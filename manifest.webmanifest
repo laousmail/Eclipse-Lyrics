@@ -1,0 +1,81 @@
+{
+  "name": "Eclipse Lyrics",
+  "short_name": "Eclipse",
+  "description": "Free lyrics sync & SRT maker. Audio stays on your device.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#070605",
+  "theme_color": "#070605",
+  "lang": "en",
+  "categories": ["music", "utilities", "productivity"],
+  "icons": [
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "file_handlers": [
+    {
+      "action": "./index.html",
+      "accept": {
+        "application/json": [".eclipse.json", ".json"],
+        "application/x-subrip": [".srt"],
+        "text/vtt": [".vtt"],
+        "text/plain": [".lrc", ".srt", ".vtt"]
+      },
+      "icons": [
+        {
+          "src": "icons/icon-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    }
+  ],
+  "share_target": {
+    "action": "./index.html?share-target=1",
+    "method": "POST",
+    "enctype": "multipart/form-data",
+    "params": {
+      "title": "title",
+      "text": "text",
+      "url": "url",
+      "files": [
+        {
+          "name": "audio",
+          "accept": ["audio/*", ".mp3", ".wav", ".m4a", ".ogg", ".flac"]
+        }
+      ]
+    }
+  },
+  "shortcuts": [
+    {
+      "name": "New project",
+      "short_name": "New",
+      "url": "./index.html#audio",
+      "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Projects",
+      "short_name": "Library",
+      "url": "./index.html#projects",
+      "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }]
+    }
+  ]
+}
