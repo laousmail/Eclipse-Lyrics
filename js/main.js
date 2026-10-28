@@ -6,6 +6,9 @@ import * as storage from "./storage.js";
 import * as exp from "./export.js";
 import { initWaveform, computePeaks } from "./waveform.js";
 import * as video from "./video.js";
+import * as i18n from "./i18n.js";
+import * as docs from "./docs.js";
+import * as haptics from "./haptics.js";
 
 const state = {
   project: sync.createEmptyProject(),
@@ -14,23 +17,31 @@ const state = {
   undoStack: [],
   audioBlob: null,
   waveform: null,
-  syncMode: true,
   screen: "audio",
+  scrubbing: false,
+  audioReady: false,
 };
 
 video.bindProject(() => state.project);
 
 const $ = (id) => document.getElementById(id);
-
 const SCREENS = ["audio", "lyrics", "sync", "export", "video"];
+const SCRUB_MAX = 1000;
 
 function showScreen(name, { pushHash = true } = {}) {
   if (!SCREENS.includes(name)) return;
+  const changed = state.screen !== name;
   state.screen = name;
   document.querySelectorAll(".screen").forEach((el) => {
     const active = el.dataset.screen === name;
     el.classList.toggle("is-active", active);
     el.hidden = !active;
+    if (active) {
+      el.classList.remove("screen-enter");
+      // reflow for enter animation
+      void el.offsetWidth;
+      el.classList.add("screen-enter");
+    }
   });
   document.querySelectorAll(".app-tabbar .tab").forEach((tab) => {
     const active = tab.dataset.goto === name;
@@ -43,17 +54,18 @@ function showScreen(name, { pushHash = true } = {}) {
     requestAnimationFrame(() => {
       state.waveform?.resize?.();
       state.waveform?.draw?.();
+      updateScrubber();
+      scrollTapLineIntoView(true);
     });
   }
-  if (name === "video") {
-    video.renderFrame(state.project);
-  }
+  if (name === "video") video.renderFrame(state.project);
   const main = $("main");
   if (main) main.scrollTop = 0;
   if (pushHash) {
     const hash = `#${name}`;
     if (location.hash !== hash) history.replaceState(null, "", hash);
   }
+  if (changed) haptics.tick();
 }
 
 function updateDockVisibility() {
@@ -74,40 +86,6 @@ function closeSheet(id) {
   if (el) el.hidden = true;
 }
 
-function setupNavigation() {
-  document.querySelectorAll("[data-goto]").forEach((el) => {
-    el.addEventListener("click", () => showScreen(el.dataset.goto));
-  });
-
-  document.querySelectorAll("[data-lyric-tab]").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const tab = btn.dataset.lyricTab;
-      document.querySelectorAll("[data-lyric-tab]").forEach((b) => {
-        const on = b.dataset.lyricTab === tab;
-        b.classList.toggle("is-active", on);
-        b.setAttribute("aria-selected", on ? "true" : "false");
-      });
-      document.querySelectorAll("[data-lyric-pane]").forEach((pane) => {
-        const on = pane.dataset.lyricPane === tab;
-        pane.classList.toggle("is-active", on);
-        pane.hidden = !on;
-      });
-    });
-  });
-
-  $("btn-more")?.addEventListener("click", () => openSheet("more-sheet"));
-  $("btn-more-close")?.addEventListener("click", () => closeSheet("more-sheet"));
-  $("more-sheet")?.addEventListener("click", (e) => {
-    if (e.target === $("more-sheet")) closeSheet("more-sheet");
-  });
-
-  $("btn-save-project")?.addEventListener("click", () => {
-    closeSheet("more-sheet");
-  });
-  $("input-project")?.addEventListener("change", () => closeSheet("more-sheet"));
-  $("input-import")?.addEventListener("change", () => closeSheet("more-sheet"));
-}
-
 function persist() {
   storage.scheduleSave(state.project);
 }
@@ -121,30 +99,90 @@ function formatClock(t) {
   return sync.formatTime(t);
 }
 
+function updateAudioLoadedUI(fileName, duration) {
+  const pick = $("audio-pick");
+  const loaded = $("audio-loaded");
+  const prompt = $("meta-prompt");
+  const btn = $("btn-continue-lyrics");
+  if (pick) pick.hidden = true;
+  if (loaded) loaded.hidden = false;
+  if (prompt) prompt.hidden = false;
+  if ($("loaded-file-name")) $("loaded-file-name").textContent = fileName || "—";
+  if ($("loaded-duration")) $("loaded-duration").textContent = formatClock(duration || 0);
+  state.audioReady = true;
+  if (btn) {
+    btn.dataset.i18n = "loadedContinue";
+    btn.textContent = i18n.t("loadedContinue");
+  }
+  document.body.classList.add("audio-ready");
+}
+
+function resetAudioPickUI() {
+  const pick = $("audio-pick");
+  const loaded = $("audio-loaded");
+  const prompt = $("meta-prompt");
+  const btn = $("btn-continue-lyrics");
+  if (pick) pick.hidden = false;
+  if (loaded) loaded.hidden = true;
+  if (prompt) prompt.hidden = true;
+  state.audioReady = false;
+  if (btn) {
+    btn.dataset.i18n = "continueLyrics";
+    btn.textContent = i18n.t("continueLyrics");
+  }
+  document.body.classList.remove("audio-ready");
+}
+
+function updateScrubber() {
+  const scrub = $("scrubber");
+  if (!scrub || state.scrubbing) return;
+  const dur = audio.getDuration() || state.project.duration || 0;
+  const cur = audio.getCurrentTime();
+  scrub.max = String(SCRUB_MAX);
+  scrub.value = String(dur > 0 ? Math.round((cur / dur) * SCRUB_MAX) : 0);
+}
+
 function updateTimeDisplay() {
   const cur = audio.getCurrentTime();
   const dur = audio.getDuration() || state.project.duration || 0;
-  $("time-display").textContent = `${formatClock(cur)} / ${formatClock(dur)}`;
+  const td = $("time-display");
+  if (td) td.textContent = `${formatClock(cur)} / ${formatClock(dur)}`;
   state.waveform?.setPlayhead(cur);
+  updateScrubber();
   updatePreview(cur);
   updateActiveLine(cur);
 }
 
 function updatePlayButton() {
   const playing = audio.isPlaying();
-  $("btn-play").textContent = playing ? "⏸" : "▶";
-  $("btn-play").setAttribute("aria-label", playing ? "Pause" : "Play");
+  const btn = $("btn-play");
+  if (btn) {
+    btn.textContent = playing ? "⏸" : "▶";
+    btn.setAttribute("aria-label", playing ? i18n.t("pause") : i18n.t("play"));
+  }
   updateDockVisibility();
 }
 
 function updateTapButtons() {
   const hasLines = state.project.lines.length > 0;
-  $("btn-tap").disabled = !hasLines || !state.project.audioFileName;
-  $("btn-undo").disabled = state.undoStack.length === 0;
+  const tap = $("btn-tap");
+  const undo = $("btn-undo");
+  if (tap) tap.disabled = !hasLines || !state.project.audioFileName;
+  if (undo) undo.disabled = state.undoStack.length === 0;
+}
+
+function scrollTapLineIntoView(force = false) {
+  const list = $("line-list");
+  if (!list) return;
+  const idx = state.selectedIndex;
+  const el = list.querySelector(`.line-item[data-index="${idx}"]`);
+  if (!el) return;
+  el.scrollIntoView({ block: "center", behavior: force ? "auto" : "smooth" });
 }
 
 function renderLineList() {
   const list = $("line-list");
+  if (!list) return;
   list.innerHTML = "";
   state.project.lines.forEach((line, i) => {
     const li = document.createElement("li");
@@ -156,8 +194,8 @@ function renderLineList() {
       li.classList.add("selected");
       li.setAttribute("aria-selected", "true");
     }
-    const time =
-      line.start != null ? formatClock(line.start) : "—:—";
+    if (i === state.tapIndex) li.classList.add("next-tap");
+    const time = line.start != null ? formatClock(line.start) : "—:—";
     li.innerHTML = `
       <span class="time">${time}</span>
       <span class="text">
@@ -173,6 +211,7 @@ function renderLineList() {
   state.waveform?.setLines(state.project.lines);
   state.waveform?.setSelected(state.selectedIndex);
   updateTapButtons();
+  scrollTapLineIntoView();
 }
 
 function selectLine(i, seekTo = false) {
@@ -204,6 +243,7 @@ function updatePreview(t) {
   const cur = $("preview-current");
   const next = $("preview-next");
   const tr = $("preview-tr");
+  if (!cur) return;
 
   if (idx < 0) {
     prev.textContent = "";
@@ -219,6 +259,16 @@ function updatePreview(t) {
   const lang = state.project.settings.translationLang || "fr";
   const translation = lang === "en" ? lines[idx]?.en : lines[idx]?.fr;
   tr.textContent = translation || "";
+}
+
+function flashTapConfirm() {
+  const cur = $("preview-current");
+  const dock = $("btn-tap");
+  cur?.classList.remove("tap-flash");
+  dock?.classList.remove("tap-flash");
+  void cur?.offsetWidth;
+  cur?.classList.add("tap-flash");
+  dock?.classList.add("tap-flash");
 }
 
 function applyLyricsFromFields() {
@@ -242,12 +292,15 @@ function applyLyricsFromFields() {
   state.undoStack = [];
   renderLineList();
   persist();
-  if (state.project.lines.length) showScreen("sync");
+  if (state.project.lines.length) {
+    haptics.success();
+    showScreen("sync");
+  }
 }
 
 async function handleAudioFile(file) {
   if (!file) return;
-  setStatus(`Loading ${file.name}…`);
+  setStatus(i18n.t("loadingAudio"));
   try {
     const result = await audio.loadAudioFile(file);
     state.audioBlob = result.blob;
@@ -262,9 +315,104 @@ async function handleAudioFile(file) {
     persist();
     storage.saveAudioBlob(result.blob, result.fileName);
     updateTimeDisplay();
+    updateAudioLoadedUI(result.fileName, result.duration);
+    haptics.success();
+    // Prompt for title — stay on audio screen, focus title
+    showScreen("audio");
+    requestAnimationFrame(() => {
+      const title = $("field-title");
+      title?.focus();
+      title?.scrollIntoView({ block: "center", behavior: "smooth" });
+    });
   } catch (err) {
     console.error(err);
-    setStatus(err.message || "Failed to load audio");
+    setStatus(i18n.t("errAudioLoad"));
+  }
+}
+
+async function handleAudioUrl() {
+  const input = $("field-audio-url");
+  const errEl = $("audio-url-error");
+  const url = input?.value?.trim() || "";
+  if (errEl) {
+    errEl.hidden = true;
+    errEl.textContent = "";
+  }
+  if (!url) {
+    if (errEl) {
+      errEl.hidden = false;
+      errEl.textContent = i18n.t("errAudioUrlEmpty");
+    }
+    return;
+  }
+  setStatus(i18n.t("loadingAudio"));
+  try {
+    const result = await audio.loadAudioFromUrl(url);
+    state.audioBlob = result.blob;
+    state.project.audioFileName = result.fileName;
+    state.project.duration = result.duration;
+    const peaks = computePeaks(result.buffer);
+    state.waveform?.setPeaks(peaks, result.duration);
+    state.waveform?.setDuration(result.duration);
+    setStatus(`${result.fileName} · ${formatClock(result.duration)}`);
+    sync.recomputeEnds(state.project.lines, result.duration);
+    renderLineList();
+    persist();
+    storage.saveAudioBlob(result.blob, result.fileName);
+    updateTimeDisplay();
+    updateAudioLoadedUI(result.fileName, result.duration);
+    haptics.success();
+    showScreen("audio");
+    requestAnimationFrame(() => $("field-title")?.focus());
+  } catch (err) {
+    console.error(err);
+    setStatus(i18n.t("errAudioUrl"));
+    if (errEl) {
+      errEl.hidden = false;
+      errEl.textContent = i18n.t("errAudioUrl");
+    }
+  }
+}
+
+async function handleGoogleDocs() {
+  const input = $("field-gdocs");
+  const errEl = $("gdocs-error");
+  const raw = input?.value?.trim() || "";
+  if (errEl) {
+    errEl.hidden = true;
+    errEl.textContent = "";
+  }
+  if (!raw) {
+    if (errEl) {
+      errEl.hidden = false;
+      errEl.textContent = i18n.t("errGdocsEmpty");
+    }
+    return;
+  }
+  if (!docs.parseGoogleDocId(raw)) {
+    if (errEl) {
+      errEl.hidden = false;
+      errEl.textContent = i18n.t("errGdocsBad");
+    }
+    return;
+  }
+  const btn = $("btn-gdocs");
+  if (btn) btn.disabled = true;
+  try {
+    setStatus(i18n.t("loadingDocs"));
+    const text = await docs.fetchGoogleDocText(raw);
+    $("field-lyrics").value = text;
+    // switch to main pane
+    document.querySelector('[data-lyric-tab="main"]')?.click();
+    haptics.success();
+  } catch (err) {
+    console.error(err);
+    if (errEl) {
+      errEl.hidden = false;
+      errEl.textContent = i18n.t("errGdocs");
+    }
+  } finally {
+    if (btn) btn.disabled = false;
   }
 }
 
@@ -280,6 +428,9 @@ function doTap() {
   state.selectedIndex = state.tapIndex;
   renderLineList();
   persist();
+  haptics.tap();
+  flashTapConfirm();
+  scrollTapLineIntoView();
 }
 
 function doUndo() {
@@ -290,6 +441,7 @@ function doUndo() {
   state.selectedIndex = state.tapIndex;
   renderLineList();
   persist();
+  haptics.soft();
 }
 
 function exportOpts() {
@@ -321,6 +473,9 @@ function syncFieldsFromProject() {
   if (v.translationLang) $("select-video-tr").value = v.translationLang;
   $("opt-include-tr").checked = Boolean(s.includeTranslationInExport);
   if (s.translationLang) $("select-tr-lang").value = s.translationLang;
+  if (state.project.audioFileName) {
+    updateAudioLoadedUI(state.project.audioFileName, state.project.duration);
+  }
 }
 
 function readVideoSettings({ save = true } = {}) {
@@ -347,11 +502,7 @@ function isTypingTarget(el) {
 
 function setupKeyboard() {
   window.addEventListener("keydown", (e) => {
-    if (isTypingTarget(e.target)) {
-      // Allow Space only outside text fields for tap
-      return;
-    }
-
+    if (isTypingTarget(e.target)) return;
     const key = e.key;
     if (key === " " || key === "Spacebar") {
       e.preventDefault();
@@ -407,7 +558,6 @@ function setupKeyboard() {
     if (key === "." || key === ">") {
       e.preventDefault();
       bumpSpeed(0.25);
-      return;
     }
   });
 }
@@ -424,35 +574,136 @@ function bumpSpeed(delta) {
   persist();
 }
 
+function setupNavigation() {
+  document.querySelectorAll("[data-goto]").forEach((el) => {
+    el.addEventListener("click", () => {
+      // After audio load, continue requires focusing title flow
+      if (el.id === "btn-continue-lyrics" && state.audioReady && !$("field-title").value.trim()) {
+        $("field-title")?.focus();
+        // still allow continue — title optional but prompted
+      }
+      showScreen(el.dataset.goto);
+    });
+  });
+
+  document.querySelectorAll("[data-lyric-tab]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const tab = btn.dataset.lyricTab;
+      document.querySelectorAll("[data-lyric-tab]").forEach((b) => {
+        const on = b.dataset.lyricTab === tab;
+        b.classList.toggle("is-active", on);
+        b.setAttribute("aria-selected", on ? "true" : "false");
+      });
+      document.querySelectorAll("[data-lyric-pane]").forEach((pane) => {
+        const on = pane.dataset.lyricPane === tab;
+        pane.classList.toggle("is-active", on);
+        pane.hidden = !on;
+      });
+      haptics.tick();
+    });
+  });
+
+  $("btn-more")?.addEventListener("click", () => openSheet("more-sheet"));
+  $("btn-more-close")?.addEventListener("click", () => closeSheet("more-sheet"));
+  $("more-sheet")?.addEventListener("click", (e) => {
+    if (e.target === $("more-sheet")) closeSheet("more-sheet");
+  });
+  $("btn-save-project")?.addEventListener("click", () => closeSheet("more-sheet"));
+  $("input-project")?.addEventListener("change", () => closeSheet("more-sheet"));
+  $("input-import")?.addEventListener("change", () => closeSheet("more-sheet"));
+
+  document.querySelectorAll(".lang-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      i18n.setLang(btn.dataset.lang);
+      haptics.tick();
+      updatePlayButton();
+      state.waveform?.setEmptyLabel?.(i18n.t("loadWaveform"));
+      if (state.audioReady) {
+        const b = $("btn-continue-lyrics");
+        if (b) b.textContent = i18n.t("loadedContinue");
+      }
+    });
+  });
+}
+
 function setupDropZone() {
   const zone = $("drop-zone");
   const input = $("input-audio");
-
-  const openPicker = (e) => {
-    e?.preventDefault?.();
+  zone?.addEventListener("click", (e) => {
+    e.preventDefault();
     input.click();
-  };
-  zone.addEventListener("click", openPicker);
-  input.addEventListener("change", () => {
+  });
+  input?.addEventListener("change", () => {
     handleAudioFile(input.files?.[0]);
     input.value = "";
   });
-
   ["dragenter", "dragover"].forEach((ev) => {
-    zone.addEventListener(ev, (e) => {
+    zone?.addEventListener(ev, (e) => {
       e.preventDefault();
       zone.classList.add("dragover");
     });
   });
   ["dragleave", "drop"].forEach((ev) => {
-    zone.addEventListener(ev, (e) => {
+    zone?.addEventListener(ev, (e) => {
       e.preventDefault();
       zone.classList.remove("dragover");
     });
   });
-  zone.addEventListener("drop", (e) => {
+  zone?.addEventListener("drop", (e) => {
     const file = e.dataTransfer?.files?.[0];
     if (file) handleAudioFile(file);
+  });
+  $("btn-change-audio")?.addEventListener("click", () => {
+    resetAudioPickUI();
+    input?.click();
+  });
+  $("btn-load-url")?.addEventListener("click", handleAudioUrl);
+  $("field-audio-url")?.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      handleAudioUrl();
+    }
+  });
+}
+
+function setupScrubber() {
+  const scrub = $("scrubber");
+  if (!scrub) return;
+
+  const seekFromScrub = () => {
+    const dur = audio.getDuration() || state.project.duration || 0;
+    if (!dur) return;
+    const t = (Number(scrub.value) / SCRUB_MAX) * dur;
+    audio.seek(t);
+    updateTimeDisplay();
+  };
+
+  scrub.addEventListener("pointerdown", () => {
+    state.scrubbing = true;
+    scrub.classList.add("is-scrubbing");
+  });
+  scrub.addEventListener("input", () => {
+    state.scrubbing = true;
+    seekFromScrub();
+  });
+  const endScrub = () => {
+    if (!state.scrubbing) return;
+    state.scrubbing = false;
+    scrub.classList.remove("is-scrubbing");
+    seekFromScrub();
+    haptics.scrubCommit();
+  };
+  scrub.addEventListener("pointerup", endScrub);
+  scrub.addEventListener("change", endScrub);
+  scrub.addEventListener("pointercancel", () => {
+    state.scrubbing = false;
+    scrub.classList.remove("is-scrubbing");
+  });
+
+  $("btn-go-start")?.addEventListener("click", () => {
+    audio.seek(0);
+    updateTimeDisplay();
+    haptics.soft();
   });
 }
 
@@ -473,13 +724,11 @@ async function offerRestore() {
     await storage.clearSession();
     return;
   }
-
   const banner = $("restore-banner");
   const detail = $("restore-detail");
-  const when = meta.savedAt ? new Date(meta.savedAt).toLocaleString() : "unknown time";
-  detail.textContent = `${meta.title || "Untitled"} · ${meta.audioFileName || "no audio"} · saved ${when}`;
+  const when = meta.savedAt ? new Date(meta.savedAt).toLocaleString() : "—";
+  detail.textContent = `${meta.title || "—"} · ${meta.audioFileName || "—"} · ${when}`;
   banner.hidden = false;
-
   await new Promise((resolve) => {
     $("btn-restore").onclick = async () => {
       banner.hidden = true;
@@ -510,7 +759,6 @@ async function restoreSession(meta) {
   syncFieldsFromProject();
   renderLineList();
   state.tapIndex = sync.firstUntimedIndex(state.project.lines);
-
   const audioData = await storage.loadAudioBlob();
   if (audioData?.blob) {
     const file = new File([audioData.blob], audioData.fileName || meta.audioFileName || "audio", {
@@ -518,7 +766,7 @@ async function restoreSession(meta) {
     });
     await handleAudioFile(file);
   } else if (meta.audioFileName) {
-    setStatus(`Restored project — reload “${meta.audioFileName}” to hear audio`);
+    setStatus(`${meta.audioFileName}`);
   }
 }
 
@@ -549,21 +797,23 @@ function mergeImported(data) {
   state.undoStack = [];
   renderLineList();
   persist();
+  haptics.success();
 }
 
 function setupUI() {
   document.body.classList.add("has-tabbar");
+  i18n.initI18n();
   setupNavigation();
   setupDropZone();
   setupKeyboard();
+  setupScrubber();
+
   const initial = (location.hash || "").replace(/^#/, "");
-  showScreen(SCREENS.includes(initial) ? initial : "audio", { pushHash: !SCREENS.includes(initial) });
+  showScreen(SCREENS.includes(initial) ? initial : "audio", {
+    pushHash: !SCREENS.includes(initial),
+  });
 
   state.waveform = initWaveform($("waveform"), {
-    onSeek: (t) => {
-      audio.seek(t);
-      updateTimeDisplay();
-    },
     onMarkerDrag: (index, t) => {
       sync.setLineStart(state.project, index, t);
       state.selectedIndex = index;
@@ -572,29 +822,39 @@ function setupUI() {
     },
     onSelect: (index) => selectLine(index, false),
   });
+  state.waveform?.setEmptyLabel?.(i18n.t("loadWaveform"));
 
   $("btn-apply-lyrics").addEventListener("click", applyLyricsFromFields);
+  $("btn-gdocs")?.addEventListener("click", handleGoogleDocs);
+  $("field-gdocs")?.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      handleGoogleDocs();
+    }
+  });
+
   $("btn-play").addEventListener("click", () => {
     audio.togglePlay().then(updatePlayButton);
+    haptics.tick();
   });
   $("btn-tap").addEventListener("click", doTap);
   $("btn-undo").addEventListener("click", doUndo);
   $("btn-seek-back")?.addEventListener("click", () => {
     audio.seek(Math.max(0, audio.getCurrentTime() - 5));
     updateTimeDisplay();
+    haptics.soft();
   });
   $("btn-seek-fwd")?.addEventListener("click", () => {
     audio.seek(audio.getCurrentTime() + 5);
     updateTimeDisplay();
+    haptics.soft();
   });
 
-  const blurOut = $("bg-blur-out");
-  const darkOut = $("bg-darken-out");
   $("bg-blur")?.addEventListener("input", () => {
-    if (blurOut) blurOut.textContent = $("bg-blur").value;
+    if ($("bg-blur-out")) $("bg-blur-out").textContent = $("bg-blur").value;
   });
   $("bg-darken")?.addEventListener("input", () => {
-    if (darkOut) darkOut.textContent = $("bg-darken").value;
+    if ($("bg-darken-out")) $("bg-darken-out").textContent = $("bg-darken").value;
   });
 
   $("select-speed").addEventListener("change", () => {
@@ -613,13 +873,15 @@ function setupUI() {
     persist();
   });
 
-  $("btn-export-lrc").addEventListener("click", () => exp.downloadLRC(state.project));
-  $("btn-export-srt").addEventListener("click", () => exp.downloadSRT(state.project, exportOpts()));
-  $("btn-export-vtt").addEventListener("click", () => exp.downloadVTT(state.project, exportOpts()));
-  $("btn-export-json").addEventListener("click", () => exp.downloadJSON(state.project));
-  $("btn-export-tr-files").addEventListener("click", () =>
-    exp.downloadPerLanguage(state.project, "srt")
-  );
+  const withSuccess = (fn) => () => {
+    fn();
+    haptics.success();
+  };
+  $("btn-export-lrc").addEventListener("click", withSuccess(() => exp.downloadLRC(state.project)));
+  $("btn-export-srt").addEventListener("click", withSuccess(() => exp.downloadSRT(state.project, exportOpts())));
+  $("btn-export-vtt").addEventListener("click", withSuccess(() => exp.downloadVTT(state.project, exportOpts())));
+  $("btn-export-json").addEventListener("click", withSuccess(() => exp.downloadJSON(state.project)));
+  $("btn-export-tr-files").addEventListener("click", withSuccess(() => exp.downloadPerLanguage(state.project, "srt")));
 
   $("opt-include-tr").addEventListener("change", () => {
     state.project.settings.includeTranslationInExport = $("opt-include-tr").checked;
@@ -631,9 +893,10 @@ function setupUI() {
     updatePreview(audio.getCurrentTime());
   });
 
-  $("btn-save-project").addEventListener("click", () =>
-    storage.downloadProjectFile(state.project)
-  );
+  $("btn-save-project").addEventListener("click", () => {
+    storage.downloadProjectFile(state.project);
+    haptics.success();
+  });
 
   $("input-project").addEventListener("change", async (e) => {
     const file = e.target.files?.[0];
@@ -648,15 +911,13 @@ function setupUI() {
     if (!file) return;
     const text = await file.text();
     try {
-      const data = exp.parseImportedProject(text, file.name);
-      mergeImported(data);
+      mergeImported(exp.parseImportedProject(text, file.name));
     } catch (err) {
-      alert(err.message || "Could not import file");
+      alert(err.message || "Import failed");
     }
     e.target.value = "";
   });
 
-  // Video controls
   [
     "select-aspect",
     "select-anim",
@@ -667,11 +928,11 @@ function setupUI() {
     "video-show-tr",
     "select-video-tr",
   ].forEach((id) => {
-    $(id).addEventListener("change", () => {
+    $(id)?.addEventListener("change", () => {
       readVideoSettings();
       video.renderFrame(state.project);
     });
-    $(id).addEventListener("input", () => {
+    $(id)?.addEventListener("input", () => {
       readVideoSettings();
       video.renderFrame(state.project);
     });
@@ -690,10 +951,10 @@ function setupUI() {
     readVideoSettings();
     if (video.isPreviewEnabled()) {
       video.disablePreview();
-      $("btn-preview-video").textContent = "Live preview";
+      $("btn-preview-video").textContent = i18n.t("livePreview");
     } else {
       video.enablePreview();
-      $("btn-preview-video").textContent = "Stop preview";
+      $("btn-preview-video").textContent = i18n.t("stopPreview");
     }
   });
 
@@ -705,20 +966,19 @@ function setupUI() {
     prog.hidden = false;
     $("btn-stop-record").hidden = false;
     $("btn-record").disabled = true;
-    status.textContent = "Recording… keep this tab open";
-
+    status.textContent = i18n.t("recordingKeep");
     await video.startRecording(state.project, {
       onProgress: (p) => {
         bar.style.width = `${Math.round(p * 100)}%`;
-        status.textContent = `Recording… ${Math.round(p * 100)}% — keep this tab open`;
+        status.textContent = `${i18n.t("recordingKeep")} ${Math.round(p * 100)}%`;
       },
       onDone: () => {
-        prog.hidden = false;
         bar.style.width = "100%";
-        status.textContent = "Done — video downloaded";
+        status.textContent = "✓";
         $("btn-stop-record").hidden = true;
         $("btn-record").disabled = false;
-        $("btn-preview-video").textContent = "Live preview";
+        $("btn-preview-video").textContent = i18n.t("livePreview");
+        haptics.success();
       },
       onError: (err) => {
         status.textContent = err?.message || "Recording failed";
@@ -737,19 +997,33 @@ function setupUI() {
   audio.onTimeUpdate(updateTimeDisplay);
   audio.onPlayState(() => updatePlayButton());
 
-  // Smooth playhead via rAF while playing
   const tick = () => {
     if (audio.isPlaying()) updateTimeDisplay();
     requestAnimationFrame(tick);
   };
   requestAnimationFrame(tick);
 
-  // Initial empty video frame (don't persist empty defaults)
   readVideoSettings({ save: false });
   video.renderFrame(state.project);
 }
 
 async function boot() {
+  // Prevent browser pinch-zoom gestures where possible
+  document.addEventListener(
+    "gesturestart",
+    (e) => {
+      e.preventDefault();
+    },
+    { passive: false }
+  );
+  document.addEventListener(
+    "gesturechange",
+    (e) => {
+      e.preventDefault();
+    },
+    { passive: false }
+  );
+
   setupUI();
   renderLineList();
   updateTapButtons();

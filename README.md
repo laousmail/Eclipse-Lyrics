@@ -16,7 +16,9 @@ python3 -m http.server 8080
 
 ES modules require HTTP (not `file://`).
 
-Phone-first app shell: bottom tabs (Audio → Lyrics → Sync → Export → Film), sticky thumb-friendly Tap dock on Sync, and language segments for lyrics. Desktop gets the same flow in a centered phone frame.
+Phone-first app shell: bottom tabs (Audio → Lyrics → Sync → Export → Film), sticky thumb-friendly Tap dock on Sync, scrubber for deliberate seeking, FR/EN UI, Google Docs import, and audio-from-URL. Desktop gets the same flow in a centered phone frame.
+
+Viewport is locked (no pinch-zoom) for an app-like feel. Haptics via the Vibration API when available.
 
 ## Workflow
 
