@@ -500,18 +500,29 @@ function isTypingTarget(el) {
   return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || el.isContentEditable;
 }
 
+function isDialogOpen() {
+  return Boolean(document.querySelector('.sheet-overlay:not([hidden]), [role="dialog"]:not([hidden])'));
+}
+
 function setupKeyboard() {
   window.addEventListener("keydown", (e) => {
     if (isTypingTarget(e.target)) return;
+    if (isDialogOpen()) return;
     const key = e.key;
-    if (key === " " || key === "Spacebar") {
-      e.preventDefault();
-      doTap();
-      return;
-    }
+
+    // Play/pause stays available on every screen
     if (key === "p" || key === "P" || key === "k" || key === "K") {
       e.preventDefault();
       audio.togglePlay().then(updatePlayButton);
+      return;
+    }
+
+    // Remaining shortcuts only on Sync (avoid re-timing on Export/Film)
+    if (state.screen !== "sync") return;
+
+    if (key === " " || key === "Spacebar") {
+      e.preventDefault();
+      doTap();
       return;
     }
     if (key === "Backspace") {
