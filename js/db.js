@@ -1,5 +1,7 @@
 /** IndexedDB: projects + audio. localStorage only for UI preferences. */
 
+import { projectId as newProjectId, audioId as newAudioId } from "./core/project.js";
+
 const DB_NAME = "eclipse-lyrics-v2";
 const DB_VERSION = 1;
 const STORE_PROJECTS = "projects";
@@ -106,12 +108,63 @@ export async function listProjects() {
   });
 }
 
-export async function deleteProject(id) {
+export async function deleteProject(id, audioId = "") {
   const db = await openDb();
   const tx = db.transaction([STORE_PROJECTS, STORE_AUDIO], "readwrite");
   tx.objectStore(STORE_PROJECTS).delete(id);
-  // audio keyed by storedAudioId — caller may also pass audio id
+  if (audioId) tx.objectStore(STORE_AUDIO).delete(audioId);
   await txDone(tx);
+  const prefs = loadPrefs();
+  if (prefs.lastProjectId === id) savePrefs({ lastProjectId: null });
+}
+
+/** Soft-delete helper: return snapshot for undo. */
+export async function removeProjectWithAudio(project) {
+  const id = project?.id;
+  const audioKey = project?.audio?.storedAudioId || "";
+  let audioRow = null;
+  if (audioKey) audioRow = await loadAudio(audioKey);
+  await deleteProject(id, audioKey);
+  return { project: { ...project }, audioRow };
+}
+
+export async function restoreDeletedProject(snapshot) {
+  if (!snapshot?.project) return;
+  await saveProject(snapshot.project);
+  if (snapshot.audioRow?.id && snapshot.audioRow.blob) {
+    await saveAudio(snapshot.audioRow.id, snapshot.audioRow.blob, snapshot.audioRow.fileName || "");
+  }
+}
+
+export async function duplicateProject(project) {
+  const copy = JSON.parse(JSON.stringify(project));
+  copy.id = newProjectId();
+  copy.title = `${project.title || "Untitled"} (copy)`;
+  copy.createdAt = Date.now();
+  copy.updatedAt = Date.now();
+  const oldAudio = project.audio?.storedAudioId || "";
+  copy.audio = {
+    ...(copy.audio || {}),
+    storedAudioId: newAudioId(),
+  };
+  await saveProject(copy);
+  if (oldAudio) {
+    const row = await loadAudio(oldAudio);
+    if (row?.blob) await saveAudio(copy.audio.storedAudioId, row.blob, row.fileName || copy.audio.fileName || "");
+  }
+  return copy;
+}
+
+export async function estimateStorage() {
+  try {
+    if (navigator.storage?.estimate) {
+      const e = await navigator.storage.estimate();
+      return { usage: e.usage || 0, quota: e.quota || 0 };
+    }
+  } catch {
+    /* ignore */
+  }
+  return { usage: 0, quota: 0 };
 }
 
 export async function saveAudio(id, blob, fileName = "") {

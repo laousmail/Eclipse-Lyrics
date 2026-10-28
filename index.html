@@ -5,47 +5,121 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#070605" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-title" content="Eclipse" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="mobile-web-app-capable" content="yes" />
-  <meta name="description" content="Free browser tool to sync song lyrics, export subtitles, and render lyric videos. Made by laousmail." />
-  <title>Eclipse Lyrics Sync</title>
+  <meta name="description" content="Free lyrics sync &amp; SRT maker in your browser. Tap along, export YouTube subtitles, make lyric videos. Audio never leaves your device. Made by laousmail." />
+  <meta name="eclipse-goatcounter" content="" />
+  <title>Free Lyrics Sync &amp; SRT Maker | Eclipse Lyrics</title>
+  <link rel="canonical" href="https://laousmail.github.io/Eclipse-Lyrics/" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png" />
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="Eclipse Lyrics" />
+  <meta property="og:title" content="Free Lyrics Sync &amp; SRT Maker | Eclipse Lyrics" />
+  <meta property="og:description" content="Free lyrics sync &amp; SRT maker. Audio stays on your device. Made in Montréal by laousmail." />
+  <meta property="og:image" content="https://laousmail.github.io/Eclipse-Lyrics/og/og-1200x630.png" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Free Lyrics Sync &amp; SRT Maker | Eclipse Lyrics" />
+  <meta name="twitter:description" content="Free lyrics sync &amp; SRT maker. Audio stays on your device." />
+  <meta name="twitter:image" content="https://laousmail.github.io/Eclipse-Lyrics/og/og-1200x630.png" />
+  <link rel="preload" href="fonts/outfit-600.woff2" as="font" type="font/woff2" crossorigin />
+  <link rel="preload" href="fonts/outfit-400.woff2" as="font" type="font/woff2" crossorigin />
+  <link rel="modulepreload" href="js/main.js" />
   <link rel="stylesheet" href="css/tokens.css" />
   <link rel="stylesheet" href="css/app.css" />
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "WebApplication",
+    "name": "Eclipse Lyrics",
+    "applicationCategory": "MultimediaApplication",
+    "operatingSystem": "Any",
+    "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+    "description": "Free browser tool to sync song lyrics, export SRT/VTT/LRC, and render lyric videos. Audio never leaves your device.",
+    "url": "https://laousmail.github.io/Eclipse-Lyrics/",
+    "author": { "@type": "Person", "name": "laousmail", "url": "https://laousmail.com" },
+    "inLanguage": ["en", "fr", "kab"]
+  }
+  </script>
 </head>
 <body>
   <a class="skip-link" href="#main" data-i18n="skip">Skip to main content</a>
   <div id="toast" class="toast" hidden role="status" aria-live="polite"></div>
+  <div id="a11y-live" class="visually-hidden" role="status" aria-live="polite" aria-atomic="true"></div>
+  <div id="screen-tip" class="screen-tip" hidden role="status">
+    <p id="screen-tip-text"></p>
+    <button type="button" id="btn-tip-dismiss" class="btn btn-ghost btn-sm" data-i18n="gotIt">Got it</button>
+  </div>
 
-  <div id="restore-banner" class="sheet-overlay" hidden role="dialog" aria-modal="true" aria-labelledby="restore-title">
-    <div class="sheet">
-      <p id="restore-title" class="sheet-title" data-i18n="restoreTitle">Restore your last session?</p>
-      <p class="muted" id="restore-detail"></p>
-      <div class="sheet-actions">
-        <button type="button" id="btn-restore" class="btn btn-fill" data-i18n="restore">Restore</button>
-        <button type="button" id="btn-fresh" class="btn btn-ghost" data-i18n="startFresh">Start fresh</button>
+  <div id="intro-overlay" class="intro-overlay" hidden>
+    <div class="intro-card" role="dialog" aria-modal="true" aria-labelledby="intro-title">
+      <p class="eyebrow" data-i18n="welcome">Welcome</p>
+      <h2 id="intro-title"></h2>
+      <p id="intro-body" class="intro-body"></p>
+      <div class="intro-dots" id="intro-dots" aria-hidden="true"></div>
+      <div class="intro-actions">
+        <button type="button" id="btn-intro-skip" class="btn btn-ghost" data-i18n="skipIntro">Skip</button>
+        <button type="button" id="btn-intro-next" class="btn btn-fill" data-i18n="next">Next</button>
       </div>
+      <button type="button" id="btn-intro-demo" class="btn btn-ghost intro-demo" data-i18n="tryDemo">Try with a demo song</button>
     </div>
+  </div>
+
+  <div id="ios-install-hint" class="ios-install-hint" hidden role="status">
+    <p data-i18n="iosInstallHint">Install: Share → Add to Home Screen</p>
+    <button type="button" id="btn-ios-hint-dismiss" class="btn btn-ghost btn-sm" data-i18n="gotIt">Got it</button>
   </div>
 
   <div id="more-sheet" class="sheet-overlay" hidden role="dialog" aria-modal="true" aria-labelledby="more-title">
     <div class="sheet">
       <p id="more-title" class="sheet-title" data-i18n="moreTitle">Project</p>
       <div class="sheet-list">
-        <button type="button" id="btn-save-project" class="sheet-row" data-i18n="saveProject">Save project</button>
+        <button type="button" id="btn-goto-projects" class="sheet-row" data-goto="projects" data-i18n="tabProjects">Projects</button>
+        <button type="button" id="btn-save-project" class="sheet-row" data-i18n="saveProject">Save project file</button>
+        <button type="button" id="btn-export-bundle" class="sheet-row" data-i18n="exportBundle">Export with audio (.eclipselyrics)</button>
+        <button type="button" id="btn-sheet-demo" class="sheet-row" data-i18n="tryDemo">Try with a demo song</button>
+        <button type="button" class="sheet-row" data-goto="help" data-i18n="help">Help</button>
         <label class="sheet-row file-row">
-          <span data-i18n="openProject">Open project</span>
-          <input type="file" id="input-project" accept=".json,application/json" hidden />
+          <span data-i18n="openProject">Open project file</span>
+          <input type="file" id="input-project" accept=".json,.eclipse.json,.eclipselyrics,.zip,application/json,application/zip" hidden />
         </label>
         <label class="sheet-row file-row">
           <span data-i18n="importSubtitles">Import subtitles</span>
           <input type="file" id="input-import" accept=".lrc,.srt,.vtt,text/plain" hidden />
         </label>
       </div>
-      <div class="lang-row" role="group" data-i18n-aria="langSwitch" aria-label="Language">
-        <button type="button" class="lang-btn" data-lang="en" aria-pressed="true">EN</button>
-        <button type="button" class="lang-btn" data-lang="fr" aria-pressed="false">FR</button>
-      </div>
+      <p id="storage-usage" class="muted tip"></p>
+      <p class="muted tip privacy-note" data-i18n="privacyNote">Privacy: audio and lyrics never leave this device. Optional cookie-free page-view analytics only if enabled.</p>
       <button type="button" id="btn-more-close" class="btn btn-ghost sheet-dismiss" data-i18n="close">Close</button>
+    </div>
+  </div>
+
+  <div id="rename-dialog" class="sheet-overlay" hidden role="dialog" aria-modal="true" aria-labelledby="rename-title">
+    <div class="sheet">
+      <p id="rename-title" class="sheet-title" data-i18n="renameProject">Rename project</p>
+      <label class="field">
+        <span data-i18n="title">Title</span>
+        <input type="text" id="field-rename" autocomplete="off" />
+      </label>
+      <div class="sheet-actions">
+        <button type="button" id="btn-rename-save" class="btn btn-fill" data-i18n="save">Save</button>
+        <button type="button" id="btn-rename-cancel" class="btn btn-ghost" data-i18n="close">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="delete-dialog" class="sheet-overlay" hidden role="dialog" aria-modal="true" aria-labelledby="delete-title">
+    <div class="sheet">
+      <p id="delete-title" class="sheet-title" data-i18n="deleteProject">Delete project?</p>
+      <p class="muted" id="delete-detail"></p>
+      <div class="sheet-actions sheet-actions-stack">
+        <button type="button" id="btn-delete-confirm" class="btn btn-fill" data-i18n="deleteConfirm">Delete</button>
+        <button type="button" id="btn-delete-cancel" class="btn btn-ghost" data-i18n="close">Close</button>
+      </div>
     </div>
   </div>
 
@@ -125,7 +199,8 @@
           <p class="brand-tag" data-i18n="brandTag">by laousmail</p>
         </div>
       </div>
-      <nav class="step-seg desktop-workspace-only" role="tablist" aria-label="Steps">
+      <nav class="step-seg desktop-workspace-only" aria-label="Steps">
+        <button type="button" class="step-seg-btn" data-goto="projects" data-i18n="tabProjects">Projects</button>
         <button type="button" class="step-seg-btn is-active" data-goto="audio" data-i18n="tabAudio">Audio</button>
         <button type="button" class="step-seg-btn" data-goto="lyrics" data-i18n="tabLyrics">Lyrics</button>
         <button type="button" class="step-seg-btn" data-goto="sync" data-i18n="tabSync">Sync</button>
@@ -134,10 +209,13 @@
       </nav>
       <div class="topbar-tools">
         <button type="button" class="btn btn-fill btn-sm desktop-workspace-only" data-goto="export" data-i18n="export">Export</button>
+        <button type="button" id="btn-install" class="btn btn-ghost btn-sm" hidden data-i18n="installApp">Install app</button>
         <div class="lang-pill" role="group" aria-label="Language">
           <button type="button" class="lang-btn" data-lang="en" aria-pressed="true">EN</button>
           <button type="button" class="lang-btn" data-lang="fr" aria-pressed="false">FR</button>
+          <button type="button" class="lang-btn" data-lang="kab" aria-pressed="false">KAB</button>
         </div>
+        <button type="button" id="btn-help" class="icon-btn" data-goto="help" data-i18n-aria="help" aria-label="Help" title="Help">?</button>
         <button type="button" id="btn-more" class="icon-btn" data-i18n-aria="moreAria" aria-label="More project actions" aria-haspopup="dialog" aria-controls="more-sheet">
           <span class="icon-dots" aria-hidden="true"></span>
         </button>
@@ -145,8 +223,28 @@
     </header>
 
     <main id="main" class="app-screens" tabindex="-1">
+      <!-- PROJECTS -->
+      <section id="screen-projects" class="screen is-active" data-screen="projects" aria-labelledby="projects-heading">
+        <header class="screen-head">
+          <p class="eyebrow" data-i18n="library">Library</p>
+          <h2 id="projects-heading" data-i18n="projectsTitle">Projects</h2>
+          <p class="screen-lead" data-i18n="projectsLead">All songs stay on this device. Open one or start a new sync.</p>
+        </header>
+        <div class="projects-toolbar">
+          <button type="button" id="btn-new-project" class="btn btn-fill" data-i18n="newProject">New project</button>
+          <button type="button" id="btn-try-demo" class="btn btn-ghost" data-i18n="tryDemo">Try with a demo song</button>
+          <label class="btn btn-ghost file-btn">
+            <span data-i18n="openProject">Open project file</span>
+            <input type="file" id="input-project-home" accept=".json,.eclipse.json,.eclipselyrics,.zip,application/json,application/zip" hidden />
+          </label>
+        </div>
+        <p id="projects-storage" class="muted tip"></p>
+        <ul id="projects-list" class="projects-list" role="list"></ul>
+        <p id="projects-empty" class="empty-state muted" hidden data-i18n="projectsEmpty">No projects yet. Create one to start.</p>
+      </section>
+
       <!-- AUDIO -->
-      <section id="screen-audio" class="screen is-active" data-screen="audio" aria-labelledby="load-heading">
+      <section id="screen-audio" class="screen" data-screen="audio" aria-labelledby="load-heading" hidden>
         <header class="screen-head">
           <p class="eyebrow" data-i18n="step1">Step 1</p>
           <h2 id="load-heading" data-i18n="loadAudio">Load audio</h2>
@@ -329,107 +427,363 @@
           <p class="screen-lead" data-i18n="exportLead">Download subtitle files for YouTube, the web, or your player.</p>
         </header>
 
-        <label class="check-row">
-          <input type="checkbox" id="opt-include-tr" />
-          <span data-i18n="includeTr">Include translation as second line (SRT / VTT)</span>
-        </label>
+        <article class="song-details-card">
+          <h3 class="subhead" data-i18n="songDetails">Song details</h3>
+          <div class="field-stack">
+            <label class="field">
+              <span data-i18n="title">Title</span>
+              <input type="text" id="field-export-title" data-i18n-placeholder="titlePlaceholder" placeholder="Song title" autocomplete="off" />
+            </label>
+            <label class="field">
+              <span data-i18n="artist">Artist</span>
+              <input type="text" id="field-export-artist" data-i18n-placeholder="artistPlaceholder" placeholder="Artist" autocomplete="off" />
+            </label>
+          </div>
+        </article>
+
         <label class="field">
-          <span data-i18n="trLang">Translation language</span>
-          <select id="select-tr-lang" aria-label="Translation language for export">
-            <option value="fr">Français / French</option>
-            <option value="en">English / Anglais</option>
+          <span data-i18n="exportLanguages">Languages in the file</span>
+          <select id="select-export-lang" aria-label="Languages in the file">
+            <option value="main" data-i18n="langMainOnly">Main only</option>
+            <option value="main+fr" data-i18n="langMainFr">Main + FR (2 lines)</option>
+            <option value="main+en" data-i18n="langMainEn">Main + EN</option>
+            <option value="separate" data-i18n="langSeparate">One file per language</option>
           </select>
         </label>
 
-        <div class="export-cards">
-          <article class="export-card">
-            <button type="button" id="btn-export-lrc" class="btn btn-ghost export-tile" data-i18n="exportLrcTitle">LRC</button>
-            <p class="export-desc" data-i18n="exportLrcDesc">For music apps and lyric players that show lines as the song plays.</p>
-          </article>
-          <article class="export-card">
-            <button type="button" id="btn-export-srt" class="btn btn-ghost export-tile" data-i18n="exportSrtTitle">SRT</button>
-            <p class="export-desc" data-i18n="exportSrtDesc">The usual subtitle file for YouTube — upload it with your video.</p>
-          </article>
-          <article class="export-card">
-            <button type="button" id="btn-export-vtt" class="btn btn-ghost export-tile" data-i18n="exportVttTitle">VTT</button>
-            <p class="export-desc" data-i18n="exportVttDesc">For websites and HTML5 video players on the web.</p>
-          </article>
-          <article class="export-card">
-            <button type="button" id="btn-export-json" class="btn btn-ghost export-tile" data-i18n="exportJsonTitle">JSON</button>
-            <p class="export-desc" data-i18n="exportJsonDesc">Your full project to reopen later or use in the laousmail player.</p>
-          </article>
+        <div class="export-options">
+          <label class="field">
+            <span data-i18n="globalOffset">Global offset (ms)</span>
+            <input type="number" id="field-global-offset" step="10" value="0" />
+          </label>
+          <label class="field">
+            <span data-i18n="minLineMs">Minimum line duration (ms)</span>
+            <input type="number" id="field-min-line" step="50" min="0" value="700" />
+          </label>
+          <label class="field">
+            <span data-i18n="maxGapMs">Max gap before clearing (ms)</span>
+            <input type="number" id="field-max-gap" step="100" min="0" value="8000" />
+          </label>
         </div>
-        <button type="button" id="btn-export-tr-files" class="btn btn-ghost" data-i18n="onePerLang">One file per language</button>
+
+        <!-- Hidden legacy mirrors for older wiring -->
+        <input type="checkbox" id="opt-include-tr" hidden tabindex="-1" aria-hidden="true" />
+        <select id="select-tr-lang" hidden tabindex="-1" aria-hidden="true">
+          <option value="fr">fr</option>
+          <option value="en">en</option>
+        </select>
+
+        <article class="export-card export-card-primary">
+          <h3 class="export-primary-title" data-i18n="youtubeSrtTitle">YouTube subtitles (.srt)</h3>
+          <p class="export-desc" data-i18n="youtubeSrtHow">YouTube Studio → Subtitles → Upload file → With timing</p>
+          <div class="btn-stack">
+            <button type="button" id="btn-export-srt" class="btn btn-fill" data-i18n="downloadSrt">Download .srt</button>
+            <div class="btn-row">
+              <button type="button" id="btn-copy-srt" class="btn btn-ghost" data-i18n="copy">Copy</button>
+              <button type="button" id="btn-share-srt" class="btn btn-ghost" data-i18n="share">Share</button>
+            </div>
+          </div>
+        </article>
+
+        <details class="export-more">
+          <summary data-i18n="moreFormats">More formats</summary>
+          <div class="export-cards">
+            <article class="export-card">
+              <button type="button" id="btn-export-lrc" class="btn btn-ghost export-tile" data-i18n="exportLrcTitle">LRC</button>
+              <p class="export-desc" data-i18n="exportLrcDesc">For music apps and lyric players that show lines as the song plays.</p>
+            </article>
+            <article class="export-card">
+              <button type="button" id="btn-export-vtt" class="btn btn-ghost export-tile" data-i18n="exportVttTitle">VTT</button>
+              <p class="export-desc" data-i18n="exportVttDesc">For websites and HTML5 video players on the web.</p>
+            </article>
+            <article class="export-card">
+              <button type="button" id="btn-export-txt" class="btn btn-ghost export-tile" data-i18n="exportTxtTitle">TXT</button>
+              <p class="export-desc" data-i18n="exportTxtDesc">Plain lyrics only, no timings.</p>
+            </article>
+            <article class="export-card">
+              <button type="button" id="btn-export-json" class="btn btn-ghost export-tile" data-i18n="exportJsonTitle">Project JSON</button>
+              <p class="export-desc" data-i18n="exportJsonDesc">Your full project to reopen later (.eclipse.json).</p>
+            </article>
+            <article class="export-card">
+              <button type="button" id="btn-export-releases" class="btn btn-ghost export-tile" data-i18n="exportReleasesTitle">laousmail.com JSON</button>
+              <p class="export-desc" data-i18n="exportReleasesDesc">Release-shaped JSON matching releases.js, with timed lyrics.</p>
+            </article>
+          </div>
+          <button type="button" id="btn-export-tr-files" class="btn btn-ghost" hidden data-i18n="onePerLang">One file per language</button>
+        </details>
+
+        <div class="btn-stack">
+          <button type="button" id="btn-export-zip" class="btn btn-ghost" data-i18n="downloadZip">Download all as ZIP</button>
+        </div>
+
+        <details class="export-preview" open>
+          <summary data-i18n="exportPreview">Preview (first 10 cues)</summary>
+          <pre id="export-preview-code" class="export-preview-code" aria-live="polite"></pre>
+        </details>
       </section>
 
-      <!-- VIDEO -->
-      <section id="screen-video" class="screen" data-screen="video" aria-labelledby="video-heading" hidden>
-        <header class="screen-head">
+      <!-- VIDEO / FILM -->
+      <section id="screen-video" class="screen screen-film" data-screen="video" aria-labelledby="video-heading" hidden>
+        <header class="screen-head screen-head-compact">
           <p class="eyebrow" data-i18n="step5">Step 5</p>
           <h2 id="video-heading" data-i18n="lyricVideo">Lyric video</h2>
-          <p class="screen-lead" data-i18n="videoLead">Preview animations, then record in real time.</p>
+          <p class="screen-lead" data-i18n="videoLead">Offline MP4 when supported — works in the background.</p>
         </header>
 
-        <div class="video-stage">
-          <canvas id="video-canvas" width="540" height="960" aria-label="Lyric video preview"></canvas>
+        <div class="film-sticky">
+          <div class="video-stage video-stage-compact">
+            <canvas id="video-canvas" width="540" height="960" aria-label="Lyric video preview"></canvas>
+          </div>
+          <div class="film-scrub">
+            <label class="field film-scrub-field">
+              <span class="visually-hidden" data-i18n="previewScrub">Preview scrubber</span>
+              <input type="range" id="video-scrub" min="0" max="1000" value="0" step="1" />
+            </label>
+            <div class="film-scrub-meta">
+              <span id="video-scrub-time" class="muted">0:00</span>
+              <label class="field field-inline">
+                <span data-i18n="jumpToLine">Jump to line</span>
+                <select id="select-jump-line"></select>
+              </label>
+            </div>
+          </div>
         </div>
 
-        <div class="field-stack video-fields">
-          <label class="field">
-            <span data-i18n="aspect">Aspect</span>
-            <select id="select-aspect">
-              <option value="1080x1920" data-i18n="aspect916">9:16 Reels / TikTok</option>
-              <option value="1920x1080" data-i18n="aspect169">16:9 YouTube</option>
-              <option value="1080x1080" data-i18n="aspect11">1:1 Square</option>
-            </select>
-          </label>
-          <label class="field">
-            <span data-i18n="style">Style</span>
-            <select id="select-anim">
-              <option value="fadeUp" data-i18n="styleFadeUp">Fade up</option>
-              <option value="glowSweep" data-i18n="styleGlowSweep">Glow sweep</option>
-              <option value="smoke" data-i18n="styleSmoke">Smoke</option>
-            </select>
-          </label>
-          <label class="field">
-            <span data-i18n="background">Background</span>
-            <select id="select-bg">
-              <option value="eclipse" data-i18n="bgEclipse">Eclipse glow</option>
-              <option value="image" data-i18n="bgImage">Cover image</option>
-              <option value="video" data-i18n="bgVideo">Background video</option>
-            </select>
-          </label>
-          <label class="btn btn-ghost file-btn">
-            <span data-i18n="uploadBg">Upload background</span>
-            <input type="file" id="input-bg" accept="image/*,video/*" hidden />
-          </label>
-          <label class="field">
-            <span><span data-i18n="blur">Blur</span> <output id="bg-blur-out" for="bg-blur">8</output></span>
-            <input type="range" id="bg-blur" min="0" max="20" value="8" />
-          </label>
-          <label class="field">
-            <span><span data-i18n="darken">Darken</span> <output id="bg-darken-out" for="bg-darken">45</output></span>
-            <input type="range" id="bg-darken" min="0" max="90" value="45" />
-          </label>
-          <label class="check-row"><input type="checkbox" id="bg-zoom" checked /> <span data-i18n="slowZoom">Slow zoom</span></label>
-          <label class="check-row"><input type="checkbox" id="video-show-tr" /> <span data-i18n="showTr">Show translation</span></label>
-          <label class="field">
-            <span data-i18n="translation">Translation</span>
-            <select id="select-video-tr">
-              <option value="fr">Français / French</option>
-              <option value="en">English / Anglais</option>
-            </select>
-          </label>
+        <div class="film-tabs" role="tablist" aria-label="Film settings">
+          <button type="button" class="film-tab is-active" role="tab" aria-selected="true" data-film-tab="style" data-i18n="filmTabStyle">Style</button>
+          <button type="button" class="film-tab" role="tab" aria-selected="false" data-film-tab="text" data-i18n="filmTabText">Text</button>
+          <button type="button" class="film-tab" role="tab" aria-selected="false" data-film-tab="background" data-i18n="filmTabBg">Background</button>
+          <button type="button" class="film-tab" role="tab" aria-selected="false" data-film-tab="format" data-i18n="filmTabFormat">Format</button>
+        </div>
+
+        <div class="film-panels">
+          <div class="film-panel field-stack" data-film-panel="style" role="tabpanel">
+            <label class="field">
+              <span data-i18n="template">Template</span>
+              <select id="select-template">
+                <option value="eclipse">Eclipse</option>
+                <option value="minimal">Minimal</option>
+                <option value="cinema">Cinema</option>
+                <option value="karaoke">Karaoke</option>
+                <option value="bilingual">Bilingual</option>
+              </select>
+            </label>
+            <label class="field">
+              <span data-i18n="style">Animation</span>
+              <select id="select-anim">
+                <option value="fadeUp" data-i18n="styleFadeUp">Fade up</option>
+                <option value="glowSweep" data-i18n="styleGlowSweep">Glow sweep</option>
+                <option value="smoke" data-i18n="styleSmoke">Smoke</option>
+                <option value="typewriter" data-i18n="styleTypewriter">Typewriter</option>
+                <option value="blurIn" data-i18n="styleBlurIn">Blur in</option>
+              </select>
+            </label>
+            <label class="field">
+              <span><span data-i18n="inOutSpeed">In / out speed</span> <output id="inout-out" for="inout-speed">0.15</output></span>
+              <input type="range" id="inout-speed" min="0.05" max="0.4" step="0.01" value="0.15" />
+            </label>
+            <label class="check-row"><input type="checkbox" id="video-show-tr" /> <span data-i18n="showTr">Show translation</span></label>
+            <label class="field">
+              <span data-i18n="translation">Translation</span>
+              <select id="select-video-tr">
+                <option value="fr">Français / French</option>
+                <option value="en">English / Anglais</option>
+              </select>
+            </label>
+            <label class="check-row"><input type="checkbox" id="video-intro" checked /> <span data-i18n="introCard">Intro title card</span></label>
+            <label class="check-row"><input type="checkbox" id="video-watermark" /> <span data-i18n="artistWatermark">Artist watermark</span></label>
+            <label class="check-row"><input type="checkbox" id="video-progress" /> <span data-i18n="progressBar">Progress bar</span></label>
+            <label class="check-row"><input type="checkbox" id="video-credit" checked /> <span data-i18n="madeWithCredit">Made with Eclipse Lyrics</span></label>
+            <label class="check-row"><input type="checkbox" id="video-safezones" /> <span data-i18n="safeZones">Safe-zone guides (preview)</span></label>
+          </div>
+
+          <div class="film-panel field-stack" data-film-panel="text" role="tabpanel" hidden>
+            <label class="field">
+              <span data-i18n="font">Font</span>
+              <select id="select-font">
+                <option value="Outfit">Outfit</option>
+                <option value="Noto Sans">Noto Sans</option>
+                <option value="Noto Serif">Noto Serif</option>
+                <option value="Noto Sans Tifinagh">Noto Sans Tifinagh</option>
+              </select>
+            </label>
+            <label class="field">
+              <span><span data-i18n="fontSize">Size</span> <output id="font-size-out" for="font-size">0</output></span>
+              <input type="range" id="font-size" min="0" max="96" value="0" />
+              <span class="tip muted" data-i18n="fontSizeAuto">0 = auto</span>
+            </label>
+            <label class="field">
+              <span data-i18n="fontWeight">Weight</span>
+              <select id="select-weight">
+                <option value="400">400</option>
+                <option value="500">500</option>
+                <option value="600" selected>600</option>
+                <option value="700">700</option>
+              </select>
+            </label>
+            <label class="field">
+              <span data-i18n="textCase">Case</span>
+              <select id="select-case">
+                <option value="none" data-i18n="caseNone">As written</option>
+                <option value="upper" data-i18n="caseUpper">UPPER</option>
+                <option value="lower" data-i18n="caseLower">lower</option>
+                <option value="title" data-i18n="caseTitle">Title Case</option>
+              </select>
+            </label>
+            <label class="field">
+              <span><span data-i18n="letterSpacing">Letter spacing</span> <output id="letter-spacing-out" for="letter-spacing">0</output></span>
+              <input type="range" id="letter-spacing" min="-2" max="8" step="0.5" value="0" />
+            </label>
+            <label class="field">
+              <span data-i18n="position">Position</span>
+              <select id="select-position">
+                <option value="top" data-i18n="posTop">Top third</option>
+                <option value="center" selected data-i18n="posCenter">Center</option>
+                <option value="bottom" data-i18n="posBottom">Bottom third</option>
+              </select>
+            </label>
+            <label class="field">
+              <span data-i18n="align">Alignment</span>
+              <select id="select-align">
+                <option value="left" data-i18n="alignLeft">Left</option>
+                <option value="center" selected data-i18n="alignCenter">Center</option>
+                <option value="right" data-i18n="alignRight">Right</option>
+              </select>
+            </label>
+            <label class="field">
+              <span><span data-i18n="maxWidth">Max width %</span> <output id="max-width-out" for="max-width">82</output></span>
+              <input type="range" id="max-width" min="50" max="95" value="82" />
+            </label>
+            <label class="field">
+              <span data-i18n="textColor">Text color</span>
+              <input type="color" id="text-color" value="#f4ebe6" />
+            </label>
+            <label class="field">
+              <span data-i18n="trColor">Translation color</span>
+              <input type="color" id="tr-color" value="#ffb088" />
+            </label>
+          </div>
+
+          <div class="film-panel field-stack" data-film-panel="background" role="tabpanel" hidden>
+            <label class="field">
+              <span data-i18n="background">Background</span>
+              <select id="select-bg">
+                <option value="eclipse" data-i18n="bgEclipse">Eclipse glow</option>
+                <option value="image" data-i18n="bgImage">Cover image</option>
+                <option value="video" data-i18n="bgVideo">Background video</option>
+                <option value="solid" data-i18n="bgSolid">Solid</option>
+                <option value="gradient" data-i18n="bgGradient">Gradient</option>
+                <option value="reactive" data-i18n="bgReactive">Audio-reactive</option>
+              </select>
+            </label>
+            <label class="btn btn-ghost file-btn">
+              <span data-i18n="uploadBg">Upload background</span>
+              <input type="file" id="input-bg" accept="image/*,video/*" hidden />
+            </label>
+            <label class="field" id="solid-color-field" hidden>
+              <span data-i18n="solidColor">Solid color</span>
+              <input type="color" id="solid-color" value="#000000" />
+            </label>
+            <label class="field">
+              <span><span data-i18n="blur">Blur</span> <output id="bg-blur-out" for="bg-blur">8</output></span>
+              <input type="range" id="bg-blur" min="0" max="20" value="8" />
+            </label>
+            <label class="field">
+              <span><span data-i18n="darken">Darken</span> <output id="bg-darken-out" for="bg-darken">45</output></span>
+              <input type="range" id="bg-darken" min="0" max="90" value="45" />
+            </label>
+            <label class="check-row"><input type="checkbox" id="bg-zoom" checked /> <span data-i18n="slowZoom">Slow zoom</span></label>
+          </div>
+
+          <div class="film-panel field-stack" data-film-panel="format" role="tabpanel" hidden>
+            <label class="field">
+              <span data-i18n="aspect">Aspect</span>
+              <select id="select-aspect">
+                <option value="1080x1920" data-i18n="aspect916">9:16 Reels / TikTok</option>
+                <option value="1920x1080" data-i18n="aspect169">16:9 YouTube</option>
+                <option value="1080x1080" data-i18n="aspect11">1:1 Square</option>
+              </select>
+            </label>
+            <label class="field">
+              <span data-i18n="resolution">Resolution</span>
+              <select id="select-resolution">
+                <option value="720p">720p</option>
+                <option value="1080p" selected>1080p</option>
+                <option value="4k" id="opt-4k">4K</option>
+              </select>
+            </label>
+            <label class="field">
+              <span data-i18n="fps">Frame rate</span>
+              <select id="select-fps">
+                <option value="30" selected>30 fps</option>
+                <option value="60">60 fps</option>
+              </select>
+            </label>
+            <fieldset class="film-section-range">
+              <legend data-i18n="sectionOnly">Render section only (Reels)</legend>
+              <label class="field">
+                <span data-i18n="sectionStart">Start line</span>
+                <select id="select-section-start">
+                  <option value="">— full —</option>
+                </select>
+              </label>
+              <label class="field">
+                <span data-i18n="sectionEnd">End line</span>
+                <select id="select-section-end">
+                  <option value="">— full —</option>
+                </select>
+              </label>
+            </fieldset>
+            <p id="export-path-hint" class="tip muted"></p>
+          </div>
         </div>
 
         <div class="btn-stack">
           <button type="button" id="btn-preview-video" class="btn btn-ghost" data-i18n="livePreview">Live preview</button>
-          <button type="button" id="btn-record" class="btn btn-fill" data-i18n="recordVideo">Record video</button>
-          <button type="button" id="btn-stop-record" class="btn btn-ghost" hidden data-i18n="stopRecording">Stop recording</button>
+          <button type="button" id="btn-record" class="btn btn-fill" data-i18n="recordVideo">Export MP4</button>
+          <button type="button" id="btn-stop-record" class="btn btn-ghost" hidden data-i18n="stopRecording">Cancel</button>
         </div>
         <div id="record-progress" class="record-progress" hidden>
           <div class="bar"><span id="record-bar"></span></div>
-          <p id="record-status" class="muted" data-i18n="recordingKeep">Recording… keep this tab open</p>
+          <p id="record-status" class="muted" data-i18n="recordingKeep">Exporting…</p>
+        </div>
+      </section>
+
+      <!-- HELP -->
+      <section id="screen-help" class="screen" data-screen="help" aria-labelledby="help-heading" hidden>
+        <header class="screen-head">
+          <p class="eyebrow" data-i18n="help">Help</p>
+          <h2 id="help-heading" data-i18n="helpTitle">Help &amp; FAQ</h2>
+          <p class="screen-lead" data-i18n="helpLead">Shortcuts, YouTube upload, and privacy.</p>
+        </header>
+        <article class="help-block">
+          <h3 data-i18n="helpShortcuts">Keyboard shortcuts</h3>
+          <ul class="help-list">
+            <li><kbd>Space</kbd> — <span data-i18n="helpSpace">Tap current line (Sync only)</span></li>
+            <li><kbd>P</kbd> / <kbd>K</kbd> — <span data-i18n="helpPlay">Play / pause (any screen)</span></li>
+            <li><kbd>J</kbd> / <kbd>L</kbd> — <span data-i18n="helpSeek">Seek −5s / +5s</span></li>
+            <li><kbd>←</kbd> <kbd>→</kbd> — <span data-i18n="helpNudge">Nudge selected line ±50 ms</span></li>
+            <li><kbd>Backspace</kbd> — <span data-i18n="helpUndo">Undo last tap</span></li>
+          </ul>
+        </article>
+        <article class="help-block">
+          <h3 data-i18n="helpYoutubeTitle">Upload SRT to YouTube</h3>
+          <p data-i18n="helpYoutubeBody">YouTube Studio → Subtitles → Upload file → With timing. Use the Export screen’s Download .srt.</p>
+        </article>
+        <article class="help-block">
+          <h3 data-i18n="helpFaqTitle">FAQ</h3>
+          <p><strong data-i18n="helpFaqAudioQ">Is my audio uploaded?</strong></p>
+          <p data-i18n="helpFaqAudioA">No. Audio and lyrics stay on this device. Exports download locally.</p>
+          <p><strong data-i18n="helpFaqOfflineQ">Does it work offline?</strong></p>
+          <p data-i18n="helpFaqOfflineA">Yes after the first visit — the app shell, fonts, and vendor files are cached.</p>
+        </article>
+        <p class="muted tip">
+          <span data-i18n="madeSomething">Made something?</span>
+          <a href="https://instagram.com/laousmail" rel="noopener noreferrer" target="_blank" data-i18n="tagLaousmail">Tag @laousmail</a>
+        </p>
+        <div class="btn-stack">
+          <button type="button" class="btn btn-fill" data-goto="projects" data-i18n="tabProjects">Projects</button>
+          <button type="button" id="btn-help-demo" class="btn btn-ghost" data-i18n="tryDemo">Try with a demo song</button>
         </div>
       </section>
     </main>
@@ -446,7 +800,11 @@
     </div>
 
     <nav class="app-tabbar" aria-label="Main">
-      <button type="button" class="tab is-active" data-goto="audio" aria-current="page">
+      <button type="button" class="tab is-active" data-goto="projects" aria-current="page">
+        <span class="tab-icon" data-icon="list" aria-hidden="true"></span>
+        <span data-i18n="tabProjects">Projects</span>
+      </button>
+      <button type="button" class="tab" data-goto="audio">
         <span class="tab-icon" data-icon="music" aria-hidden="true"></span>
         <span data-i18n="tabAudio">Audio</span>
       </button>
@@ -466,15 +824,24 @@
         <span class="tab-icon" data-icon="film" aria-hidden="true"></span>
         <span data-i18n="tabFilm">Film</span>
       </button>
+      <button type="button" class="tab" data-goto="help">
+        <span class="tab-icon" aria-hidden="true">?</span>
+        <span data-i18n="help">Help</span>
+      </button>
     </nav>
   </div>
 
   <footer class="site-footer desktop-credit">
     <p>
-      <span data-i18n="brandTag">by laousmail</span>
+      <span data-i18n="madeInMtl">Made in Montréal by laousmail</span>
       ·
       <a href="https://laousmail.com" rel="noopener noreferrer" target="_blank">laousmail.com</a>
+      ·
+      <a href="https://github.com/laousmail/Eclipse-Lyrics/issues" rel="noopener noreferrer" target="_blank" data-i18n="feedback">Feedback</a>
+      ·
+      <a href="https://ko-fi.com/laousmail" rel="noopener noreferrer" target="_blank" data-i18n="support">Support</a>
     </p>
+    <p class="muted tip privacy-note" data-i18n="privacyNote">Privacy: audio and lyrics never leave this device. Optional cookie-free page-view analytics only if enabled.</p>
   </footer>
 
   <script type="module" src="js/main.js"></script>

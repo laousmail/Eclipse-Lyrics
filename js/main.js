@@ -22,6 +22,13 @@ import {
   ensureRows,
   countOverLimit,
 } from "./ui/lyricsGrid.js";
+import { renderProjectsList } from "./ui/projectsList.js";
+import {
+  downloadEclipseJson,
+  downloadEclipseBundle,
+  importProjectFile,
+  peaksToThumb,
+} from "./projectFile.js";
 import {
   migrateProject,
   setDurationSec,
@@ -31,7 +38,13 @@ import {
   lineEn,
   audioId,
   isLyric,
+  createEmptyProject,
+  projectId,
 } from "./core/project.js";
+import * as pwa from "./pwa.js";
+import * as onboarding from "./onboarding.js";
+import * as demo from "./demo.js";
+import * as analytics from "./analytics.js";
 import {
   DEFAULT_TAP_OFFSET_MS,
   computeAverageDelayMs,
@@ -48,6 +61,7 @@ const state = {
   tapIndex: 0,
   audioBlob: null,
   waveform: null,
+  peaks: null,
   screen: "audio",
   scrubbing: false,
   audioReady: false,
@@ -71,6 +85,7 @@ store.reset({
 });
 
 video.bindProject(() => state.project);
+video.bindPeaks(() => state.peaks || null);
 
 function publishStore(patch = {}) {
   store.set({
@@ -83,8 +98,10 @@ function publishStore(patch = {}) {
 }
 
 const $ = (id) => document.getElementById(id);
-const SCREENS = ["audio", "lyrics", "sync", "export", "video"];
+const SCREENS = ["projects", "audio", "lyrics", "sync", "export", "video", "help"];
 const SCRUB_MAX = 1000;
+let pendingDeleteId = null;
+let renameTargetId = null;
 
 function showScreen(name, { pushHash = true, persistScreen = true } = {}) {
   if (!SCREENS.includes(name)) return;
@@ -119,8 +136,15 @@ function showScreen(name, { pushHash = true, persistScreen = true } = {}) {
     btn.classList.toggle("is-active", btn.dataset.goto === name);
   });
   updateDockVisibility();
+  if (name === "projects") {
+    refreshProjectsList();
+  }
   if (name === "lyrics") {
     refreshLyricsGrid();
+  }
+  if (name === "export") {
+    syncExportFieldsFromProject();
+    updateExportPreview();
   }
   if (name === "sync") {
     requestAnimationFrame(() => {
@@ -138,7 +162,11 @@ function showScreen(name, { pushHash = true, persistScreen = true } = {}) {
     const hash = `#${name}`;
     if (location.hash !== hash) window.history.replaceState(null, "", hash);
   }
-  if (changed) haptics.tick();
+  if (changed) {
+    haptics.tick();
+    maybeShowScreenTip(name);
+    analytics.trackPageView();
+  }
 }
 
 function updateDockVisibility() {
@@ -594,8 +622,15 @@ async function handleAudioFile(file, { stayOnScreen = false } = {}) {
     } catch {
       peaks = computePeaks(result.buffer);
     }
+    state.peaks = peaks;
     state.waveform?.setPeaks(peaks, result.duration);
     state.waveform?.setDuration(result.duration);
+    state.project.audio.waveformThumb = peaksToThumb(peaks);
+    if (!state.project.title) {
+      state.project.title = titleFromFileName(result.fileName);
+      if ($("field-title")) $("field-title").value = state.project.title;
+      if ($("field-export-title")) $("field-export-title").value = state.project.title;
+    }
     setStatus(`${result.fileName} · ${formatClock(result.duration)}`);
     sync.recomputeEnds(state.project.lines, state.project.audio.durationMs);
     renderLineList();
@@ -649,8 +684,15 @@ async function handleAudioUrl() {
     } catch {
       peaks = computePeaks(result.buffer);
     }
+    state.peaks = peaks;
     state.waveform?.setPeaks(peaks, result.duration);
     state.waveform?.setDuration(result.duration);
+    state.project.audio.waveformThumb = peaksToThumb(peaks);
+    if (!state.project.title) {
+      state.project.title = titleFromFileName(result.fileName);
+      if ($("field-title")) $("field-title").value = state.project.title;
+      if ($("field-export-title")) $("field-export-title").value = state.project.title;
+    }
     setStatus(`${result.fileName} · ${formatClock(result.duration)}`);
     sync.recomputeEnds(state.project.lines, state.project.audio.durationMs);
     renderLineList();
@@ -768,6 +810,7 @@ function doTap() {
   pushTimingCommand("tap", before, after, beforeTap, beforeSel, afterTap, afterSel);
   haptics.tap();
   flashTapConfirm();
+  announceLineTimed(idx, state.project.lines[idx]?.startMs ?? tMs);
   if (result.done) showToast(i18n.t("allLinesTimed"));
   scrollTapLineIntoView(true);
 }
@@ -1066,11 +1109,20 @@ function updateExportButtons() {
     "btn-export-srt",
     "btn-export-vtt",
     "btn-export-json",
+    "btn-export-txt",
+    "btn-export-releases",
+    "btn-export-zip",
+    "btn-copy-srt",
+    "btn-share-srt",
     "btn-export-tr-files",
   ].forEach((id) => {
     const btn = $(id);
-    if (btn) btn.disabled = timed === 0 && id !== "btn-export-json";
+    if (!btn) return;
+    const always = id === "btn-export-json";
+    btn.disabled = timed === 0 && !always;
   });
+  const sep = $("btn-export-tr-files");
+  if (sep) sep.hidden = ($("select-export-lang")?.value || "main") !== "separate";
 }
 
 function askExportGuard(untimed) {
@@ -1095,6 +1147,7 @@ function askExportGuard(untimed) {
 }
 
 async function runExport(fn) {
+  readExportSettings({ save: true });
   const timed = countTimed();
   if (timed === 0) {
     showToast(i18n.t("exportNoneTimed"));
@@ -1105,46 +1158,182 @@ async function runExport(fn) {
     const ok = await askExportGuard(untimed);
     if (!ok) return;
   }
-  fn();
+  await fn();
   haptics.success();
+  analytics.trackExport("subtitles");
 }
 
 function exportOpts() {
+  const mode = $("select-export-lang")?.value || state.project.settings?.export?.languages || "main";
+  const globalOffsetMs = Number($("field-global-offset")?.value ?? state.project.settings?.export?.globalOffsetMs ?? 0);
+  const minLineMs = Number($("field-min-line")?.value ?? state.project.settings?.export?.minLineMs ?? 700);
+  const maxGapMs = Number($("field-max-gap")?.value ?? state.project.settings?.export?.maxGapMs ?? 8000);
+  const includeTr = mode === "main+fr" || mode === "main+en";
+  const trLang = mode === "main+en" ? "en" : "fr";
+  if ($("opt-include-tr")) $("opt-include-tr").checked = includeTr;
+  if ($("select-tr-lang")) $("select-tr-lang").value = trLang;
   return {
-    includeTr: $("opt-include-tr").checked,
-    trLang: $("select-tr-lang").value,
+    languages: mode,
+    includeTr,
+    trLang,
+    globalOffsetMs,
+    minLineMs,
+    maxGapMs,
   };
 }
 
+function syncExportFieldsFromProject() {
+  const ex = state.project.settings?.export || {};
+  if ($("select-export-lang") && ex.languages) $("select-export-lang").value = ex.languages;
+  if ($("field-global-offset")) $("field-global-offset").value = String(ex.globalOffsetMs ?? 0);
+  if ($("field-min-line")) $("field-min-line").value = String(ex.minLineMs ?? 700);
+  if ($("field-max-gap")) $("field-max-gap").value = String(ex.maxGapMs ?? 8000);
+  if ($("field-export-title")) $("field-export-title").value = state.project.title || "";
+  if ($("field-export-artist")) $("field-export-artist").value = state.project.artist || "";
+}
+
+function readExportSettings({ save = true } = {}) {
+  if (!state.project.settings.export) {
+    state.project.settings.export = createEmptyProject().settings.export;
+  }
+  const ex = state.project.settings.export;
+  const opts = exportOpts();
+  ex.languages = opts.languages;
+  ex.globalOffsetMs = opts.globalOffsetMs;
+  ex.minLineMs = opts.minLineMs;
+  ex.maxGapMs = opts.maxGapMs;
+  state.project.settings.includeTranslationInExport = opts.includeTr;
+  if (opts.includeTr) state.project.settings.translationLang = opts.trLang;
+  if (save) persist();
+  updateExportPreview();
+}
+
+function updateExportPreview() {
+  const pre = $("export-preview-code");
+  if (!pre) return;
+  try {
+    pre.textContent = exp.previewCues(state.project, exportOpts(), 10) || "—";
+  } catch {
+    pre.textContent = "—";
+  }
+}
+
+function titleFromFileName(fileName) {
+  return String(fileName || "")
+    .replace(/\.[a-z0-9]{2,5}$/i, "")
+    .replace(/[_-]+/g, " ")
+    .trim();
+}
+
 function syncFieldsFromProject() {
-  $("field-title").value = state.project.title || "";
-  $("field-artist").value = state.project.artist || "";
+  if ($("field-title")) $("field-title").value = state.project.title || "";
+  if ($("field-artist")) $("field-artist").value = state.project.artist || "";
+  if ($("field-export-title")) $("field-export-title").value = state.project.title || "";
+  if ($("field-export-artist")) $("field-export-artist").value = state.project.artist || "";
   state.lyricsRows = rowsFromProject(state.project);
   if (!state.lyricsRows.length) state.lyricsRows = [{ main: "", fr: "", en: "" }];
   mirrorFieldsFromRows();
   if (state.screen === "lyrics") refreshLyricsGrid();
   const s = state.project.settings || {};
   if (s.tapOffsetMs == null) s.tapOffsetMs = DEFAULT_TAP_OFFSET_MS;
+  if (!s.export) s.export = createEmptyProject().settings.export;
   if (s.playbackRate) {
     $("select-speed").value = String(s.playbackRate);
     audio.setPlaybackRate(s.playbackRate);
   }
+  syncExportFieldsFromProject();
   updateOffsetChip();
   const v = s.video || {};
-  if (v.aspect) $("select-aspect").value = v.aspect;
-  if (v.style) $("select-anim").value = v.style;
-  if (v.background) $("select-bg").value = v.background;
-  if (v.blur != null) $("bg-blur").value = v.blur;
-  if (v.darken != null) $("bg-darken").value = v.darken;
-  $("bg-zoom").checked = v.zoom !== false;
-  $("video-show-tr").checked = Boolean(v.showTranslation);
-  if (v.translationLang) $("select-video-tr").value = v.translationLang;
+  if (v.aspect && $("select-aspect")) $("select-aspect").value = v.aspect;
+  if (v.resolution && $("select-resolution")) $("select-resolution").value = v.resolution;
+  if (v.fps && $("select-fps")) $("select-fps").value = String(v.fps);
+  if (v.template && $("select-template")) $("select-template").value = v.template;
+  if (v.style && $("select-anim")) $("select-anim").value = v.style;
+  if (v.background && $("select-bg")) $("select-bg").value = v.background;
+  if (v.blur != null && $("bg-blur")) $("bg-blur").value = v.blur;
+  if (v.darken != null && $("bg-darken")) $("bg-darken").value = v.darken;
+  if ($("bg-zoom")) $("bg-zoom").checked = v.zoom !== false;
+  if ($("video-show-tr")) $("video-show-tr").checked = Boolean(v.showTranslation);
+  if (v.translationLang && $("select-video-tr")) $("select-video-tr").value = v.translationLang;
+  if ($("inout-speed") && v.inOutSpeed != null) $("inout-speed").value = v.inOutSpeed;
+  if ($("select-font") && v.font) $("select-font").value = v.font;
+  if ($("font-size") && v.fontSize != null) $("font-size").value = v.fontSize || 0;
+  if ($("select-weight") && v.fontWeight) $("select-weight").value = String(v.fontWeight);
+  if ($("select-case") && v.textCase) $("select-case").value = v.textCase;
+  if ($("letter-spacing") && v.letterSpacing != null) $("letter-spacing").value = v.letterSpacing;
+  if ($("select-position") && v.position) $("select-position").value = v.position;
+  if ($("select-align") && v.align) $("select-align").value = v.align;
+  if ($("max-width") && v.maxWidthPct != null) $("max-width").value = v.maxWidthPct;
+  if ($("text-color") && v.textColor) $("text-color").value = v.textColor;
+  if ($("tr-color") && v.translationColor) $("tr-color").value = v.translationColor;
+  if ($("solid-color") && v.solidColor) $("solid-color").value = v.solidColor;
+  if ($("video-intro")) $("video-intro").checked = v.introCard !== false;
+  if ($("video-watermark")) $("video-watermark").checked = Boolean(v.watermark);
+  if ($("video-progress")) $("video-progress").checked = Boolean(v.progressBar);
+  if ($("video-credit")) $("video-credit").checked = v.credit !== false;
+  if ($("video-safezones")) $("video-safezones").checked = false;
+  syncFilmLineSelects();
+  updateFilmOutputs();
   $("opt-include-tr").checked = Boolean(s.includeTranslationInExport);
   if (s.translationLang) $("select-tr-lang").value = s.translationLang;
   const fileName = state.project.audio?.fileName || state.project.audioFileName;
   if (fileName) {
     updateAudioLoadedUI(fileName, durationSec(state.project) || state.project.duration || 0);
   }
+  syncVideoScrubRange();
+}
+
+function updateFilmOutputs() {
+  const map = [
+    ["bg-blur", "bg-blur-out"],
+    ["bg-darken", "bg-darken-out"],
+    ["inout-speed", "inout-out"],
+    ["font-size", "font-size-out"],
+    ["letter-spacing", "letter-spacing-out"],
+    ["max-width", "max-width-out"],
+  ];
+  for (const [id, out] of map) {
+    if ($(id) && $(out)) $(out).textContent = $(id).value;
+  }
+  const solidField = $("solid-color-field");
+  if (solidField && $("select-bg")) {
+    solidField.hidden = $("select-bg").value !== "solid";
+  }
+}
+
+function syncFilmLineSelects() {
+  const lines = state.project?.lines || [];
+  const fill = (sel, current) => {
+    if (!sel) return;
+    const prev = current ?? sel.value;
+    sel.innerHTML = `<option value="">—</option>`;
+    lines.forEach((line, i) => {
+      if (!sync.isLyric(line)) return;
+      const label = `${i + 1}. ${(sync.lineMainText(line) || "").slice(0, 42)}`;
+      const opt = document.createElement("option");
+      opt.value = String(i);
+      opt.textContent = label;
+      sel.appendChild(opt);
+    });
+    if (prev !== "" && [...sel.options].some((o) => o.value === String(prev))) {
+      sel.value = String(prev);
+    }
+  };
+  const v = state.project?.settings?.video || {};
+  fill($("select-jump-line"));
+  fill($("select-section-start"), v.sectionStartLine);
+  fill($("select-section-end"), v.sectionEndLine);
+}
+
+function syncVideoScrubRange() {
+  const scrub = $("video-scrub");
+  if (!scrub) return;
+  const durMs =
+    state.project?.audio?.durationMs ||
+    Math.round((durationSec(state.project) || 0) * 1000) ||
+    1000;
+  scrub.max = String(Math.max(1, durMs));
+  if (Number(scrub.value) > durMs) scrub.value = "0";
 }
 
 function readVideoSettings({ save = true } = {}) {
@@ -1152,14 +1341,40 @@ function readVideoSettings({ save = true } = {}) {
     state.project.settings.video = sync.createEmptyProject().settings.video;
   }
   const v = state.project.settings.video;
-  v.aspect = $("select-aspect").value;
-  v.style = $("select-anim").value;
-  v.background = $("select-bg").value;
-  v.blur = Number($("bg-blur").value);
-  v.darken = Number($("bg-darken").value);
-  v.zoom = $("bg-zoom").checked;
-  v.showTranslation = $("video-show-tr").checked;
-  v.translationLang = $("select-video-tr").value;
+  if ($("select-aspect")) v.aspect = $("select-aspect").value;
+  if ($("select-resolution")) v.resolution = $("select-resolution").value;
+  if ($("select-fps")) v.fps = Number($("select-fps").value) || 30;
+  if ($("select-template")) v.template = $("select-template").value;
+  if ($("select-anim")) v.style = $("select-anim").value;
+  if ($("select-bg")) v.background = $("select-bg").value;
+  if ($("bg-blur")) v.blur = Number($("bg-blur").value);
+  if ($("bg-darken")) v.darken = Number($("bg-darken").value);
+  if ($("bg-zoom")) v.zoom = $("bg-zoom").checked;
+  if ($("video-show-tr")) v.showTranslation = $("video-show-tr").checked;
+  if ($("select-video-tr")) v.translationLang = $("select-video-tr").value;
+  if ($("inout-speed")) v.inOutSpeed = Number($("inout-speed").value);
+  if ($("select-font")) v.font = $("select-font").value;
+  if ($("font-size")) v.fontSize = Number($("font-size").value) || 0;
+  if ($("select-weight")) v.fontWeight = Number($("select-weight").value) || 600;
+  if ($("select-case")) v.textCase = $("select-case").value;
+  if ($("letter-spacing")) v.letterSpacing = Number($("letter-spacing").value) || 0;
+  if ($("select-position")) v.position = $("select-position").value;
+  if ($("select-align")) v.align = $("select-align").value;
+  if ($("max-width")) v.maxWidthPct = Number($("max-width").value) || 82;
+  if ($("text-color")) v.textColor = $("text-color").value;
+  if ($("tr-color")) v.translationColor = $("tr-color").value;
+  if ($("solid-color")) v.solidColor = $("solid-color").value;
+  if ($("video-intro")) v.introCard = $("video-intro").checked;
+  if ($("video-watermark")) {
+    v.watermark = $("video-watermark").checked;
+    v.watermarkText = v.watermark ? state.project.artist || state.project.title || "" : "";
+  }
+  if ($("video-progress")) v.progressBar = $("video-progress").checked;
+  if ($("video-credit")) v.credit = $("video-credit").checked;
+  if ($("select-section-start")) v.sectionStartLine = $("select-section-start").value;
+  if ($("select-section-end")) v.sectionEndLine = $("select-section-end").value;
+  video.setSafeZones(Boolean($("video-safezones")?.checked));
+  updateFilmOutputs();
   if (save) persist();
 }
 
@@ -1278,6 +1493,30 @@ function setupKeyboard() {
     if (key === "." || key === ">") {
       e.preventDefault();
       bumpSpeed(0.25);
+      return;
+    }
+    // Waveform keyboard equivalents (zoom / follow)
+    if (key === "+" || key === "=") {
+      e.preventDefault();
+      state.waveform?.zoomIn?.();
+      return;
+    }
+    if (key === "-" || key === "_") {
+      e.preventDefault();
+      state.waveform?.zoomOut?.();
+      return;
+    }
+    if (key === "f" || key === "F") {
+      e.preventDefault();
+      const on = !state.waveform?.getFollow?.();
+      state.waveform?.setFollow?.(on);
+      return;
+    }
+    if (key === "[" || key === "]") {
+      e.preventDefault();
+      const cur = audio.getCurrentTime();
+      audio.seek(Math.max(0, cur + (key === "[" ? -1 : 1)));
+      updateTimeDisplay();
     }
   });
 }
@@ -1328,8 +1567,6 @@ function setupNavigation() {
   $("more-sheet")?.addEventListener("click", (e) => {
     if (e.target === $("more-sheet")) closeSheet("more-sheet");
   });
-  $("btn-save-project")?.addEventListener("click", () => closeSheet("more-sheet"));
-  $("input-project")?.addEventListener("change", () => closeSheet("more-sheet"));
   $("input-import")?.addEventListener("change", () => closeSheet("more-sheet"));
 
   document.querySelectorAll(".lang-btn").forEach((btn) => {
@@ -1491,7 +1728,8 @@ async function restoreSession(meta) {
     setStatus(`${state.project.audio?.fileName || meta.audioFileName}`);
   }
   const last = state.project.lastScreen || meta.lastScreen;
-  showScreen(SCREENS.includes(last) ? last : "audio", { persistScreen: false });
+  const screen = SCREENS.includes(last) && last !== "projects" ? last : "audio";
+  showScreen(screen, { persistScreen: false });
 }
 
 function askImportMultiLine() {
@@ -1582,10 +1820,11 @@ function setupUI() {
   setupKeyboard();
   setupScrubber();
 
+  // Boot() chooses projects vs last project; avoid flashing audio here
   const initial = (location.hash || "").replace(/^#/, "");
-  showScreen(SCREENS.includes(initial) ? initial : "audio", {
-    pushHash: !SCREENS.includes(initial),
-  });
+  if (SCREENS.includes(initial)) {
+    showScreen(initial, { pushHash: false, persistScreen: false });
+  }
 
   $("line-list")?.addEventListener(
     "scroll",
@@ -1837,58 +2076,160 @@ function setupUI() {
     persist();
   });
 
-  $("field-title").addEventListener("input", () => {
-    state.project.title = $("field-title").value;
+  const syncTitle = (value) => {
+    state.project.title = value;
+    if ($("field-title") && $("field-title") !== document.activeElement) $("field-title").value = value;
+    if ($("field-export-title") && $("field-export-title") !== document.activeElement) {
+      $("field-export-title").value = value;
+    }
     persist();
-  });
-  $("field-artist").addEventListener("input", () => {
-    state.project.artist = $("field-artist").value;
+  };
+  const syncArtist = (value) => {
+    state.project.artist = value;
+    if ($("field-artist") && $("field-artist") !== document.activeElement) $("field-artist").value = value;
+    if ($("field-export-artist") && $("field-export-artist") !== document.activeElement) {
+      $("field-export-artist").value = value;
+    }
     persist();
-  });
+  };
+  $("field-title")?.addEventListener("input", () => syncTitle($("field-title").value));
+  $("field-artist")?.addEventListener("input", () => syncArtist($("field-artist").value));
+  $("field-export-title")?.addEventListener("input", () => syncTitle($("field-export-title").value));
+  $("field-export-artist")?.addEventListener("input", () => syncArtist($("field-export-artist").value));
 
-  $("btn-export-lrc").addEventListener("click", () => runExport(() => exp.downloadLRC(state.project)));
-  $("btn-export-srt").addEventListener("click", () => runExport(() => exp.downloadSRT(state.project, exportOpts())));
-  $("btn-export-vtt").addEventListener("click", () => runExport(() => exp.downloadVTT(state.project, exportOpts())));
-  $("btn-export-json").addEventListener("click", () => {
+  $("btn-export-lrc")?.addEventListener("click", () =>
+    runExport(() => exp.downloadLRC(state.project, exportOpts()))
+  );
+  $("btn-export-srt")?.addEventListener("click", () =>
+    runExport(() => {
+      const opts = exportOpts();
+      if (opts.languages === "separate") exp.downloadPerLanguage(state.project, "srt", opts);
+      else exp.downloadSRT(state.project, opts);
+    })
+  );
+  $("btn-export-vtt")?.addEventListener("click", () =>
+    runExport(() => exp.downloadVTT(state.project, exportOpts()))
+  );
+  $("btn-export-txt")?.addEventListener("click", () => runExport(() => exp.downloadTXT(state.project)));
+  $("btn-export-json")?.addEventListener("click", () => {
     exp.downloadJSON(state.project);
     haptics.success();
   });
-  $("btn-export-tr-files").addEventListener("click", () =>
-    runExport(() => exp.downloadPerLanguage(state.project, "srt"))
+  $("btn-export-releases")?.addEventListener("click", () => {
+    exp.downloadLaousmailJson(state.project);
+    haptics.success();
+  });
+  $("btn-export-zip")?.addEventListener("click", () =>
+    runExport(() => exp.downloadAllZip(state.project, exportOpts()))
+  );
+  $("btn-copy-srt")?.addEventListener("click", async () => {
+    const ok = await runExport(async () => {
+      const text = exp.toSRT(state.project, exportOpts());
+      const copied = await exp.copyText(text);
+      if (!copied) throw new Error(i18n.t("copyFailed"));
+      showToast(i18n.t("copied"));
+    });
+    void ok;
+  });
+  $("btn-share-srt")?.addEventListener("click", async () => {
+    await runExport(async () => {
+      const opts = exportOpts();
+      const blob = exp.srtBlob(state.project, opts);
+      const fileName = `${(state.project.title || "lyrics").replace(/\s+/g, "-")}.srt`;
+      const file = new File([blob], fileName, { type: blob.type });
+      try {
+        const shared = await exp.shareFiles([file], state.project.title || "Eclipse Lyrics");
+        if (!shared) {
+          exp.downloadSRT(state.project, opts);
+          showToast(i18n.t("shareUnavailable"));
+        }
+      } catch {
+        exp.downloadSRT(state.project, opts);
+        showToast(i18n.t("shareUnavailable"));
+      }
+    });
+  });
+  $("btn-export-tr-files")?.addEventListener("click", () =>
+    runExport(() => exp.downloadPerLanguage(state.project, "srt", exportOpts()))
   );
   updateExportButtons();
 
-  $("opt-include-tr").addEventListener("change", () => {
-    state.project.settings.includeTranslationInExport = $("opt-include-tr").checked;
-    persist();
-  });
-  $("select-tr-lang").addEventListener("change", () => {
-    state.project.settings.translationLang = $("select-tr-lang").value;
-    persist();
-    updatePreview(audio.getCurrentTime());
+  ["select-export-lang", "field-global-offset", "field-min-line", "field-max-gap"].forEach((id) => {
+    $(id)?.addEventListener("change", () => {
+      readExportSettings();
+      updateExportButtons();
+    });
+    $(id)?.addEventListener("input", () => {
+      readExportSettings({ save: false });
+    });
   });
 
-  $("btn-save-project").addEventListener("click", () => {
-    storage.downloadProjectFile(state.project);
+  $("btn-new-project")?.addEventListener("click", () => startNewProject());
+  $("btn-goto-projects")?.addEventListener("click", () => {
+    closeSheet("more-sheet");
+    showScreen("projects");
+  });
+  $("btn-rename-save")?.addEventListener("click", async () => {
+    const id = renameTargetId;
+    const title = $("field-rename")?.value?.trim() || "";
+    closeSheet("rename-dialog");
+    renameTargetId = null;
+    if (!id) return;
+    const p = await db.getProject(id);
+    if (!p) return;
+    p.title = title;
+    await db.saveProject(p);
+    if (state.project?.id === id) {
+      state.project.title = title;
+      syncFieldsFromProject();
+      persist();
+    }
+    refreshProjectsList();
+  });
+  $("btn-rename-cancel")?.addEventListener("click", () => closeSheet("rename-dialog"));
+  $("btn-delete-confirm")?.addEventListener("click", () => confirmDeleteProject());
+  $("btn-delete-cancel")?.addEventListener("click", () => {
+    pendingDeleteId = null;
+    closeSheet("delete-dialog");
+  });
+
+  $("btn-save-project")?.addEventListener("click", () => {
+    downloadEclipseJson(state.project);
+    closeSheet("more-sheet");
+    haptics.success();
+  });
+  $("btn-export-bundle")?.addEventListener("click", async () => {
+    closeSheet("more-sheet");
+    await downloadEclipseBundle(state.project, state.audioBlob);
     haptics.success();
   });
 
-  $("input-project").addEventListener("change", async (e) => {
-    const file = e.target.files?.[0];
+  async function handleProjectFileInput(file) {
     if (!file) return;
     try {
-      const text = await file.text();
-      let data;
-      try {
-        data = JSON.parse(text);
-      } catch {
-        throw new Error(i18n.t("errProjectJson"));
+      const { project, audioBlob, audioFileName } = await importProjectFile(file);
+      await db.saveProject(project);
+      if (audioBlob) {
+        await db.saveAudio(project.audio.storedAudioId, audioBlob, audioFileName || project.audio.fileName || "");
       }
-      if (!isValidProjectShape(data)) throw new Error(i18n.t("errProjectShape"));
-      mergeImported(data);
+      await restoreSession(project);
+      showToast(i18n.t("projectOpened"));
+      haptics.success();
     } catch (err) {
+      console.error(err);
       showToast(err.message || i18n.t("errImport"));
     }
+  }
+
+  $("input-project")?.addEventListener("change", async (e) => {
+    const file = e.target.files?.[0];
+    await handleProjectFileInput(file);
+    e.target.value = "";
+    closeSheet("more-sheet");
+  });
+  $("input-project-home")?.addEventListener("change", async (e) => {
+    const file = e.target.files?.[0];
+    await handleProjectFileInput(file);
     e.target.value = "";
   });
 
@@ -1914,8 +2255,39 @@ function setupUI() {
     e.target.value = "";
   });
 
-  [
+  // Film settings tabs
+  document.querySelectorAll("[data-film-tab]").forEach((tab) => {
+    tab.addEventListener("click", () => {
+      const name = tab.getAttribute("data-film-tab");
+      document.querySelectorAll("[data-film-tab]").forEach((t) => {
+        const on = t === tab;
+        t.classList.toggle("is-active", on);
+        t.setAttribute("aria-selected", on ? "true" : "false");
+      });
+      document.querySelectorAll("[data-film-panel]").forEach((panel) => {
+        panel.hidden = panel.getAttribute("data-film-panel") !== name;
+      });
+    });
+  });
+
+  // Hide 4K on narrow / touch-first (desktop only)
+  const opt4k = $("opt-4k");
+  if (opt4k && window.matchMedia("(max-width: 900px)").matches) {
+    opt4k.disabled = true;
+    opt4k.hidden = true;
+  }
+
+  video.detectExportPath?.().then((path) => {
+    const hint = $("export-path-hint");
+    if (!hint) return;
+    hint.textContent =
+      path === "webcodecs" ? i18n.t("exportPathWebcodecs") : i18n.t("exportPathFallback");
+  });
+
+  const videoControlIds = [
     "select-aspect",
+    "select-resolution",
+    "select-fps",
     "select-anim",
     "select-bg",
     "bg-blur",
@@ -1923,18 +2295,47 @@ function setupUI() {
     "bg-zoom",
     "video-show-tr",
     "select-video-tr",
-  ].forEach((id) => {
+    "inout-speed",
+    "select-font",
+    "font-size",
+    "select-weight",
+    "select-case",
+    "letter-spacing",
+    "select-position",
+    "select-align",
+    "max-width",
+    "text-color",
+    "tr-color",
+    "solid-color",
+    "video-intro",
+    "video-watermark",
+    "video-progress",
+    "video-credit",
+    "video-safezones",
+    "select-section-start",
+    "select-section-end",
+  ];
+  videoControlIds.forEach((id) => {
     $(id)?.addEventListener("change", () => {
       readVideoSettings();
       video.renderFrame(state.project);
     });
     $(id)?.addEventListener("input", () => {
-      readVideoSettings();
+      readVideoSettings({ save: false });
       video.renderFrame(state.project);
     });
   });
 
-  $("input-bg").addEventListener("change", (e) => {
+  $("select-template")?.addEventListener("change", () => {
+    const id = $("select-template").value;
+    const next = video.applyTemplate(state.project.settings.video || {}, id);
+    state.project.settings.video = next;
+    syncFieldsFromProject();
+    readVideoSettings();
+    video.renderFrame(state.project);
+  });
+
+  $("input-bg")?.addEventListener("change", (e) => {
     const file = e.target.files?.[0];
     video.setBackgroundFile(file);
     if (file?.type.startsWith("video/")) $("select-bg").value = "video";
@@ -1943,20 +2344,41 @@ function setupUI() {
     video.renderFrame(state.project);
   });
 
-  $("btn-preview-video").addEventListener("click", async () => {
+  $("video-scrub")?.addEventListener("input", () => {
+    const ms = Number($("video-scrub").value) || 0;
+    video.setScrubMs(ms);
+    if ($("video-scrub-time")) $("video-scrub-time").textContent = sync.formatMs(ms);
+    video.disablePreview();
+    if ($("btn-preview-video")) $("btn-preview-video").textContent = i18n.t("livePreview");
+    video.renderFrame(state.project);
+  });
+
+  $("select-jump-line")?.addEventListener("change", () => {
+    const idx = Number($("select-jump-line").value);
+    const line = state.project.lines[idx];
+    if (!line || line.startMs == null) return;
+    video.setScrubMs(line.startMs);
+    if ($("video-scrub")) $("video-scrub").value = String(line.startMs);
+    if ($("video-scrub-time")) $("video-scrub-time").textContent = sync.formatMs(line.startMs);
+    audio.seek(line.startMs / 1000);
+    video.renderFrame(state.project);
+  });
+
+  $("btn-preview-video")?.addEventListener("click", async () => {
     readVideoSettings();
     if (video.isPreviewEnabled()) {
       video.disablePreview();
       $("btn-preview-video").textContent = i18n.t("livePreview");
     } else {
-      await video.ensureVideoFonts();
+      video.setScrubMs(null);
+      await video.ensureVideoFonts(state.project.settings.video);
       video.enablePreview();
       $("btn-preview-video").textContent = i18n.t("stopPreview");
     }
   });
 
   let recordPausedByHide = false;
-  $("btn-record").addEventListener("click", async () => {
+  $("btn-record")?.addEventListener("click", async () => {
     const status = $("record-status");
     if (recordPausedByHide) {
       if (video.resumeRecordingIfPaused()) {
@@ -1968,16 +2390,21 @@ function setupUI() {
       return;
     }
     readVideoSettings();
+    syncFilmLineSelects();
     const prog = $("record-progress");
     const bar = $("record-bar");
     prog.hidden = false;
     $("btn-stop-record").hidden = false;
     $("btn-record").disabled = true;
-    status.textContent = i18n.t("recordingKeep");
-    await video.startRecording(state.project, {
-      onProgress: (p) => {
+    status.textContent = i18n.t("exporting");
+    await video.startVideoExport(state.project, {
+      onProgress: (info) => {
+        const p = info.progress ?? info;
         bar.style.width = `${Math.round(p * 100)}%`;
-        status.textContent = `${i18n.t("recordingKeep")} ${Math.round(p * 100)}%`;
+        const eta = info.etaSec != null ? ` · ${video.formatEta(info.etaSec)} ${i18n.t("left")}` : "";
+        const path =
+          info.path === "webcodecs" ? i18n.t("exportingOffline") : i18n.t("recordingKeep");
+        status.textContent = `${path} ${Math.round(p * 100)}%${eta}`;
       },
       onDone: () => {
         recordPausedByHide = false;
@@ -1988,12 +2415,18 @@ function setupUI() {
         $("btn-record").textContent = i18n.t("recordVideo");
         $("btn-preview-video").textContent = i18n.t("livePreview");
         haptics.success();
+        analytics.trackExport("video");
       },
       onError: (err) => {
         recordPausedByHide = false;
-        status.textContent = err?.message || i18n.t("recordingFailed");
+        if (err?.name === "AbortError") {
+          status.textContent = i18n.t("exportCancelled");
+        } else {
+          status.textContent = err?.message || i18n.t("recordingFailed");
+        }
         $("btn-stop-record").hidden = true;
         $("btn-record").disabled = false;
+        $("btn-record").textContent = i18n.t("recordVideo");
       },
       onHidden: () => {
         recordPausedByHide = true;
@@ -2005,12 +2438,13 @@ function setupUI() {
     });
   });
 
-  $("btn-stop-record").addEventListener("click", () => {
+  $("btn-stop-record")?.addEventListener("click", () => {
     recordPausedByHide = false;
     video.stopRecording();
     $("btn-stop-record").hidden = true;
     $("btn-record").disabled = false;
     $("btn-record").textContent = i18n.t("recordVideo");
+    if ($("record-status")) $("record-status").textContent = i18n.t("exportCancelled");
   });
 
   audio.onTimeUpdate(updateTimeDisplay);
@@ -2026,73 +2460,383 @@ function setupUI() {
   video.renderFrame(state.project);
 }
 
+async function refreshProjectsList() {
+  const projects = await db.listProjects();
+  renderProjectsList($("projects-list"), $("projects-empty"), {
+    projects,
+    onOpen: (p) => openProjectById(p.id),
+    onDuplicate: async (p) => {
+      await db.duplicateProject(p);
+      showToast(i18n.t("projectDuplicated"));
+      refreshProjectsList();
+    },
+    onRename: (p) => {
+      renameTargetId = p.id;
+      if ($("field-rename")) $("field-rename").value = p.title || "";
+      openSheet("rename-dialog");
+    },
+    onExport: (p) => {
+      downloadEclipseJson(p);
+      haptics.success();
+    },
+    onDelete: (p) => {
+      pendingDeleteId = p.id;
+      if ($("delete-detail")) {
+        $("delete-detail").textContent = i18n
+          .t("deleteDetail")
+          .replace("{title}", p.title || p.audio?.fileName || "Untitled");
+      }
+      openSheet("delete-dialog");
+    },
+  });
+  const est = await db.estimateStorage();
+  const label = formatStorage(est);
+  if ($("projects-storage")) $("projects-storage").textContent = label;
+  if ($("storage-usage")) $("storage-usage").textContent = label;
+}
+
+function formatStorage(est) {
+  if (!est?.quota) return i18n.t("storageUnknown");
+  const usedMb = (est.usage / (1024 * 1024)).toFixed(1);
+  const quotaMb = (est.quota / (1024 * 1024)).toFixed(0);
+  return i18n.t("storageUsage").replace("{used}", usedMb).replace("{quota}", quotaMb);
+}
+
+async function openProjectById(id) {
+  const project = await db.getProject(id);
+  if (!project) {
+    showToast(i18n.t("errImport"));
+    return;
+  }
+  await restoreSession(project);
+  haptics.success();
+}
+
+async function startNewProject() {
+  const p = createEmptyProject();
+  p.id = projectId();
+  state.project = p;
+  state.audioBlob = null;
+  state.selectedIndex = 0;
+  state.tapIndex = 0;
+  state.lyricsRows = [{ main: "", fr: "", en: "" }];
+  history.clear();
+  audio.clearAudio();
+  resetAudioPickUI();
+  syncFieldsFromProject();
+  renderLineList();
+  await db.saveProject(p);
+  showScreen("audio");
+  haptics.tick();
+}
+
+async function confirmDeleteProject() {
+  const id = pendingDeleteId;
+  closeSheet("delete-dialog");
+  pendingDeleteId = null;
+  if (!id) return;
+  const project = await db.getProject(id);
+  if (!project) return;
+  const snap = await db.removeProjectWithAudio(project);
+  if (state.project?.id === id) {
+    await startNewProject();
+    showScreen("projects");
+  }
+  refreshProjectsList();
+  showToast(i18n.t("projectDeleted"), {
+    duration: 10000,
+    actionLabel: i18n.t("undo"),
+    onAction: async () => {
+      await db.restoreDeletedProject(snap);
+      refreshProjectsList();
+      showToast(i18n.t("projectRestored"));
+    },
+  });
+}
+
+let lastAnnounceAt = 0;
+function announceLineTimed(lineIndex, startMs) {
+  const live = $("a11y-live");
+  if (!live) return;
+  const now = Date.now();
+  if (now - lastAnnounceAt < 350) return;
+  lastAnnounceAt = now;
+  const time = sync.formatMs(startMs, { millis: true });
+  live.textContent = i18n
+    .t("announceTimed")
+    .replace("{n}", String(lineIndex + 1))
+    .replace("{time}", time);
+}
+
+function maybeShowScreenTip(screen) {
+  const key = onboarding.SCREEN_TIPS[screen];
+  if (!key || onboarding.hasSeenTip(screen)) return;
+  const tip = $("screen-tip");
+  const text = $("screen-tip-text");
+  if (!tip || !text) return;
+  text.textContent = i18n.t(key);
+  tip.hidden = false;
+}
+
+function dismissScreenTip() {
+  const tip = $("screen-tip");
+  if (tip) tip.hidden = true;
+  if (state.screen) onboarding.markTipSeen(state.screen);
+}
+
+let introIndex = 0;
+function showIntro(start = 0) {
+  introIndex = start;
+  const overlay = $("intro-overlay");
+  if (!overlay) return;
+  overlay.hidden = false;
+  renderIntroCard();
+}
+
+function hideIntro() {
+  const overlay = $("intro-overlay");
+  if (overlay) overlay.hidden = true;
+  onboarding.markIntroSeen();
+}
+
+function renderIntroCard() {
+  const cards = onboarding.INTRO_CARDS;
+  const card = cards[introIndex] || cards[0];
+  if ($("intro-title")) $("intro-title").textContent = i18n.t(card.titleKey);
+  if ($("intro-body")) $("intro-body").textContent = i18n.t(card.bodyKey);
+  const dots = $("intro-dots");
+  if (dots) {
+    dots.innerHTML = cards
+      .map((_, i) => `<span class="${i === introIndex ? "is-on" : ""}"></span>`)
+      .join("");
+  }
+  const next = $("btn-intro-next");
+  if (next) next.textContent = introIndex >= cards.length - 1 ? i18n.t("gotIt") : i18n.t("next");
+}
+
+async function loadDemoProject() {
+  try {
+    const project = await demo.fetchDemoProject();
+    const file = await demo.fetchDemoAudioFile();
+    state.project = project;
+    state.selectedIndex = 0;
+    state.tapIndex = sync.nextTapIndex(project.lines);
+    state.lyricsRows = rowsFromProject(project);
+    history.clear();
+    await db.saveProject(project);
+    db.savePrefs({ lastProjectId: project.id });
+    await handleAudioFile(file, { stayOnScreen: true });
+    syncFieldsFromProject();
+    renderLineList();
+    showScreen("sync");
+    showToast(i18n.t("demoLoaded"));
+    analytics.track("/event/demo");
+  } catch (err) {
+    showToast(err?.message || i18n.t("errAudioLoad"));
+  }
+}
+
+function setupPhase5() {
+  $("btn-tip-dismiss")?.addEventListener("click", dismissScreenTip);
+
+  $("btn-intro-skip")?.addEventListener("click", () => hideIntro());
+  $("btn-intro-next")?.addEventListener("click", () => {
+    if (introIndex >= onboarding.INTRO_CARDS.length - 1) {
+      hideIntro();
+      return;
+    }
+    introIndex += 1;
+    renderIntroCard();
+  });
+  $("btn-intro-demo")?.addEventListener("click", async () => {
+    hideIntro();
+    await loadDemoProject();
+  });
+
+  $("btn-try-demo")?.addEventListener("click", () => loadDemoProject());
+  $("btn-help-demo")?.addEventListener("click", () => loadDemoProject());
+  $("btn-sheet-demo")?.addEventListener("click", () => {
+    closeSheet("more-sheet");
+    loadDemoProject();
+  });
+
+  $("btn-install")?.addEventListener("click", async () => {
+    const ok = await pwa.promptInstall();
+    if (ok) $("btn-install").hidden = true;
+  });
+  $("btn-ios-hint-dismiss")?.addEventListener("click", () => {
+    const el = $("ios-install-hint");
+    if (el) el.hidden = true;
+    try {
+      localStorage.setItem("eclipse-ios-hint", "1");
+    } catch {
+      /* ignore */
+    }
+  });
+
+  pwa.onBeforeInstall(() => {
+    const btn = $("btn-install");
+    if (btn && !pwa.isStandalone()) btn.hidden = false;
+  });
+
+  pwa.registerServiceWorker({
+    onUpdate: (reg) => {
+      showToast(i18n.t("newVersion"), {
+        duration: 15000,
+        actionLabel: i18n.t("refresh"),
+        onAction: () => pwa.activateWaitingWorker(reg),
+      });
+    },
+  });
+
+  if (pwa.isIos() && !pwa.isStandalone()) {
+    try {
+      if (localStorage.getItem("eclipse-ios-hint") !== "1") {
+        const el = $("ios-install-hint");
+        if (el) el.hidden = false;
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+
+  pwa.consumeLaunchQueue(async (file) => {
+    const name = (file.name || "").toLowerCase();
+    if (name.endsWith(".eclipse.json") || name.endsWith(".eclipselyrics") || name.endsWith(".json")) {
+      try {
+        const { project, audioBlob } = await importProjectFile(file);
+        state.project = project;
+        await db.saveProject(project);
+        db.savePrefs({ lastProjectId: project.id });
+        if (audioBlob) await handleAudioFile(audioBlob, { stayOnScreen: true });
+        syncFieldsFromProject();
+        renderLineList();
+        showScreen(project.lastScreen || "sync");
+        showToast(i18n.t("projectOpened"));
+      } catch (err) {
+        showToast(err?.message || i18n.t("errImport"));
+      }
+      return;
+    }
+    if (name.endsWith(".srt") || name.endsWith(".lrc") || name.endsWith(".vtt")) {
+      try {
+        const text = await file.text();
+        mergeImported(exp.parseImportedProject(text, file.name));
+        showScreen("sync");
+      } catch (err) {
+        showToast(err?.message || i18n.t("errImport"));
+      }
+      return;
+    }
+    if (file.type.startsWith("audio/") || /\.(mp3|wav|m4a|ogg|flac)$/i.test(name)) {
+      await handleAudioFile(file);
+    }
+  });
+
+  // Line list keyboard (listbox)
+  $("line-list")?.addEventListener("keydown", (e) => {
+    if (state.screen !== "sync") return;
+    const max = state.project.lines.length - 1;
+    if (max < 0) return;
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      e.preventDefault();
+      const next =
+        e.key === "ArrowDown"
+          ? Math.min(max, state.selectedIndex + 1)
+          : Math.max(0, state.selectedIndex - 1);
+      selectLine(next, true);
+      focusLineOption(next);
+    } else if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      const line = state.project.lines[state.selectedIndex];
+      if (line?.startMs != null) audio.seek(line.startMs / 1000);
+    } else if (e.key === "Home") {
+      e.preventDefault();
+      selectLine(0, true);
+      focusLineOption(0);
+    } else if (e.key === "End") {
+      e.preventDefault();
+      selectLine(max, true);
+      focusLineOption(max);
+    }
+  });
+}
+
+function focusLineOption(index) {
+  const list = $("line-list");
+  if (!list) return;
+  list.tabIndex = 0;
+  const items = [...list.querySelectorAll(".line-item")];
+  items.forEach((el, i) => {
+    el.tabIndex = i === index ? 0 : -1;
+  });
+  items[index]?.focus();
+}
+
 async function boot() {
   // Pinch-zoom allowed (B20). Double-tap zoom on Tap is blocked via CSS
   // touch-action: manipulation on #btn-tap / .dock-tap.
   applyIcons(document);
   await db.requestPersistentStorage();
   setupUI();
+  setupPhase5();
   renderLineList();
   updateTapButtons();
 
   // Migrate legacy v1 session into IndexedDB once
   const prefs = db.loadPrefs();
-  if (prefs.lastProjectId) {
-    const existing = await db.getProject(prefs.lastProjectId);
-    if (existing) {
-      await offerRestoreFromProject(existing);
-    } else {
-      await offerRestore();
+  const legacy = await db.readLegacySession();
+  if (legacy.meta) {
+    const migrated = migrateProject(legacy.meta);
+    if (legacy.audio?.blob) {
+      if (!migrated.audio.storedAudioId) migrated.audio.storedAudioId = audioId();
+      await db.saveAudio(migrated.audio.storedAudioId, legacy.audio.blob, legacy.audio.fileName || "");
     }
+    await db.saveProject(migrated);
+    await db.clearLegacySession();
+    if (!prefs.lastProjectId) db.savePrefs({ lastProjectId: migrated.id });
+  }
+
+  const shared = await pwa.consumeShareTarget();
+  if (shared) {
+    await startNewProject();
+    await handleAudioFile(shared, { stayOnScreen: true });
+    showScreen("audio");
   } else {
-    const legacy = await db.readLegacySession();
-    if (legacy.meta) {
-      const migrated = migrateProject(legacy.meta);
-      if (legacy.audio?.blob) {
-        if (!migrated.audio.storedAudioId) migrated.audio.storedAudioId = audioId();
-        await db.saveAudio(migrated.audio.storedAudioId, legacy.audio.blob, legacy.audio.fileName || "");
+    const hash = (location.hash || "").replace(/^#/, "");
+    if (SCREENS.includes(hash) && hash !== "projects") {
+      const lastId = db.loadPrefs().lastProjectId;
+      if (lastId) {
+        const existing = await db.getProject(lastId);
+        if (existing) await restoreSession(existing);
       }
-      await db.saveProject(migrated);
-      await db.clearLegacySession();
-      await offerRestoreFromProject(migrated);
+      showScreen(hash, { pushHash: false, persistScreen: false });
     } else {
-      await offerRestore();
+      const lastId = db.loadPrefs().lastProjectId;
+      if (lastId) {
+        const existing = await db.getProject(lastId);
+        if (existing) {
+          await restoreSession(existing);
+        } else {
+          showScreen("projects", { pushHash: true, persistScreen: false });
+        }
+      } else {
+        showScreen("projects", { pushHash: true, persistScreen: false });
+      }
     }
   }
+
+  if (!onboarding.hasSeenIntro()) {
+    showIntro(0);
+  } else {
+    maybeShowScreenTip(state.screen);
+  }
+
+  analytics.trackPageView();
 
   window.addEventListener("hashchange", () => {
     const name = (location.hash || "").replace(/^#/, "");
     if (SCREENS.includes(name)) showScreen(name, { pushHash: false });
-  });
-}
-
-async function offerRestoreFromProject(project) {
-  if (!project) return;
-  const banner = $("restore-banner");
-  const detail = $("restore-detail");
-  if (!banner) {
-    await restoreSession(project);
-    return;
-  }
-  const when = project.updatedAt ? new Date(project.updatedAt).toLocaleString() : "—";
-  if (detail) {
-    detail.textContent = i18n
-      .t("restoreDetail")
-      .replace("{title}", project.title || "—")
-      .replace("{file}", project.audio?.fileName || "—")
-      .replace("{when}", when);
-  }
-  banner.hidden = false;
-  await new Promise((resolve) => {
-    $("btn-restore").onclick = async () => {
-      banner.hidden = true;
-      await restoreSession(project);
-      resolve();
-    };
-    $("btn-fresh").onclick = async () => {
-      banner.hidden = true;
-      resolve();
-    };
   });
 }
 

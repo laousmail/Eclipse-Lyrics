@@ -1,0 +1,90 @@
+{
+  "version": 2,
+  "id": "p_demo",
+  "title": "Demo",
+  "artist": "Eclipse Lyrics",
+  "audio": {
+    "fileName": "demo.wav",
+    "durationMs": 12000,
+    "storedAudioId": ""
+  },
+  "languages": ["kab", "fr", "en"],
+  "lines": [
+    {
+      "id": "L1",
+      "type": "lyric",
+      "startMs": 1200,
+      "endMs": 2800,
+      "text": { "kab": "Azul fellawen", "fr": "Bonjour à vous", "en": "Hello everyone" },
+      "endManual": true,
+      "words": []
+    },
+    {
+      "id": "L2",
+      "type": "lyric",
+      "startMs": 3000,
+      "endMs": 4600,
+      "text": { "kab": "Ansuf yis-wen", "fr": "Bienvenue", "en": "Welcome" },
+      "endManual": true,
+      "words": []
+    },
+    {
+      "id": "L3",
+      "type": "lyric",
+      "startMs": 4800,
+      "endMs": 6400,
+      "text": { "kab": "Taqbaylit tɛziz", "fr": "Le kabyle est précieux", "en": "Kabyle is precious" },
+      "endManual": true,
+      "words": []
+    },
+    {
+      "id": "L4",
+      "type": "lyric",
+      "startMs": 6600,
+      "endMs": 8200,
+      "text": { "kab": "Ad naru isefra", "fr": "Nous écrirons des poèmes", "en": "We will write poems" },
+      "endManual": true,
+      "words": []
+    },
+    {
+      "id": "L5",
+      "type": "lyric",
+      "startMs": 8400,
+      "endMs": 10000,
+      "text": { "kab": "S tira d uẓawan", "fr": "Avec l’écriture et la musique", "en": "With writing and music" },
+      "endManual": true,
+      "words": []
+    },
+    {
+      "id": "L6",
+      "type": "lyric",
+      "startMs": 10200,
+      "endMs": 11600,
+      "text": { "kab": "Tanemmirt", "fr": "Merci", "en": "Thank you" },
+      "endManual": true,
+      "words": []
+    }
+  ],
+  "settings": {
+    "tapOffsetMs": -150,
+    "translationLang": "fr",
+    "includeTranslationInExport": false,
+    "playbackRate": 1,
+    "export": {
+      "languages": "main",
+      "globalOffsetMs": 0,
+      "minLineMs": 700,
+      "maxGapMs": 8000
+    },
+    "video": {
+      "aspect": "1080x1920",
+      "style": "fadeUp",
+      "background": "eclipse",
+      "template": "eclipse",
+      "showTranslation": true,
+      "translationLang": "fr"
+    }
+  },
+  "lastScreen": "sync",
+  "isDemo": true
+}
