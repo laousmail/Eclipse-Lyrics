@@ -119,6 +119,7 @@ function showScreen(name, { pushHash = true, persistScreen = true } = {}) {
     applyLyricsFromGrid({ silent: true, stay: true });
   }
   state.screen = name;
+  document.body.dataset.screen = name;
   if (persistScreen) {
     state.project.lastScreen = name;
     if (changed) persist();
@@ -308,6 +309,8 @@ function updateProgressChip() {
   const { timed, total } = sync.progressTimed(state.project.lines);
   const label = $("progress-chip-label");
   if (label) label.textContent = i18n.t("progressTimed").replace("{timed}", String(timed)).replace("{total}", String(total));
+  const chip = $("progress-chip");
+  if (chip) chip.classList.toggle("is-complete", total > 0 && timed >= total);
   const ring = $("progress-ring-fg");
   if (ring) {
     const circ = 94.2;
@@ -2875,6 +2878,17 @@ async function boot() {
   // Pinch-zoom: document allows intentional pinch (B20). Controls use
   // touch-action: manipulation to block accidental double-tap zoom; waveform
   // uses touch-action: none + its own pinch. Inputs are ≥16px to stop iOS focus-zoom.
+  // iOS A2HS: navigator.standalone — class helps CSS fill -webkit-fill-available
+  try {
+    if (window.navigator.standalone === true) {
+      document.documentElement.classList.add("standalone-ios");
+    }
+    if (window.matchMedia("(display-mode: standalone)").matches) {
+      document.documentElement.classList.add("standalone-pwa");
+    }
+  } catch {
+    /* ignore */
+  }
   applyIcons(document);
   initKeyboardGuards();
   await db.requestPersistentStorage();

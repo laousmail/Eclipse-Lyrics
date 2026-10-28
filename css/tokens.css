@@ -1,7 +1,7 @@
 /* Design tokens — colors, spacing, radius, type, motion */
 
 :root {
-  /* Color */
+  /* Color — Eclipse dark + warm ember palette */
   --bg: #070605;
   --bg2: #110e0c;
   --bg3: #1b1613;
@@ -17,7 +17,25 @@
   --glass: rgba(7, 6, 5, 0.86);
   --warn: #ffb020;
   --danger: #ff4d3a;
+  /* Warm success (not lime / not purple) — readable gold-amber */
+  --ok: #d4b06a;
+  --ok-strong: #e8c070;
   --grad: linear-gradient(110deg, var(--hot), var(--gold));
+
+  /*
+   * Feature accents — same family, distinct enough to cue Song vs Sync vs Film.
+   * Calm, premium: used for active tabs, eyebrows, and primary actions — not rainbow chrome.
+   */
+  --feat-projects: #e8a54a; /* amber — library */
+  --feat-song: #ff6a13;     /* brand hot — prepare / Song */
+  --feat-sync: #ff7a3d;     /* brighter ember — Tap / sync action */
+  --feat-film: #e23d2e;     /* deep ember — Film / cinema */
+  --feat-export: #ffb347;   /* gold — Export (More) */
+  --grad-sync: linear-gradient(110deg, #ff5a18, var(--gold));
+  --grad-film: linear-gradient(110deg, #e23d2e, #ff8a4a);
+
+  /* Active feature (set via body[data-screen] or defaults to brand) */
+  --feat: var(--hot);
 
   /* Type */
   --sans: "Outfit", "Noto Sans", system-ui, sans-serif;
@@ -62,12 +80,21 @@
   --dock-h: 5.35rem;
   --safe-t: env(safe-area-inset-top, 0px);
   --safe-b: env(safe-area-inset-bottom, 0px);
+  --safe-l: env(safe-area-inset-left, 0px);
+  --safe-r: env(safe-area-inset-right, 0px);
   --kb-inset: 0px; /* visualViewport keyboard inset — set by js/keyboard.js */
   --touch: 2.85rem; /* ≥ 44px */
   --touch-lg: 3.25rem;
 
   color-scheme: dark;
 }
+
+body[data-screen="projects"] { --feat: var(--feat-projects); }
+body[data-screen="prepare"] { --feat: var(--feat-song); }
+body[data-screen="sync"] { --feat: var(--feat-sync); }
+body[data-screen="video"] { --feat: var(--feat-film); }
+body[data-screen="export"] { --feat: var(--feat-export); }
+body[data-screen="help"] { --feat: var(--gold); }
 
 @media (prefers-reduced-motion: reduce) {
   :root {
