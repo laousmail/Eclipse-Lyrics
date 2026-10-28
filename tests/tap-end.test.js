@@ -11,6 +11,7 @@ import {
 describe("B5 last-line end tap", () => {
   it("sets last end after all starts, then completes", () => {
     const project = createEmptyProject();
+    project.settings.tapOffsetMs = 0;
     project.audio.durationMs = 20000;
     project.lines = [
       createLyricLine({ id: "1", kab: "a" }),

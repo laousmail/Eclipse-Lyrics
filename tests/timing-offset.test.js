@@ -22,6 +22,15 @@ describe("Phase 2 timing offset", () => {
     assert.equal(avg, 140);
     assert.equal(offsetFromAverageDelay(avg), -140);
   });
+
+  it("tapLine applies project tapOffsetMs", async () => {
+    const { tapLine, createEmptyProject, createLyricLine } = await import("../js/sync.js");
+    const project = createEmptyProject();
+    project.settings.tapOffsetMs = -150;
+    project.lines = [createLyricLine({ kab: "a" })];
+    tapLine(project, 0, 1000);
+    assert.equal(project.lines[0].startMs, 850);
+  });
 });
 
 describe("Phase 2 section markers", () => {
@@ -32,12 +41,14 @@ describe("Phase 2 section markers", () => {
   });
 
   it("parses mixed lyric + section lines", () => {
-    const lines = parseLinesWithSections(["[Chorus]", "Awal", "Ɣer"], ["", "Mot"], ["", "Word"]);
+    // FR/EN are lyric-aligned (no slot for section rows)
+    const lines = parseLinesWithSections(["[Chorus]", "Awal", "Ɣer"], ["Mot", "Mot2"], ["Word", "Word2"]);
     assert.equal(lines[0].type, "section");
     assert.equal(lines[0].label, "Chorus");
     assert.equal(lines[1].type, "lyric");
     assert.equal(lines[1].text.kab, "Awal");
     assert.equal(lines[1].text.fr, "Mot");
+    assert.equal(lines[2].text.en, "Word2");
   });
 
   it("warns over 42 characters", () => {

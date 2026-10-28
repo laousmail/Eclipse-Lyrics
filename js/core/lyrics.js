@@ -15,7 +15,9 @@ export function sectionLabel(text) {
   return m ? m[1].trim() : "";
 }
 
-/** Parse pasted main lines into lyric + section line objects. */
+/** Parse pasted main lines into lyric + section line objects.
+ * FR/EN arrays are lyric-aligned (skip section rows in main).
+ */
 export function parseLinesWithSections(mainLines, frLines = [], enLines = []) {
   const out = [];
   let lyricIdx = 0;
