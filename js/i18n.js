@@ -106,7 +106,8 @@ const STRINGS = {
     loadWaveform: "Load audio to see waveform",
     langSwitch: "Language",
     errAudioLoad: "Could not load this audio file",
-    errAudioUrl: "Couldn’t fetch that link. The file must allow cross-origin access (CORS), or try downloading it and choosing the file instead.",
+    errAudioUrl:
+      "Couldn’t fetch that link (most Drive/Dropbox/SoundCloud links block downloads). Download the file and choose it instead.",
     errAudioUrlEmpty: "Paste an audio link first.",
     errGdocs: "Couldn’t read that Google Doc. Make sure it’s public (Anyone with the link can view), or paste the lyrics manually.",
     errGdocsCors: "Copy the lyrics from the doc and paste them here — the browser blocked the Google Docs download.",
@@ -153,7 +154,7 @@ const STRINGS = {
     loadLead: "Le fichier reste sur ce téléphone. Rien n’est envoyé.",
     chooseAudio: "Choisir l’audio",
     audioFormats: "MP3 · WAV · M4A · OGG",
-    orFromLink: "Ou coller un lien audio",
+    orFromLink: "Lien .mp3 direct (doit autoriser le téléchargement)",
     audioUrlPlaceholder: "https://…/chanson.mp3",
     loadUrl: "Charger le lien",
     changeAudio: "Remplacer l’audio",
@@ -240,7 +241,7 @@ const STRINGS = {
     langSwitch: "Langue",
     errAudioLoad: "Impossible de charger ce fichier audio",
     errAudioUrl:
-      "Impossible de récupérer ce lien. Le fichier doit autoriser l’accès cross-origin (CORS), ou télécharge-le puis choisis le fichier.",
+      "Impossible de récupérer ce lien (Drive/Dropbox/SoundCloud bloquent souvent). Télécharge le fichier et choisis-le à la place.",
     errAudioUrlEmpty: "Colle d’abord un lien audio.",
     errGdocs:
       "Impossible de lire ce Google Doc. Vérifie qu’il est public (Toute personne avec le lien peut consulter), ou colle les paroles à la main.",
