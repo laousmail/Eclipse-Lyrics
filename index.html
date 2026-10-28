@@ -5,16 +5,74 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#070605" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-title" content="Eclipse" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="mobile-web-app-capable" content="yes" />
-  <meta name="description" content="Free browser tool to sync song lyrics, export subtitles, and render lyric videos. Made by laousmail." />
-  <title>Eclipse Lyrics Sync</title>
+  <meta name="description" content="Free lyrics sync &amp; SRT maker in your browser. Tap along, export YouTube subtitles, make lyric videos. Audio never leaves your device. Made by laousmail." />
+  <meta name="eclipse-goatcounter" content="" />
+  <title>Free Lyrics Sync &amp; SRT Maker | Eclipse Lyrics</title>
+  <link rel="canonical" href="https://laousmail.github.io/Eclipse-Lyrics/" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png" />
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="Eclipse Lyrics" />
+  <meta property="og:title" content="Free Lyrics Sync &amp; SRT Maker | Eclipse Lyrics" />
+  <meta property="og:description" content="Free lyrics sync &amp; SRT maker. Audio stays on your device. Made in Montréal by laousmail." />
+  <meta property="og:image" content="https://laousmail.github.io/Eclipse-Lyrics/og/og-1200x630.png" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Free Lyrics Sync &amp; SRT Maker | Eclipse Lyrics" />
+  <meta name="twitter:description" content="Free lyrics sync &amp; SRT maker. Audio stays on your device." />
+  <meta name="twitter:image" content="https://laousmail.github.io/Eclipse-Lyrics/og/og-1200x630.png" />
+  <link rel="preload" href="fonts/outfit-600.woff2" as="font" type="font/woff2" crossorigin />
+  <link rel="preload" href="fonts/outfit-400.woff2" as="font" type="font/woff2" crossorigin />
+  <link rel="modulepreload" href="js/main.js" />
   <link rel="stylesheet" href="css/tokens.css" />
   <link rel="stylesheet" href="css/app.css" />
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "WebApplication",
+    "name": "Eclipse Lyrics",
+    "applicationCategory": "MultimediaApplication",
+    "operatingSystem": "Any",
+    "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+    "description": "Free browser tool to sync song lyrics, export SRT/VTT/LRC, and render lyric videos. Audio never leaves your device.",
+    "url": "https://laousmail.github.io/Eclipse-Lyrics/",
+    "author": { "@type": "Person", "name": "laousmail", "url": "https://laousmail.com" },
+    "inLanguage": ["en", "fr", "kab"]
+  }
+  </script>
 </head>
 <body>
   <a class="skip-link" href="#main" data-i18n="skip">Skip to main content</a>
   <div id="toast" class="toast" hidden role="status" aria-live="polite"></div>
+  <div id="a11y-live" class="visually-hidden" role="status" aria-live="polite" aria-atomic="true"></div>
+  <div id="screen-tip" class="screen-tip" hidden role="status">
+    <p id="screen-tip-text"></p>
+    <button type="button" id="btn-tip-dismiss" class="btn btn-ghost btn-sm" data-i18n="gotIt">Got it</button>
+  </div>
+
+  <div id="intro-overlay" class="intro-overlay" hidden>
+    <div class="intro-card" role="dialog" aria-modal="true" aria-labelledby="intro-title">
+      <p class="eyebrow" data-i18n="welcome">Welcome</p>
+      <h2 id="intro-title"></h2>
+      <p id="intro-body" class="intro-body"></p>
+      <div class="intro-dots" id="intro-dots" aria-hidden="true"></div>
+      <div class="intro-actions">
+        <button type="button" id="btn-intro-skip" class="btn btn-ghost" data-i18n="skipIntro">Skip</button>
+        <button type="button" id="btn-intro-next" class="btn btn-fill" data-i18n="next">Next</button>
+      </div>
+      <button type="button" id="btn-intro-demo" class="btn btn-ghost intro-demo" data-i18n="tryDemo">Try with a demo song</button>
+    </div>
+  </div>
+
+  <div id="ios-install-hint" class="ios-install-hint" hidden role="status">
+    <p data-i18n="iosInstallHint">Install: Share → Add to Home Screen</p>
+    <button type="button" id="btn-ios-hint-dismiss" class="btn btn-ghost btn-sm" data-i18n="gotIt">Got it</button>
+  </div>
 
   <div id="more-sheet" class="sheet-overlay" hidden role="dialog" aria-modal="true" aria-labelledby="more-title">
     <div class="sheet">
@@ -23,6 +81,8 @@
         <button type="button" id="btn-goto-projects" class="sheet-row" data-goto="projects" data-i18n="tabProjects">Projects</button>
         <button type="button" id="btn-save-project" class="sheet-row" data-i18n="saveProject">Save project file</button>
         <button type="button" id="btn-export-bundle" class="sheet-row" data-i18n="exportBundle">Export with audio (.eclipselyrics)</button>
+        <button type="button" id="btn-sheet-demo" class="sheet-row" data-i18n="tryDemo">Try with a demo song</button>
+        <button type="button" class="sheet-row" data-goto="help" data-i18n="help">Help</button>
         <label class="sheet-row file-row">
           <span data-i18n="openProject">Open project file</span>
           <input type="file" id="input-project" accept=".json,.eclipse.json,.eclipselyrics,.zip,application/json,application/zip" hidden />
@@ -33,6 +93,7 @@
         </label>
       </div>
       <p id="storage-usage" class="muted tip"></p>
+      <p class="muted tip privacy-note" data-i18n="privacyNote">Privacy: audio and lyrics never leave this device. Optional cookie-free page-view analytics only if enabled.</p>
       <button type="button" id="btn-more-close" class="btn btn-ghost sheet-dismiss" data-i18n="close">Close</button>
     </div>
   </div>
@@ -138,7 +199,7 @@
           <p class="brand-tag" data-i18n="brandTag">by laousmail</p>
         </div>
       </div>
-      <nav class="step-seg desktop-workspace-only" role="tablist" aria-label="Steps">
+      <nav class="step-seg desktop-workspace-only" aria-label="Steps">
         <button type="button" class="step-seg-btn" data-goto="projects" data-i18n="tabProjects">Projects</button>
         <button type="button" class="step-seg-btn is-active" data-goto="audio" data-i18n="tabAudio">Audio</button>
         <button type="button" class="step-seg-btn" data-goto="lyrics" data-i18n="tabLyrics">Lyrics</button>
@@ -148,10 +209,13 @@
       </nav>
       <div class="topbar-tools">
         <button type="button" class="btn btn-fill btn-sm desktop-workspace-only" data-goto="export" data-i18n="export">Export</button>
+        <button type="button" id="btn-install" class="btn btn-ghost btn-sm" hidden data-i18n="installApp">Install app</button>
         <div class="lang-pill" role="group" aria-label="Language">
           <button type="button" class="lang-btn" data-lang="en" aria-pressed="true">EN</button>
           <button type="button" class="lang-btn" data-lang="fr" aria-pressed="false">FR</button>
+          <button type="button" class="lang-btn" data-lang="kab" aria-pressed="false">KAB</button>
         </div>
+        <button type="button" id="btn-help" class="icon-btn" data-goto="help" data-i18n-aria="help" aria-label="Help" title="Help">?</button>
         <button type="button" id="btn-more" class="icon-btn" data-i18n-aria="moreAria" aria-label="More project actions" aria-haspopup="dialog" aria-controls="more-sheet">
           <span class="icon-dots" aria-hidden="true"></span>
         </button>
@@ -168,6 +232,7 @@
         </header>
         <div class="projects-toolbar">
           <button type="button" id="btn-new-project" class="btn btn-fill" data-i18n="newProject">New project</button>
+          <button type="button" id="btn-try-demo" class="btn btn-ghost" data-i18n="tryDemo">Try with a demo song</button>
           <label class="btn btn-ghost file-btn">
             <span data-i18n="openProject">Open project file</span>
             <input type="file" id="input-project-home" accept=".json,.eclipse.json,.eclipselyrics,.zip,application/json,application/zip" hidden />
@@ -683,6 +748,44 @@
           <p id="record-status" class="muted" data-i18n="recordingKeep">Exporting…</p>
         </div>
       </section>
+
+      <!-- HELP -->
+      <section id="screen-help" class="screen" data-screen="help" aria-labelledby="help-heading" hidden>
+        <header class="screen-head">
+          <p class="eyebrow" data-i18n="help">Help</p>
+          <h2 id="help-heading" data-i18n="helpTitle">Help &amp; FAQ</h2>
+          <p class="screen-lead" data-i18n="helpLead">Shortcuts, YouTube upload, and privacy.</p>
+        </header>
+        <article class="help-block">
+          <h3 data-i18n="helpShortcuts">Keyboard shortcuts</h3>
+          <ul class="help-list">
+            <li><kbd>Space</kbd> — <span data-i18n="helpSpace">Tap current line (Sync only)</span></li>
+            <li><kbd>P</kbd> / <kbd>K</kbd> — <span data-i18n="helpPlay">Play / pause (any screen)</span></li>
+            <li><kbd>J</kbd> / <kbd>L</kbd> — <span data-i18n="helpSeek">Seek −5s / +5s</span></li>
+            <li><kbd>←</kbd> <kbd>→</kbd> — <span data-i18n="helpNudge">Nudge selected line ±50 ms</span></li>
+            <li><kbd>Backspace</kbd> — <span data-i18n="helpUndo">Undo last tap</span></li>
+          </ul>
+        </article>
+        <article class="help-block">
+          <h3 data-i18n="helpYoutubeTitle">Upload SRT to YouTube</h3>
+          <p data-i18n="helpYoutubeBody">YouTube Studio → Subtitles → Upload file → With timing. Use the Export screen’s Download .srt.</p>
+        </article>
+        <article class="help-block">
+          <h3 data-i18n="helpFaqTitle">FAQ</h3>
+          <p><strong data-i18n="helpFaqAudioQ">Is my audio uploaded?</strong></p>
+          <p data-i18n="helpFaqAudioA">No. Audio and lyrics stay on this device. Exports download locally.</p>
+          <p><strong data-i18n="helpFaqOfflineQ">Does it work offline?</strong></p>
+          <p data-i18n="helpFaqOfflineA">Yes after the first visit — the app shell, fonts, and vendor files are cached.</p>
+        </article>
+        <p class="muted tip">
+          <span data-i18n="madeSomething">Made something?</span>
+          <a href="https://instagram.com/laousmail" rel="noopener noreferrer" target="_blank" data-i18n="tagLaousmail">Tag @laousmail</a>
+        </p>
+        <div class="btn-stack">
+          <button type="button" class="btn btn-fill" data-goto="projects" data-i18n="tabProjects">Projects</button>
+          <button type="button" id="btn-help-demo" class="btn btn-ghost" data-i18n="tryDemo">Try with a demo song</button>
+        </div>
+      </section>
     </main>
 
     <div id="player-dock" class="player-dock" hidden>
@@ -721,15 +824,24 @@
         <span class="tab-icon" data-icon="film" aria-hidden="true"></span>
         <span data-i18n="tabFilm">Film</span>
       </button>
+      <button type="button" class="tab" data-goto="help">
+        <span class="tab-icon" aria-hidden="true">?</span>
+        <span data-i18n="help">Help</span>
+      </button>
     </nav>
   </div>
 
   <footer class="site-footer desktop-credit">
     <p>
-      <span data-i18n="brandTag">by laousmail</span>
+      <span data-i18n="madeInMtl">Made in Montréal by laousmail</span>
       ·
       <a href="https://laousmail.com" rel="noopener noreferrer" target="_blank">laousmail.com</a>
+      ·
+      <a href="https://github.com/laousmail/Eclipse-Lyrics/issues" rel="noopener noreferrer" target="_blank" data-i18n="feedback">Feedback</a>
+      ·
+      <a href="https://ko-fi.com/laousmail" rel="noopener noreferrer" target="_blank" data-i18n="support">Support</a>
     </p>
+    <p class="muted tip privacy-note" data-i18n="privacyNote">Privacy: audio and lyrics never leave this device. Optional cookie-free page-view analytics only if enabled.</p>
   </footer>
 
   <script type="module" src="js/main.js"></script>

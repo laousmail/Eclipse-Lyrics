@@ -59,6 +59,7 @@ export function renderLineListInPlace(
     }
 
     li.dataset.index = String(i);
+    li.tabIndex = i === selectedIndex ? 0 : -1;
     li.classList.toggle("untimed", isLyric(line) && line.startMs == null);
     li.classList.toggle("is-section", line.type === "section");
     li.classList.toggle("selected", i === selectedIndex);

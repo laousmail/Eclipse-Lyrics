@@ -2,7 +2,6 @@
 
 import { drawFrame, resolveOutputSize, parseAspect, rmsAtTime } from "../video/renderer.js";
 import { applyTemplate, TEMPLATES } from "../video/templates.js";
-import { startExport, canUseWebCodecs, detectExportPath, downloadBlob, formatEta } from "../video/export.js";
 import {
   getAudioElement,
   getMediaStreamDestination,
@@ -20,10 +19,31 @@ export {
   parseAspect,
   applyTemplate,
   TEMPLATES,
-  canUseWebCodecs,
-  detectExportPath,
-  formatEta,
 };
+
+/** Lazy-load export stack (keeps Mediabunny off the critical path). */
+async function loadExportApi() {
+  return import("../video/export.js");
+}
+
+export async function canUseWebCodecs() {
+  const api = await loadExportApi();
+  return api.canUseWebCodecs();
+}
+
+export async function detectExportPath() {
+  const api = await loadExportApi();
+  return api.detectExportPath();
+}
+
+export function formatEta(sec) {
+  if (sec == null || !Number.isFinite(sec)) return "";
+  if (sec < 5) return "<5s";
+  if (sec < 60) return `~${Math.ceil(sec)}s`;
+  const m = Math.floor(sec / 60);
+  const s = Math.ceil(sec % 60);
+  return `~${m}m ${s}s`;
+}
 
 let previewOn = false;
 let rafId = 0;
@@ -195,6 +215,7 @@ export async function startVideoExport(project, {
   const peaks = peaksGetter?.() || null;
 
   try {
+    const { startExport, downloadBlob } = await loadExportApi();
     exportHandle = await startExport({
       mode: "auto",
       project,

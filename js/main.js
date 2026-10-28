@@ -41,6 +41,10 @@ import {
   createEmptyProject,
   projectId,
 } from "./core/project.js";
+import * as pwa from "./pwa.js";
+import * as onboarding from "./onboarding.js";
+import * as demo from "./demo.js";
+import * as analytics from "./analytics.js";
 import {
   DEFAULT_TAP_OFFSET_MS,
   computeAverageDelayMs,
@@ -94,7 +98,7 @@ function publishStore(patch = {}) {
 }
 
 const $ = (id) => document.getElementById(id);
-const SCREENS = ["projects", "audio", "lyrics", "sync", "export", "video"];
+const SCREENS = ["projects", "audio", "lyrics", "sync", "export", "video", "help"];
 const SCRUB_MAX = 1000;
 let pendingDeleteId = null;
 let renameTargetId = null;
@@ -158,7 +162,11 @@ function showScreen(name, { pushHash = true, persistScreen = true } = {}) {
     const hash = `#${name}`;
     if (location.hash !== hash) window.history.replaceState(null, "", hash);
   }
-  if (changed) haptics.tick();
+  if (changed) {
+    haptics.tick();
+    maybeShowScreenTip(name);
+    analytics.trackPageView();
+  }
 }
 
 function updateDockVisibility() {
@@ -802,6 +810,7 @@ function doTap() {
   pushTimingCommand("tap", before, after, beforeTap, beforeSel, afterTap, afterSel);
   haptics.tap();
   flashTapConfirm();
+  announceLineTimed(idx, state.project.lines[idx]?.startMs ?? tMs);
   if (result.done) showToast(i18n.t("allLinesTimed"));
   scrollTapLineIntoView(true);
 }
@@ -1151,6 +1160,7 @@ async function runExport(fn) {
   }
   await fn();
   haptics.success();
+  analytics.trackExport("subtitles");
 }
 
 function exportOpts() {
@@ -1483,6 +1493,30 @@ function setupKeyboard() {
     if (key === "." || key === ">") {
       e.preventDefault();
       bumpSpeed(0.25);
+      return;
+    }
+    // Waveform keyboard equivalents (zoom / follow)
+    if (key === "+" || key === "=") {
+      e.preventDefault();
+      state.waveform?.zoomIn?.();
+      return;
+    }
+    if (key === "-" || key === "_") {
+      e.preventDefault();
+      state.waveform?.zoomOut?.();
+      return;
+    }
+    if (key === "f" || key === "F") {
+      e.preventDefault();
+      const on = !state.waveform?.getFollow?.();
+      state.waveform?.setFollow?.(on);
+      return;
+    }
+    if (key === "[" || key === "]") {
+      e.preventDefault();
+      const cur = audio.getCurrentTime();
+      audio.seek(Math.max(0, cur + (key === "[" ? -1 : 1)));
+      updateTimeDisplay();
     }
   });
 }
@@ -2381,6 +2415,7 @@ function setupUI() {
         $("btn-record").textContent = i18n.t("recordVideo");
         $("btn-preview-video").textContent = i18n.t("livePreview");
         haptics.success();
+        analytics.trackExport("video");
       },
       onError: (err) => {
         recordPausedByHide = false;
@@ -2519,12 +2554,232 @@ async function confirmDeleteProject() {
   });
 }
 
+let lastAnnounceAt = 0;
+function announceLineTimed(lineIndex, startMs) {
+  const live = $("a11y-live");
+  if (!live) return;
+  const now = Date.now();
+  if (now - lastAnnounceAt < 350) return;
+  lastAnnounceAt = now;
+  const time = sync.formatMs(startMs, { millis: true });
+  live.textContent = i18n
+    .t("announceTimed")
+    .replace("{n}", String(lineIndex + 1))
+    .replace("{time}", time);
+}
+
+function maybeShowScreenTip(screen) {
+  const key = onboarding.SCREEN_TIPS[screen];
+  if (!key || onboarding.hasSeenTip(screen)) return;
+  const tip = $("screen-tip");
+  const text = $("screen-tip-text");
+  if (!tip || !text) return;
+  text.textContent = i18n.t(key);
+  tip.hidden = false;
+}
+
+function dismissScreenTip() {
+  const tip = $("screen-tip");
+  if (tip) tip.hidden = true;
+  if (state.screen) onboarding.markTipSeen(state.screen);
+}
+
+let introIndex = 0;
+function showIntro(start = 0) {
+  introIndex = start;
+  const overlay = $("intro-overlay");
+  if (!overlay) return;
+  overlay.hidden = false;
+  renderIntroCard();
+}
+
+function hideIntro() {
+  const overlay = $("intro-overlay");
+  if (overlay) overlay.hidden = true;
+  onboarding.markIntroSeen();
+}
+
+function renderIntroCard() {
+  const cards = onboarding.INTRO_CARDS;
+  const card = cards[introIndex] || cards[0];
+  if ($("intro-title")) $("intro-title").textContent = i18n.t(card.titleKey);
+  if ($("intro-body")) $("intro-body").textContent = i18n.t(card.bodyKey);
+  const dots = $("intro-dots");
+  if (dots) {
+    dots.innerHTML = cards
+      .map((_, i) => `<span class="${i === introIndex ? "is-on" : ""}"></span>`)
+      .join("");
+  }
+  const next = $("btn-intro-next");
+  if (next) next.textContent = introIndex >= cards.length - 1 ? i18n.t("gotIt") : i18n.t("next");
+}
+
+async function loadDemoProject() {
+  try {
+    const project = await demo.fetchDemoProject();
+    const file = await demo.fetchDemoAudioFile();
+    state.project = project;
+    state.selectedIndex = 0;
+    state.tapIndex = sync.nextTapIndex(project.lines);
+    state.lyricsRows = rowsFromProject(project);
+    history.clear();
+    await db.saveProject(project);
+    db.savePrefs({ lastProjectId: project.id });
+    await handleAudioFile(file, { stayOnScreen: true });
+    syncFieldsFromProject();
+    renderLineList();
+    showScreen("sync");
+    showToast(i18n.t("demoLoaded"));
+    analytics.track("/event/demo");
+  } catch (err) {
+    showToast(err?.message || i18n.t("errAudioLoad"));
+  }
+}
+
+function setupPhase5() {
+  $("btn-tip-dismiss")?.addEventListener("click", dismissScreenTip);
+
+  $("btn-intro-skip")?.addEventListener("click", () => hideIntro());
+  $("btn-intro-next")?.addEventListener("click", () => {
+    if (introIndex >= onboarding.INTRO_CARDS.length - 1) {
+      hideIntro();
+      return;
+    }
+    introIndex += 1;
+    renderIntroCard();
+  });
+  $("btn-intro-demo")?.addEventListener("click", async () => {
+    hideIntro();
+    await loadDemoProject();
+  });
+
+  $("btn-try-demo")?.addEventListener("click", () => loadDemoProject());
+  $("btn-help-demo")?.addEventListener("click", () => loadDemoProject());
+  $("btn-sheet-demo")?.addEventListener("click", () => {
+    closeSheet("more-sheet");
+    loadDemoProject();
+  });
+
+  $("btn-install")?.addEventListener("click", async () => {
+    const ok = await pwa.promptInstall();
+    if (ok) $("btn-install").hidden = true;
+  });
+  $("btn-ios-hint-dismiss")?.addEventListener("click", () => {
+    const el = $("ios-install-hint");
+    if (el) el.hidden = true;
+    try {
+      localStorage.setItem("eclipse-ios-hint", "1");
+    } catch {
+      /* ignore */
+    }
+  });
+
+  pwa.onBeforeInstall(() => {
+    const btn = $("btn-install");
+    if (btn && !pwa.isStandalone()) btn.hidden = false;
+  });
+
+  pwa.registerServiceWorker({
+    onUpdate: (reg) => {
+      showToast(i18n.t("newVersion"), {
+        duration: 15000,
+        actionLabel: i18n.t("refresh"),
+        onAction: () => pwa.activateWaitingWorker(reg),
+      });
+    },
+  });
+
+  if (pwa.isIos() && !pwa.isStandalone()) {
+    try {
+      if (localStorage.getItem("eclipse-ios-hint") !== "1") {
+        const el = $("ios-install-hint");
+        if (el) el.hidden = false;
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+
+  pwa.consumeLaunchQueue(async (file) => {
+    const name = (file.name || "").toLowerCase();
+    if (name.endsWith(".eclipse.json") || name.endsWith(".eclipselyrics") || name.endsWith(".json")) {
+      try {
+        const { project, audioBlob } = await importProjectFile(file);
+        state.project = project;
+        await db.saveProject(project);
+        db.savePrefs({ lastProjectId: project.id });
+        if (audioBlob) await handleAudioFile(audioBlob, { stayOnScreen: true });
+        syncFieldsFromProject();
+        renderLineList();
+        showScreen(project.lastScreen || "sync");
+        showToast(i18n.t("projectOpened"));
+      } catch (err) {
+        showToast(err?.message || i18n.t("errImport"));
+      }
+      return;
+    }
+    if (name.endsWith(".srt") || name.endsWith(".lrc") || name.endsWith(".vtt")) {
+      try {
+        const text = await file.text();
+        mergeImported(exp.parseImportedProject(text, file.name));
+        showScreen("sync");
+      } catch (err) {
+        showToast(err?.message || i18n.t("errImport"));
+      }
+      return;
+    }
+    if (file.type.startsWith("audio/") || /\.(mp3|wav|m4a|ogg|flac)$/i.test(name)) {
+      await handleAudioFile(file);
+    }
+  });
+
+  // Line list keyboard (listbox)
+  $("line-list")?.addEventListener("keydown", (e) => {
+    if (state.screen !== "sync") return;
+    const max = state.project.lines.length - 1;
+    if (max < 0) return;
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      e.preventDefault();
+      const next =
+        e.key === "ArrowDown"
+          ? Math.min(max, state.selectedIndex + 1)
+          : Math.max(0, state.selectedIndex - 1);
+      selectLine(next, true);
+      focusLineOption(next);
+    } else if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      const line = state.project.lines[state.selectedIndex];
+      if (line?.startMs != null) audio.seek(line.startMs / 1000);
+    } else if (e.key === "Home") {
+      e.preventDefault();
+      selectLine(0, true);
+      focusLineOption(0);
+    } else if (e.key === "End") {
+      e.preventDefault();
+      selectLine(max, true);
+      focusLineOption(max);
+    }
+  });
+}
+
+function focusLineOption(index) {
+  const list = $("line-list");
+  if (!list) return;
+  list.tabIndex = 0;
+  const items = [...list.querySelectorAll(".line-item")];
+  items.forEach((el, i) => {
+    el.tabIndex = i === index ? 0 : -1;
+  });
+  items[index]?.focus();
+}
+
 async function boot() {
   // Pinch-zoom allowed (B20). Double-tap zoom on Tap is blocked via CSS
   // touch-action: manipulation on #btn-tap / .dock-tap.
   applyIcons(document);
   await db.requestPersistentStorage();
   setupUI();
+  setupPhase5();
   renderLineList();
   updateTapButtons();
 
@@ -2542,28 +2797,42 @@ async function boot() {
     if (!prefs.lastProjectId) db.savePrefs({ lastProjectId: migrated.id });
   }
 
-  const hash = (location.hash || "").replace(/^#/, "");
-  if (SCREENS.includes(hash) && hash !== "projects") {
-    // Deep-link into a tool screen: reopen last project if needed
-    const lastId = db.loadPrefs().lastProjectId;
-    if (lastId) {
-      const existing = await db.getProject(lastId);
-      if (existing) await restoreSession(existing);
-    }
-    showScreen(hash, { pushHash: false, persistScreen: false });
+  const shared = await pwa.consumeShareTarget();
+  if (shared) {
+    await startNewProject();
+    await handleAudioFile(shared, { stayOnScreen: true });
+    showScreen("audio");
   } else {
-    const lastId = db.loadPrefs().lastProjectId;
-    if (lastId) {
-      const existing = await db.getProject(lastId);
-      if (existing) {
-        await restoreSession(existing);
+    const hash = (location.hash || "").replace(/^#/, "");
+    if (SCREENS.includes(hash) && hash !== "projects") {
+      const lastId = db.loadPrefs().lastProjectId;
+      if (lastId) {
+        const existing = await db.getProject(lastId);
+        if (existing) await restoreSession(existing);
+      }
+      showScreen(hash, { pushHash: false, persistScreen: false });
+    } else {
+      const lastId = db.loadPrefs().lastProjectId;
+      if (lastId) {
+        const existing = await db.getProject(lastId);
+        if (existing) {
+          await restoreSession(existing);
+        } else {
+          showScreen("projects", { pushHash: true, persistScreen: false });
+        }
       } else {
         showScreen("projects", { pushHash: true, persistScreen: false });
       }
-    } else {
-      showScreen("projects", { pushHash: true, persistScreen: false });
     }
   }
+
+  if (!onboarding.hasSeenIntro()) {
+    showIntro(0);
+  } else {
+    maybeShowScreenTip(state.screen);
+  }
+
+  analytics.trackPageView();
 
   window.addEventListener("hashchange", () => {
     const name = (location.hash || "").replace(/^#/, "");

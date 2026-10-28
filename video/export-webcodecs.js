@@ -1,15 +1,9 @@
 /**
  * Offline MP4 export via WebCodecs + Mediabunny (H.264 + AAC).
  * Frame-by-frame; works with the tab in the background (no rAF).
+ * Mediabunny is loaded lazily so the app shell stays light.
  */
 
-import {
-  Output,
-  Mp4OutputFormat,
-  BufferTarget,
-  CanvasSource,
-  AudioBufferSource,
-} from "../vendor/mediabunny.min.mjs";
 import {
   drawFrame,
   resolveOutputSize,
@@ -17,6 +11,10 @@ import {
   parseAspect,
   resolveTimeRange,
 } from "./renderer.js";
+
+async function loadMediabunny() {
+  return import("../vendor/mediabunny.min.mjs");
+}
 
 /**
  * Feature-detect WebCodecs path.
@@ -151,6 +149,14 @@ async function exportOnMainThread({
   onProgress,
   shouldCancel,
 }) {
+  const {
+    Output,
+    Mp4OutputFormat,
+    BufferTarget,
+    CanvasSource,
+    AudioBufferSource,
+  } = await loadMediabunny();
+
   const { w, h } = resolveOutputSize(settings);
   const fps = Number(settings.fps) === 60 ? 60 : 30;
   const { startMs, endMs } = resolveTimeRange(project, settings);
