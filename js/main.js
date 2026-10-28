@@ -57,6 +57,7 @@ const state = {
   tapIndex: 0,
   audioBlob: null,
   waveform: null,
+  peaks: null,
   screen: "audio",
   scrubbing: false,
   audioReady: false,
@@ -80,6 +81,7 @@ store.reset({
 });
 
 video.bindProject(() => state.project);
+video.bindPeaks(() => state.peaks || null);
 
 function publishStore(patch = {}) {
   store.set({
@@ -612,6 +614,7 @@ async function handleAudioFile(file, { stayOnScreen = false } = {}) {
     } catch {
       peaks = computePeaks(result.buffer);
     }
+    state.peaks = peaks;
     state.waveform?.setPeaks(peaks, result.duration);
     state.waveform?.setDuration(result.duration);
     state.project.audio.waveformThumb = peaksToThumb(peaks);
@@ -673,6 +676,7 @@ async function handleAudioUrl() {
     } catch {
       peaks = computePeaks(result.buffer);
     }
+    state.peaks = peaks;
     state.waveform?.setPeaks(peaks, result.duration);
     state.waveform?.setDuration(result.duration);
     state.project.audio.waveformThumb = peaksToThumb(peaks);
@@ -1230,20 +1234,96 @@ function syncFieldsFromProject() {
   syncExportFieldsFromProject();
   updateOffsetChip();
   const v = s.video || {};
-  if (v.aspect) $("select-aspect").value = v.aspect;
-  if (v.style) $("select-anim").value = v.style;
-  if (v.background) $("select-bg").value = v.background;
-  if (v.blur != null) $("bg-blur").value = v.blur;
-  if (v.darken != null) $("bg-darken").value = v.darken;
-  $("bg-zoom").checked = v.zoom !== false;
-  $("video-show-tr").checked = Boolean(v.showTranslation);
-  if (v.translationLang) $("select-video-tr").value = v.translationLang;
+  if (v.aspect && $("select-aspect")) $("select-aspect").value = v.aspect;
+  if (v.resolution && $("select-resolution")) $("select-resolution").value = v.resolution;
+  if (v.fps && $("select-fps")) $("select-fps").value = String(v.fps);
+  if (v.template && $("select-template")) $("select-template").value = v.template;
+  if (v.style && $("select-anim")) $("select-anim").value = v.style;
+  if (v.background && $("select-bg")) $("select-bg").value = v.background;
+  if (v.blur != null && $("bg-blur")) $("bg-blur").value = v.blur;
+  if (v.darken != null && $("bg-darken")) $("bg-darken").value = v.darken;
+  if ($("bg-zoom")) $("bg-zoom").checked = v.zoom !== false;
+  if ($("video-show-tr")) $("video-show-tr").checked = Boolean(v.showTranslation);
+  if (v.translationLang && $("select-video-tr")) $("select-video-tr").value = v.translationLang;
+  if ($("inout-speed") && v.inOutSpeed != null) $("inout-speed").value = v.inOutSpeed;
+  if ($("select-font") && v.font) $("select-font").value = v.font;
+  if ($("font-size") && v.fontSize != null) $("font-size").value = v.fontSize || 0;
+  if ($("select-weight") && v.fontWeight) $("select-weight").value = String(v.fontWeight);
+  if ($("select-case") && v.textCase) $("select-case").value = v.textCase;
+  if ($("letter-spacing") && v.letterSpacing != null) $("letter-spacing").value = v.letterSpacing;
+  if ($("select-position") && v.position) $("select-position").value = v.position;
+  if ($("select-align") && v.align) $("select-align").value = v.align;
+  if ($("max-width") && v.maxWidthPct != null) $("max-width").value = v.maxWidthPct;
+  if ($("text-color") && v.textColor) $("text-color").value = v.textColor;
+  if ($("tr-color") && v.translationColor) $("tr-color").value = v.translationColor;
+  if ($("solid-color") && v.solidColor) $("solid-color").value = v.solidColor;
+  if ($("video-intro")) $("video-intro").checked = v.introCard !== false;
+  if ($("video-watermark")) $("video-watermark").checked = Boolean(v.watermark);
+  if ($("video-progress")) $("video-progress").checked = Boolean(v.progressBar);
+  if ($("video-credit")) $("video-credit").checked = v.credit !== false;
+  if ($("video-safezones")) $("video-safezones").checked = false;
+  syncFilmLineSelects();
+  updateFilmOutputs();
   $("opt-include-tr").checked = Boolean(s.includeTranslationInExport);
   if (s.translationLang) $("select-tr-lang").value = s.translationLang;
   const fileName = state.project.audio?.fileName || state.project.audioFileName;
   if (fileName) {
     updateAudioLoadedUI(fileName, durationSec(state.project) || state.project.duration || 0);
   }
+  syncVideoScrubRange();
+}
+
+function updateFilmOutputs() {
+  const map = [
+    ["bg-blur", "bg-blur-out"],
+    ["bg-darken", "bg-darken-out"],
+    ["inout-speed", "inout-out"],
+    ["font-size", "font-size-out"],
+    ["letter-spacing", "letter-spacing-out"],
+    ["max-width", "max-width-out"],
+  ];
+  for (const [id, out] of map) {
+    if ($(id) && $(out)) $(out).textContent = $(id).value;
+  }
+  const solidField = $("solid-color-field");
+  if (solidField && $("select-bg")) {
+    solidField.hidden = $("select-bg").value !== "solid";
+  }
+}
+
+function syncFilmLineSelects() {
+  const lines = state.project?.lines || [];
+  const fill = (sel, current) => {
+    if (!sel) return;
+    const prev = current ?? sel.value;
+    sel.innerHTML = `<option value="">—</option>`;
+    lines.forEach((line, i) => {
+      if (!sync.isLyric(line)) return;
+      const label = `${i + 1}. ${(sync.lineMainText(line) || "").slice(0, 42)}`;
+      const opt = document.createElement("option");
+      opt.value = String(i);
+      opt.textContent = label;
+      sel.appendChild(opt);
+    });
+    if (prev !== "" && [...sel.options].some((o) => o.value === String(prev))) {
+      sel.value = String(prev);
+    }
+  };
+  const v = state.project?.settings?.video || {};
+  fill($("select-jump-line"));
+  fill($("select-section-start"), v.sectionStartLine);
+  fill($("select-section-end"), v.sectionEndLine);
+}
+
+function syncVideoScrubRange() {
+  const scrub = $("video-scrub");
+  if (!scrub) return;
+  const durMs =
+    state.project?.audio?.durationMs ||
+    Math.round((durationSec(state.project) || 0) * 1000) ||
+    1000;
+  scrub.max = String(Math.max(1, durMs));
+  if (Number(scrub.value) > durMs) scrub.value = "0";
 }
 
 function readVideoSettings({ save = true } = {}) {
@@ -1251,14 +1331,40 @@ function readVideoSettings({ save = true } = {}) {
     state.project.settings.video = sync.createEmptyProject().settings.video;
   }
   const v = state.project.settings.video;
-  v.aspect = $("select-aspect").value;
-  v.style = $("select-anim").value;
-  v.background = $("select-bg").value;
-  v.blur = Number($("bg-blur").value);
-  v.darken = Number($("bg-darken").value);
-  v.zoom = $("bg-zoom").checked;
-  v.showTranslation = $("video-show-tr").checked;
-  v.translationLang = $("select-video-tr").value;
+  if ($("select-aspect")) v.aspect = $("select-aspect").value;
+  if ($("select-resolution")) v.resolution = $("select-resolution").value;
+  if ($("select-fps")) v.fps = Number($("select-fps").value) || 30;
+  if ($("select-template")) v.template = $("select-template").value;
+  if ($("select-anim")) v.style = $("select-anim").value;
+  if ($("select-bg")) v.background = $("select-bg").value;
+  if ($("bg-blur")) v.blur = Number($("bg-blur").value);
+  if ($("bg-darken")) v.darken = Number($("bg-darken").value);
+  if ($("bg-zoom")) v.zoom = $("bg-zoom").checked;
+  if ($("video-show-tr")) v.showTranslation = $("video-show-tr").checked;
+  if ($("select-video-tr")) v.translationLang = $("select-video-tr").value;
+  if ($("inout-speed")) v.inOutSpeed = Number($("inout-speed").value);
+  if ($("select-font")) v.font = $("select-font").value;
+  if ($("font-size")) v.fontSize = Number($("font-size").value) || 0;
+  if ($("select-weight")) v.fontWeight = Number($("select-weight").value) || 600;
+  if ($("select-case")) v.textCase = $("select-case").value;
+  if ($("letter-spacing")) v.letterSpacing = Number($("letter-spacing").value) || 0;
+  if ($("select-position")) v.position = $("select-position").value;
+  if ($("select-align")) v.align = $("select-align").value;
+  if ($("max-width")) v.maxWidthPct = Number($("max-width").value) || 82;
+  if ($("text-color")) v.textColor = $("text-color").value;
+  if ($("tr-color")) v.translationColor = $("tr-color").value;
+  if ($("solid-color")) v.solidColor = $("solid-color").value;
+  if ($("video-intro")) v.introCard = $("video-intro").checked;
+  if ($("video-watermark")) {
+    v.watermark = $("video-watermark").checked;
+    v.watermarkText = v.watermark ? state.project.artist || state.project.title || "" : "";
+  }
+  if ($("video-progress")) v.progressBar = $("video-progress").checked;
+  if ($("video-credit")) v.credit = $("video-credit").checked;
+  if ($("select-section-start")) v.sectionStartLine = $("select-section-start").value;
+  if ($("select-section-end")) v.sectionEndLine = $("select-section-end").value;
+  video.setSafeZones(Boolean($("video-safezones")?.checked));
+  updateFilmOutputs();
   if (save) persist();
 }
 
@@ -2115,8 +2221,39 @@ function setupUI() {
     e.target.value = "";
   });
 
-  [
+  // Film settings tabs
+  document.querySelectorAll("[data-film-tab]").forEach((tab) => {
+    tab.addEventListener("click", () => {
+      const name = tab.getAttribute("data-film-tab");
+      document.querySelectorAll("[data-film-tab]").forEach((t) => {
+        const on = t === tab;
+        t.classList.toggle("is-active", on);
+        t.setAttribute("aria-selected", on ? "true" : "false");
+      });
+      document.querySelectorAll("[data-film-panel]").forEach((panel) => {
+        panel.hidden = panel.getAttribute("data-film-panel") !== name;
+      });
+    });
+  });
+
+  // Hide 4K on narrow / touch-first (desktop only)
+  const opt4k = $("opt-4k");
+  if (opt4k && window.matchMedia("(max-width: 900px)").matches) {
+    opt4k.disabled = true;
+    opt4k.hidden = true;
+  }
+
+  video.detectExportPath?.().then((path) => {
+    const hint = $("export-path-hint");
+    if (!hint) return;
+    hint.textContent =
+      path === "webcodecs" ? i18n.t("exportPathWebcodecs") : i18n.t("exportPathFallback");
+  });
+
+  const videoControlIds = [
     "select-aspect",
+    "select-resolution",
+    "select-fps",
     "select-anim",
     "select-bg",
     "bg-blur",
@@ -2124,18 +2261,47 @@ function setupUI() {
     "bg-zoom",
     "video-show-tr",
     "select-video-tr",
-  ].forEach((id) => {
+    "inout-speed",
+    "select-font",
+    "font-size",
+    "select-weight",
+    "select-case",
+    "letter-spacing",
+    "select-position",
+    "select-align",
+    "max-width",
+    "text-color",
+    "tr-color",
+    "solid-color",
+    "video-intro",
+    "video-watermark",
+    "video-progress",
+    "video-credit",
+    "video-safezones",
+    "select-section-start",
+    "select-section-end",
+  ];
+  videoControlIds.forEach((id) => {
     $(id)?.addEventListener("change", () => {
       readVideoSettings();
       video.renderFrame(state.project);
     });
     $(id)?.addEventListener("input", () => {
-      readVideoSettings();
+      readVideoSettings({ save: false });
       video.renderFrame(state.project);
     });
   });
 
-  $("input-bg").addEventListener("change", (e) => {
+  $("select-template")?.addEventListener("change", () => {
+    const id = $("select-template").value;
+    const next = video.applyTemplate(state.project.settings.video || {}, id);
+    state.project.settings.video = next;
+    syncFieldsFromProject();
+    readVideoSettings();
+    video.renderFrame(state.project);
+  });
+
+  $("input-bg")?.addEventListener("change", (e) => {
     const file = e.target.files?.[0];
     video.setBackgroundFile(file);
     if (file?.type.startsWith("video/")) $("select-bg").value = "video";
@@ -2144,20 +2310,41 @@ function setupUI() {
     video.renderFrame(state.project);
   });
 
-  $("btn-preview-video").addEventListener("click", async () => {
+  $("video-scrub")?.addEventListener("input", () => {
+    const ms = Number($("video-scrub").value) || 0;
+    video.setScrubMs(ms);
+    if ($("video-scrub-time")) $("video-scrub-time").textContent = sync.formatMs(ms);
+    video.disablePreview();
+    if ($("btn-preview-video")) $("btn-preview-video").textContent = i18n.t("livePreview");
+    video.renderFrame(state.project);
+  });
+
+  $("select-jump-line")?.addEventListener("change", () => {
+    const idx = Number($("select-jump-line").value);
+    const line = state.project.lines[idx];
+    if (!line || line.startMs == null) return;
+    video.setScrubMs(line.startMs);
+    if ($("video-scrub")) $("video-scrub").value = String(line.startMs);
+    if ($("video-scrub-time")) $("video-scrub-time").textContent = sync.formatMs(line.startMs);
+    audio.seek(line.startMs / 1000);
+    video.renderFrame(state.project);
+  });
+
+  $("btn-preview-video")?.addEventListener("click", async () => {
     readVideoSettings();
     if (video.isPreviewEnabled()) {
       video.disablePreview();
       $("btn-preview-video").textContent = i18n.t("livePreview");
     } else {
-      await video.ensureVideoFonts();
+      video.setScrubMs(null);
+      await video.ensureVideoFonts(state.project.settings.video);
       video.enablePreview();
       $("btn-preview-video").textContent = i18n.t("stopPreview");
     }
   });
 
   let recordPausedByHide = false;
-  $("btn-record").addEventListener("click", async () => {
+  $("btn-record")?.addEventListener("click", async () => {
     const status = $("record-status");
     if (recordPausedByHide) {
       if (video.resumeRecordingIfPaused()) {
@@ -2169,16 +2356,21 @@ function setupUI() {
       return;
     }
     readVideoSettings();
+    syncFilmLineSelects();
     const prog = $("record-progress");
     const bar = $("record-bar");
     prog.hidden = false;
     $("btn-stop-record").hidden = false;
     $("btn-record").disabled = true;
-    status.textContent = i18n.t("recordingKeep");
-    await video.startRecording(state.project, {
-      onProgress: (p) => {
+    status.textContent = i18n.t("exporting");
+    await video.startVideoExport(state.project, {
+      onProgress: (info) => {
+        const p = info.progress ?? info;
         bar.style.width = `${Math.round(p * 100)}%`;
-        status.textContent = `${i18n.t("recordingKeep")} ${Math.round(p * 100)}%`;
+        const eta = info.etaSec != null ? ` · ${video.formatEta(info.etaSec)} ${i18n.t("left")}` : "";
+        const path =
+          info.path === "webcodecs" ? i18n.t("exportingOffline") : i18n.t("recordingKeep");
+        status.textContent = `${path} ${Math.round(p * 100)}%${eta}`;
       },
       onDone: () => {
         recordPausedByHide = false;
@@ -2192,9 +2384,14 @@ function setupUI() {
       },
       onError: (err) => {
         recordPausedByHide = false;
-        status.textContent = err?.message || i18n.t("recordingFailed");
+        if (err?.name === "AbortError") {
+          status.textContent = i18n.t("exportCancelled");
+        } else {
+          status.textContent = err?.message || i18n.t("recordingFailed");
+        }
         $("btn-stop-record").hidden = true;
         $("btn-record").disabled = false;
+        $("btn-record").textContent = i18n.t("recordVideo");
       },
       onHidden: () => {
         recordPausedByHide = true;
@@ -2206,12 +2403,13 @@ function setupUI() {
     });
   });
 
-  $("btn-stop-record").addEventListener("click", () => {
+  $("btn-stop-record")?.addEventListener("click", () => {
     recordPausedByHide = false;
     video.stopRecording();
     $("btn-stop-record").hidden = true;
     $("btn-record").disabled = false;
     $("btn-record").textContent = i18n.t("recordVideo");
+    if ($("record-status")) $("record-status").textContent = i18n.t("exportCancelled");
   });
 
   audio.onTimeUpdate(updateTimeDisplay);
