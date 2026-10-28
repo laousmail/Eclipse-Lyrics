@@ -82,12 +82,14 @@
   --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
   --topbar-h: 3.5rem;
   --tabbar-h: 4.25rem;
-  --dock-h: 4.75rem;
+  --dock-h: 5.35rem;
   --safe-t: env(safe-area-inset-top, 0px);
   --safe-b: env(safe-area-inset-bottom, 0px);
   --gutter: 1rem;
   --radius: 16px;
-  --touch: 2.75rem;
+  --touch: 2.85rem;
+  --touch-lg: 3.25rem;
+  --gap-safe: 0.85rem;
   color-scheme: dark;
 }
 
@@ -106,6 +108,8 @@ html {
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
   background: var(--bg);
+  touch-action: manipulation;
+  overscroll-behavior: none;
 }
 
 body {
@@ -119,6 +123,13 @@ body {
     var(--bg);
   -webkit-font-smoothing: antialiased;
   overflow-x: clip;
+  overscroll-behavior: none;
+  touch-action: manipulation;
+  /* Fixed app viewport — no rubber-band page zoom feel */
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
 }
 
 .visually-hidden {
@@ -176,12 +187,12 @@ a:hover {
 .app {
   display: flex;
   flex-direction: column;
-  min-height: 100dvh;
-  min-height: 100svh;
+  height: 100%;
   max-width: 480px;
   margin: 0 auto;
   position: relative;
   background: transparent;
+  overflow: hidden;
 }
 
 .app-topbar {
@@ -284,14 +295,21 @@ body.dock-on.has-tabbar .app-screens {
 .screen {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
-  animation: screen-in 0.28s var(--ease);
+  gap: 1.1rem;
+}
+
+.screen.screen-enter {
+  animation: screen-in 0.32s var(--ease);
 }
 
 @keyframes screen-in {
   from {
     opacity: 0;
-    transform: translateY(8px);
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
   }
 }
 
@@ -338,15 +356,15 @@ body.dock-on.has-tabbar .app-screens {
   align-items: center;
   justify-content: center;
   gap: 0.45rem;
-  min-height: var(--touch);
-  padding: 0 1.25rem;
+  min-height: var(--touch-lg);
+  padding: 0 1.35rem;
   border: 0;
   border-radius: 99px;
   font: inherit;
   font-weight: 600;
   cursor: pointer;
   text-decoration: none;
-  transition: transform 0.18s var(--ease), box-shadow 0.18s var(--ease), background 0.15s;
+  transition: transform 0.18s var(--ease), box-shadow 0.18s var(--ease), background 0.15s, filter 0.15s;
   -webkit-tap-highlight-color: transparent;
   touch-action: manipulation;
 }
@@ -357,7 +375,8 @@ body.dock-on.has-tabbar .app-screens {
 }
 
 .btn:active:not(:disabled) {
-  transform: scale(0.98);
+  transform: scale(0.97);
+  filter: brightness(1.08);
 }
 
 .btn-fill {
@@ -378,9 +397,9 @@ body.dock-on.has-tabbar .app-screens {
 }
 
 .btn-sm {
-  min-height: 2.35rem;
-  padding: 0 0.9rem;
-  font-size: 0.88rem;
+  min-height: var(--touch);
+  padding: 0 1rem;
+  font-size: 0.9rem;
 }
 
 .btn-stack {
@@ -607,12 +626,12 @@ input[type="range"] {
 #waveform {
   display: block;
   width: 100%;
-  height: 96px;
+  height: 110px;
   border-radius: 12px;
   background: var(--bg);
   border: 1px solid var(--line);
   touch-action: none;
-  cursor: crosshair;
+  cursor: default;
 }
 
 .tip {
@@ -665,11 +684,17 @@ input[type="range"] {
   display: grid;
   grid-template-columns: 4.25rem 1fr;
   gap: 0.5rem;
-  padding: 0.75rem 0.85rem;
+  padding: 0.9rem 0.9rem;
   border-bottom: 1px solid color-mix(in srgb, var(--line) 80%, transparent);
   cursor: pointer;
-  min-height: 3rem;
+  min-height: 3.25rem;
   -webkit-tap-highlight-color: transparent;
+  transition: background 0.15s var(--ease);
+}
+
+.line-item.next-tap {
+  background: color-mix(in srgb, var(--gold) 10%, transparent);
+  box-shadow: inset 3px 0 0 var(--gold);
 }
 
 .line-item:last-child {
@@ -737,13 +762,35 @@ kbd {
 .export-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 0.65rem;
+  gap: 0.75rem;
 }
 
 .export-tile {
   min-height: 3.5rem;
+  width: 100%;
   font-size: 1.05rem;
   letter-spacing: 0.04em;
+}
+
+.export-cards {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.export-card {
+  display: grid;
+  gap: 0.45rem;
+  padding: 0.85rem;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--bg2);
+}
+
+.export-desc {
+  margin: 0;
+  color: var(--mute);
+  font-size: 0.88rem;
+  line-height: 1.4;
 }
 
 /* Video */
@@ -794,14 +841,14 @@ kbd {
   position: fixed;
   left: 50%;
   transform: translateX(-50%);
-  bottom: calc(var(--tabbar-h) + var(--safe-b));
+  bottom: calc(var(--tabbar-h) + var(--safe-b) + 0.15rem);
   z-index: 45;
   width: min(100%, 480px);
   display: grid;
-  grid-template-columns: var(--touch) 1fr auto auto;
-  gap: 0.45rem;
+  grid-template-columns: var(--touch-lg) 1fr var(--touch) var(--touch);
+  gap: 0.65rem;
   align-items: center;
-  padding: 0.55rem var(--gutter);
+  padding: 0.7rem var(--gutter) 0.65rem;
   background: var(--glass);
   -webkit-backdrop-filter: blur(16px);
   backdrop-filter: blur(16px);
@@ -814,16 +861,22 @@ kbd {
 }
 
 .dock-play {
-  width: var(--touch);
-  height: var(--touch);
+  width: var(--touch-lg);
+  height: var(--touch-lg);
   border-radius: 50%;
   border: 0;
   background: var(--bg3);
   color: var(--ink);
-  font-size: 1rem;
+  font-size: 1.05rem;
   cursor: pointer;
   box-shadow: inset 0 0 0 1.5px var(--line);
   -webkit-tap-highlight-color: transparent;
+  transition: transform 0.15s var(--ease), background 0.15s;
+}
+
+.dock-play:active {
+  transform: scale(0.94);
+  background: var(--bg2);
 }
 
 .dock-tap {
@@ -832,7 +885,7 @@ kbd {
   align-items: center;
   justify-content: center;
   gap: 0.05rem;
-  min-height: var(--touch);
+  min-height: var(--touch-lg);
   border: 0;
   border-radius: 99px;
   background: var(--grad);
@@ -842,6 +895,7 @@ kbd {
   cursor: pointer;
   box-shadow: 0 8px 24px -10px color-mix(in srgb, var(--hot) 70%, transparent);
   -webkit-tap-highlight-color: transparent;
+  transition: transform 0.15s var(--ease), box-shadow 0.2s var(--ease);
 }
 
 .dock-tap:disabled {
@@ -868,8 +922,8 @@ kbd {
 }
 
 .dock-seek {
-  min-width: 2.75rem;
-  min-height: 2.5rem;
+  min-width: var(--touch);
+  min-height: var(--touch);
   border: 0;
   border-radius: 99px;
   background: none;
@@ -880,6 +934,12 @@ kbd {
   cursor: pointer;
   box-shadow: inset 0 0 0 1px var(--line);
   -webkit-tap-highlight-color: transparent;
+  transition: transform 0.15s var(--ease), color 0.15s;
+}
+
+.dock-seek:active {
+  transform: scale(0.94);
+  color: var(--ink);
 }
 
 /* ——— Tab bar ——— */
@@ -906,19 +966,25 @@ kbd {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 0.15rem;
-  min-height: 3.25rem;
-  padding: 0.25rem 0.15rem;
+  gap: 0.2rem;
+  min-height: 3.4rem;
+  padding: 0.35rem 0.2rem;
   border: 0;
   background: none;
   color: var(--mute);
   font: inherit;
-  font-size: 0.68rem;
+  font-size: 0.7rem;
   font-weight: 500;
   letter-spacing: 0.02em;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
-  border-radius: 10px;
+  border-radius: 12px;
+  transition: color 0.18s var(--ease), transform 0.15s var(--ease), background 0.18s;
+}
+
+.tab:active {
+  transform: scale(0.96);
+  background: color-mix(in srgb, var(--hot) 10%, transparent);
 }
 
 .tab-icon {
@@ -1032,6 +1098,10 @@ kbd {
 /* ——— Desktop / wide ——— */
 @media (min-width: 900px) {
   body {
+    position: static;
+    height: auto;
+    overflow-x: clip;
+    overscroll-behavior: auto;
     background:
       radial-gradient(ellipse 60% 45% at 70% 0%, color-mix(in srgb, var(--hot) 14%, transparent), transparent 55%),
       radial-gradient(ellipse 40% 30% at 10% 80%, color-mix(in srgb, var(--gold) 8%, transparent), transparent 50%),
@@ -1046,6 +1116,7 @@ kbd {
     border-radius: 24px;
     overflow: hidden;
     min-height: calc(100dvh - 5rem);
+    height: auto;
     background: color-mix(in srgb, var(--bg2) 70%, transparent);
     box-shadow: 0 30px 80px -40px rgba(0, 0, 0, 0.85);
   }
@@ -1120,6 +1191,270 @@ kbd {
 /* Keyboard open: keep dock usable on iOS */
 @supports (height: 100dvh) {
   .app {
-    min-height: 100dvh;
+    min-height: 100%;
+  }
+}
+
+/* ——— Lang switch ——— */
+.topbar-tools {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+}
+
+.lang-pill,
+.lang-row {
+  display: flex;
+  border: 1px solid var(--line);
+  border-radius: 99px;
+  padding: 3px;
+  gap: 2px;
+}
+
+.lang-row {
+  margin: 0.75rem 0 1rem;
+  width: fit-content;
+}
+
+.lang-btn {
+  min-width: 2.6rem;
+  min-height: 2.4rem;
+  border: 0;
+  border-radius: 99px;
+  background: none;
+  color: var(--mute);
+  font: inherit;
+  font-weight: 600;
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: background 0.18s var(--ease), color 0.18s, transform 0.12s;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.lang-btn[aria-pressed="true"] {
+  background: var(--ink);
+  color: var(--bg);
+}
+
+.lang-btn:active {
+  transform: scale(0.96);
+}
+
+/* ——— Audio loaded / URL / Google Docs ——— */
+.audio-pick,
+.audio-loaded {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.url-block,
+.gdocs-block {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.url-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.7rem;
+  align-items: stretch;
+}
+
+.url-row .btn {
+  min-width: 6.5rem;
+  white-space: nowrap;
+}
+
+.url-row input {
+  font: inherit;
+  color: var(--ink);
+  background: var(--bg2);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 0.75rem 0.9rem;
+  min-height: var(--touch);
+  width: 100%;
+}
+
+.url-row input:focus {
+  border-color: var(--gold);
+  outline: none;
+}
+
+.loaded-card {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  padding: 1rem;
+  border-radius: var(--radius);
+  border: 1px solid color-mix(in srgb, var(--hot) 35%, var(--line));
+  background: color-mix(in srgb, var(--hot) 8%, var(--bg2));
+  animation: success-pop 0.4s var(--ease);
+}
+
+.loaded-icon {
+  width: 2.75rem;
+  height: 2.75rem;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--grad);
+  color: var(--on);
+  font-size: 1.2rem;
+  flex-shrink: 0;
+}
+
+.loaded-name {
+  margin: 0;
+  font-weight: 600;
+  word-break: break-word;
+}
+
+.loaded-meta .muted {
+  margin: 0.15rem 0 0;
+  font-size: 0.85rem;
+}
+
+.meta-prompt {
+  padding: 0.85rem 1rem;
+  border-radius: 14px;
+  border: 1px dashed color-mix(in srgb, var(--gold) 45%, var(--line));
+  background: color-mix(in srgb, var(--gold) 6%, transparent);
+  animation: screen-in 0.35s var(--ease);
+}
+
+.prompt-title {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 600;
+}
+
+@keyframes success-pop {
+  from {
+    opacity: 0.4;
+    transform: scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* ——— Scrubber (deliberate seek — separated from Tap) ——— */
+.scrubber-block {
+  display: grid;
+  gap: 0.45rem;
+  padding: 0.85rem 0.9rem 1rem;
+  margin: 0.15rem 0;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: var(--bg2);
+}
+
+.scrubber-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.scrubber {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 2.75rem;
+  margin: 0;
+  background: transparent;
+  cursor: pointer;
+  touch-action: none;
+}
+
+.scrubber::-webkit-slider-runnable-track {
+  height: 8px;
+  border-radius: 99px;
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--hot) 55%, var(--line)),
+    var(--line)
+  );
+}
+
+.scrubber::-moz-range-track {
+  height: 8px;
+  border-radius: 99px;
+  background: var(--line);
+}
+
+.scrubber::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 28px;
+  height: 28px;
+  margin-top: -10px;
+  border-radius: 50%;
+  background: var(--grad);
+  border: 2px solid #fff2;
+  box-shadow: 0 4px 14px color-mix(in srgb, var(--hot) 45%, transparent);
+  transition: transform 0.15s var(--ease);
+}
+
+.scrubber::-moz-range-thumb {
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--grad);
+  box-shadow: 0 4px 14px color-mix(in srgb, var(--hot) 45%, transparent);
+}
+
+.scrubber.is-scrubbing::-webkit-slider-thumb,
+.scrubber:active::-webkit-slider-thumb {
+  transform: scale(1.12);
+}
+
+/* Tap confirmation flash */
+.tap-flash {
+  animation: tap-pulse 0.35s var(--ease);
+}
+
+@keyframes tap-pulse {
+  0% {
+    transform: scale(1);
+    filter: brightness(1);
+  }
+  40% {
+    transform: scale(1.03);
+    filter: brightness(1.2);
+  }
+  100% {
+    transform: scale(1);
+    filter: brightness(1);
+  }
+}
+
+.preview-current.tap-flash {
+  text-shadow: 0 0 28px color-mix(in srgb, var(--gold) 70%, transparent);
+}
+
+.dock-tap.tap-flash {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--gold) 45%, transparent),
+    0 8px 28px -8px color-mix(in srgb, var(--hot) 80%, transparent);
+}
+
+/* Clear separation: sync content vs scrub vs dock */
+.screen-sync .waveform-wrap {
+  margin-bottom: 0.15rem;
+}
+
+.screen-sync .line-list {
+  max-height: min(36vh, 18rem);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .screen.screen-enter,
+  .tap-flash,
+  .loaded-card,
+  .meta-prompt {
+    animation: none !important;
   }
 }

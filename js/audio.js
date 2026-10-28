@@ -73,11 +73,46 @@ export async function loadAudioFile(file) {
   }
 
   return {
-    fileName: file.name,
+    fileName: file.name || "audio",
     duration: audio.duration || decodedBuffer.duration,
     buffer: decodedBuffer,
     blob: file,
   };
+}
+
+/**
+ * Fetch audio from a URL (must allow CORS), then load as a Blob.
+ */
+export async function loadAudioFromUrl(url) {
+  const trimmed = String(url || "").trim();
+  if (!trimmed) throw new Error("EMPTY_URL");
+  let res;
+  try {
+    res = await fetch(trimmed, { mode: "cors", credentials: "omit" });
+  } catch {
+    throw new Error("FETCH_FAILED");
+  }
+  if (!res.ok) throw new Error("FETCH_FAILED");
+  const blob = await res.blob();
+  if (!blob || blob.size === 0) throw new Error("FETCH_FAILED");
+  let name = "audio-from-url";
+  try {
+    const path = new URL(trimmed).pathname.split("/").pop();
+    if (path) name = decodeURIComponent(path);
+  } catch {
+    /* keep default */
+  }
+  const type = blob.type || guessMime(name);
+  const file = new File([blob], name, { type });
+  return loadAudioFile(file);
+}
+
+function guessMime(name) {
+  const lower = name.toLowerCase();
+  if (lower.endsWith(".wav")) return "audio/wav";
+  if (lower.endsWith(".ogg")) return "audio/ogg";
+  if (lower.endsWith(".m4a") || lower.endsWith(".mp4")) return "audio/mp4";
+  return "audio/mpeg";
 }
 
 export function getDecodedBuffer() {
