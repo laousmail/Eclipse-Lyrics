@@ -63,34 +63,35 @@
   src: url("../fonts/noto-sans-tifinagh-400.woff2") format("woff2");
 }
 
+/* Tokens live in css/tokens.css — keep a short fallback for older caches */
 :root {
-  --bg: #070605;
-  --bg2: #110e0c;
-  --bg3: #1b1613;
-  --ink: #f2e9dd;
-  --mute: #b0a699;
-  --line: #2b241e;
-  --hot: #ff6a13;
-  --gold: #ffb347;
-  --on: #1a0a02;
-  --glass: rgba(7, 6, 5, 0.86);
-  --warn: #ffb020;
-  --grad: linear-gradient(110deg, var(--hot), var(--gold));
-  --ease: cubic-bezier(0.22, 1, 0.36, 1);
-  --sans: "Outfit", "Noto Sans", system-ui, sans-serif;
-  --lyric: "Noto Sans", "Noto Sans Tifinagh", "Outfit", system-ui, sans-serif;
-  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-  --topbar-h: 3.5rem;
-  --tabbar-h: 4.25rem;
-  --dock-h: 5.35rem;
-  --safe-t: env(safe-area-inset-top, 0px);
-  --safe-b: env(safe-area-inset-bottom, 0px);
-  --gutter: 1rem;
-  --radius: 16px;
-  --touch: 2.85rem;
-  --touch-lg: 3.25rem;
-  --gap-safe: 0.85rem;
-  color-scheme: dark;
+  /* see tokens.css */
+}
+
+.icon,
+.tab-icon svg,
+.dock-play svg,
+.drop-icon svg,
+.loaded-icon svg {
+  display: block;
+  width: 1.25rem;
+  height: 1.25rem;
+}
+
+.dock-play svg {
+  width: 1.35rem;
+  height: 1.35rem;
+}
+
+.drop-icon svg,
+.loaded-icon svg {
+  width: 2rem;
+  height: 2rem;
+}
+
+.line-item.is-section .text-main {
+  font-style: italic;
+  opacity: 0.85;
 }
 
 *,

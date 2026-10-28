@@ -3,7 +3,7 @@
 import { fadeUp } from "./styles/fadeUp.js";
 import { glowSweep } from "./styles/glowSweep.js";
 import { smoke } from "./styles/smoke.js";
-import { lineAtTime } from "./sync.js";
+import { lineAtTime, lineMainText, lineFr, lineEn, isLyric, msToSec, durationSec } from "./sync.js";
 import {
   getAudioElement,
   getMediaStreamDestination,
@@ -117,27 +117,29 @@ export function renderFrame(project, overrideTime) {
   }
 
   const ctx = canvas.getContext("2d");
-  const t = overrideTime != null ? overrideTime : getAudioElement().currentTime || 0;
-  const duration = project.duration || getAudioElement().duration || 1;
+  const tSec = overrideTime != null ? overrideTime : getAudioElement().currentTime || 0;
+  const tMs = Math.round(tSec * 1000);
+  const duration = durationSec(project) || getAudioElement().duration || 1;
 
-  drawBackground(ctx, width, height, settings, t, duration);
+  drawBackground(ctx, width, height, settings, tSec, duration);
 
-  const idx = lineAtTime(project.lines, t);
+  const idx = lineAtTime(project.lines, tMs);
   if (idx < 0) return;
 
   const line = project.lines[idx];
-  const start = line.start ?? 0;
-  const end = line.end ?? start + 3;
-  const progress = Math.max(0, Math.min(1, (t - start) / Math.max(0.001, end - start)));
+  if (!isLyric(line)) return;
+  const start = msToSec(line.startMs) ?? 0;
+  const end = msToSec(line.endMs) ?? start + 3;
+  const progress = Math.max(0, Math.min(1, (tSec - start) / Math.max(0.001, end - start)));
 
   let translation = "";
   if (settings.showTranslation) {
-    translation = settings.translationLang === "en" ? line.en : line.fr;
+    translation = settings.translationLang === "en" ? lineEn(line) : lineFr(line);
   }
 
   const styleFn = STYLES[settings.style] || fadeUp;
   styleFn(ctx, {
-    text: line.text,
+    text: lineMainText(line),
     translation,
     progress,
     width,

@@ -3,18 +3,33 @@
 import * as audio from "./audio.js";
 import * as sync from "./sync.js";
 import * as storage from "./storage.js";
+import * as db from "./db.js";
+import * as store from "./store.js";
+import * as history from "./history.js";
 import * as exp from "./export.js";
 import { initWaveform, computePeaks } from "./waveform.js";
 import * as video from "./video.js";
 import * as i18n from "./i18n.js";
 import * as docs from "./docs.js";
 import * as haptics from "./haptics.js";
+import { showToast } from "./ui/toast.js";
+import { openDialog, closeDialog, isDialogOpen as dialogIsOpen } from "./ui/dialog.js";
+import { applyIcons, iconHtml } from "./ui/icons.js";
+import { renderLineListInPlace } from "./lineList.js";
+import {
+  migrateProject,
+  setDurationSec,
+  durationSec,
+  lineMainText,
+  lineFr,
+  lineEn,
+  audioId,
+} from "./core/project.js";
 
 const state = {
   project: sync.createEmptyProject(),
   selectedIndex: 0,
   tapIndex: 0,
-  undoStack: [],
   audioBlob: null,
   waveform: null,
   screen: "audio",
@@ -24,7 +39,24 @@ const state = {
   userScrollPauseUntil: 0,
 };
 
+store.reset({
+  project: state.project,
+  screen: state.screen,
+  selectedIndex: 0,
+  tapIndex: 0,
+});
+
 video.bindProject(() => state.project);
+
+function publishStore(patch = {}) {
+  store.set({
+    project: state.project,
+    screen: state.screen,
+    selectedIndex: state.selectedIndex,
+    tapIndex: state.tapIndex,
+    ...patch,
+  });
+}
 
 const $ = (id) => document.getElementById(id);
 const SCREENS = ["audio", "lyrics", "sync", "export", "video"];
@@ -83,17 +115,17 @@ function updateDockVisibility() {
 }
 
 function openSheet(id) {
-  const el = $(id);
-  if (el) el.hidden = false;
+  openDialog(id);
 }
 
 function closeSheet(id) {
-  const el = $(id);
-  if (el) el.hidden = true;
+  closeDialog(id);
 }
 
 function persist() {
-  storage.scheduleSave(state.project);
+  state.project.updatedAt = Date.now();
+  db.scheduleSaveProject(state.project);
+  publishStore();
 }
 
 function setStatus(msg) {
@@ -101,21 +133,6 @@ function setStatus(msg) {
   if (el) el.textContent = msg;
 }
 
-let toastTimer = 0;
-function showToast(message) {
-  const el = $("toast");
-  if (!el || !message) return;
-  el.hidden = false;
-  el.textContent = message;
-  el.classList.add("is-on");
-  clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => {
-    el.classList.remove("is-on");
-    setTimeout(() => {
-      el.hidden = true;
-    }, 180);
-  }, 2800);
-}
 
 function formatClock(t) {
   return sync.formatTime(t);
@@ -158,7 +175,7 @@ function resetAudioPickUI() {
 function updateScrubber() {
   const scrub = $("scrubber");
   if (!scrub || state.scrubbing) return;
-  const dur = audio.getDuration() || state.project.duration || 0;
+  const dur = audio.getDuration() || durationSec(state.project) || state.project.duration || 0;
   const cur = audio.getCurrentTime();
   scrub.max = String(SCRUB_MAX);
   scrub.value = String(dur > 0 ? Math.round((cur / dur) * SCRUB_MAX) : 0);
@@ -166,7 +183,7 @@ function updateScrubber() {
 
 function updateTimeDisplay() {
   const cur = audio.getCurrentTime();
-  const dur = audio.getDuration() || state.project.duration || 0;
+  const dur = audio.getDuration() || durationSec(state.project) || state.project.duration || 0;
   const td = $("time-display");
   if (td) td.textContent = `${formatClock(cur)} / ${formatClock(dur)}`;
   state.waveform?.setPlayhead(cur);
@@ -179,7 +196,7 @@ function updatePlayButton() {
   const playing = audio.isPlaying();
   const btn = $("btn-play");
   if (btn) {
-    btn.textContent = playing ? "⏸" : "▶";
+    btn.innerHTML = playing ? iconHtml("pause") : iconHtml("play");
     btn.setAttribute("aria-label", playing ? i18n.t("pause") : i18n.t("play"));
   }
   updateDockVisibility();
@@ -190,24 +207,24 @@ function updateTapButtons() {
   const done = sync.isSyncComplete(state.project.lines);
   const tap = $("btn-tap");
   const undo = $("btn-undo");
+  const redo = $("btn-redo");
   const mark = $("tap-mark-label");
+  const fileName = state.project.audio?.fileName || state.project.audioFileName;
   if (tap) {
-    tap.disabled = !hasLines || !state.project.audioFileName || done;
+    tap.disabled = !hasLines || !fileName || done;
     tap.classList.toggle("is-done", done);
   }
   if (mark) {
+    const lyrics = state.project.lines.filter(sync.isLyric);
     if (done) mark.textContent = i18n.t("allLinesTimed");
-    else if (
-      state.project.lines.length &&
-      state.project.lines.every((l) => l.start != null) &&
-      !state.project.lines.at(-1)?.endManual
-    ) {
+    else if (lyrics.length && lyrics.every((l) => l.startMs != null) && !lyrics.at(-1)?.endManual) {
       mark.textContent = i18n.t("markEnd");
     } else {
       mark.textContent = i18n.t("markStart");
     }
   }
-  if (undo) undo.disabled = state.undoStack.length === 0;
+  if (undo) undo.disabled = !history.canUndo();
+  if (redo) redo.disabled = !history.canRedo();
 }
 
 function scrollTapLineIntoView(force = false) {
@@ -221,36 +238,24 @@ function scrollTapLineIntoView(force = false) {
 
 function renderLineList() {
   const list = $("line-list");
-  if (!list) return;
-  list.innerHTML = "";
-  state.project.lines.forEach((line, i) => {
-    const li = document.createElement("li");
-    li.className = "line-item";
-    li.setAttribute("role", "option");
-    li.dataset.index = String(i);
-    if (line.start == null) li.classList.add("untimed");
-    if (i === state.selectedIndex) {
-      li.classList.add("selected");
-      li.setAttribute("aria-selected", "true");
-    }
-    if (i === state.tapIndex && state.tapIndex < state.project.lines.length) li.classList.add("next-tap");
-    const time = line.start != null ? formatClock(line.start) : "—:—";
-    li.innerHTML = `
-      <span class="time">${time}</span>
-      <span class="text">
-        <p class="text-main"></p>
-        <p class="text-tr"></p>
-      </span>`;
-    li.querySelector(".text-main").textContent = line.text;
-    const trParts = [line.fr, line.en].filter(Boolean);
-    li.querySelector(".text-tr").textContent = trParts.join(" · ");
-    li.addEventListener("click", () => selectLine(i, true));
-    list.appendChild(li);
+  renderLineListInPlace(list, {
+    lines: state.project.lines,
+    selectedIndex: state.selectedIndex,
+    tapIndex: state.tapIndex,
+    onSelect: (i, seek) => selectLine(i, seek),
   });
-  state.waveform?.setLines(state.project.lines);
+  // Waveform uses seconds for markers
+  state.waveform?.setLines(
+    state.project.lines.map((l) => ({
+      ...l,
+      start: sync.msToSec(l.startMs),
+      end: sync.msToSec(l.endMs),
+    }))
+  );
   state.waveform?.setSelected(state.selectedIndex);
   updateTapButtons();
   updateExportButtons();
+  publishStore();
   scrollTapLineIntoView();
 }
 
@@ -259,14 +264,15 @@ function selectLine(i, seekTo = false) {
   state.selectedIndex = i;
   state.tapIndex = i;
   renderLineList();
-  if (seekTo && state.project.lines[i].start != null) {
-    audio.seek(state.project.lines[i].start);
+  const line = state.project.lines[i];
+  if (seekTo && line.startMs != null) {
+    audio.seek(sync.msToSec(line.startMs));
     updateTimeDisplay();
   }
 }
 
-function updateActiveLine(t) {
-  const idx = sync.lineAtTime(state.project.lines, t);
+function updateActiveLine(tSec) {
+  const idx = sync.lineAtTime(state.project.lines, Math.round(tSec * 1000));
   const changed = idx !== state.lastActiveLine;
   document.querySelectorAll(".line-item").forEach((el) => {
     const on = Number(el.dataset.index) === idx;
@@ -284,9 +290,9 @@ function updateActiveLine(t) {
   state.lastActiveLine = idx;
 }
 
-function updatePreview(t) {
+function updatePreview(tSec) {
   const lines = state.project.lines;
-  const idx = sync.lineAtTime(lines, t);
+  const idx = sync.lineAtTime(lines, Math.round(tSec * 1000));
   const prev = $("preview-prev");
   const cur = $("preview-current");
   const next = $("preview-next");
@@ -295,17 +301,17 @@ function updatePreview(t) {
 
   if (idx < 0) {
     prev.textContent = "";
-    cur.textContent = lines[0]?.text || "—";
-    next.textContent = lines[1]?.text || "";
+    cur.textContent = lineMainText(lines[0]) || "—";
+    next.textContent = lineMainText(lines[1]) || "";
     tr.textContent = "";
     return;
   }
 
-  prev.textContent = lines[idx - 1]?.text || "";
-  cur.textContent = lines[idx]?.text || "—";
-  next.textContent = lines[idx + 1]?.text || "";
+  prev.textContent = lineMainText(lines[idx - 1]) || "";
+  cur.textContent = lineMainText(lines[idx]) || "—";
+  next.textContent = lineMainText(lines[idx + 1]) || "";
   const lang = state.project.settings.translationLang || "fr";
-  const translation = lang === "en" ? lines[idx]?.en : lines[idx]?.fr;
+  const translation = lang === "en" ? lineEn(lines[idx]) : lineFr(lines[idx]);
   tr.textContent = translation || "";
 }
 
@@ -320,13 +326,16 @@ function flashTapConfirm() {
 }
 
 function applyLyricsFromFields() {
+  const before = structuredClone
+    ? structuredClone(state.project.lines)
+    : JSON.parse(JSON.stringify(state.project.lines));
   const result = sync.applyLyrics(
     state.project,
     $("field-lyrics").value,
     $("field-fr").value,
     $("field-en").value
   );
-  state.project.lines = result.lines;
+  const after = result.lines;
   const warn = $("translation-warn");
   if (result.warnings.length) {
     warn.hidden = false;
@@ -343,11 +352,25 @@ function applyLyricsFromFields() {
     warn.hidden = true;
     warn.textContent = "";
   }
-  state.selectedIndex = 0;
-  state.tapIndex = sync.firstUntimedIndex(state.project.lines);
-  state.undoStack = [];
-  renderLineList();
-  persist();
+
+  history.push({
+    label: "lyrics",
+    do: () => {
+      state.project.lines = after;
+      state.selectedIndex = 0;
+      state.tapIndex = sync.firstUntimedIndex(state.project.lines);
+      renderLineList();
+      persist();
+    },
+    undo: () => {
+      state.project.lines = before;
+      state.selectedIndex = 0;
+      state.tapIndex = sync.nextTapIndex(state.project.lines);
+      renderLineList();
+      persist();
+    },
+  });
+
   if (result.changed || result.added) {
     showToast(
       i18n
@@ -370,21 +393,25 @@ async function handleAudioFile(file, { stayOnScreen = false } = {}) {
   try {
     const result = await audio.loadAudioFile(file);
     state.audioBlob = result.blob;
+    if (!state.project.audio) state.project.audio = { fileName: "", durationMs: 0, storedAudioId: audioId() };
+    state.project.audio.fileName = result.fileName;
+    if (!state.project.audio.storedAudioId) state.project.audio.storedAudioId = audioId();
+    setDurationSec(state.project, result.duration);
+    // legacy mirrors
     state.project.audioFileName = result.fileName;
     state.project.duration = result.duration;
     const peaks = computePeaks(result.buffer);
     state.waveform?.setPeaks(peaks, result.duration);
     state.waveform?.setDuration(result.duration);
     setStatus(`${result.fileName} · ${formatClock(result.duration)}`);
-    sync.recomputeEnds(state.project.lines, result.duration);
+    sync.recomputeEnds(state.project.lines, state.project.audio.durationMs);
     renderLineList();
     persist();
-    storage.saveAudioBlob(result.blob, result.fileName);
+    await db.saveAudio(state.project.audio.storedAudioId, result.blob, result.fileName);
     updateTimeDisplay();
     updateAudioLoadedUI(result.fileName, result.duration);
     haptics.success();
     if (!stayOnScreen) {
-      // Prompt for title — stay on audio screen, focus title
       showScreen("audio");
       requestAnimationFrame(() => {
         const title = $("field-title");
@@ -417,16 +444,20 @@ async function handleAudioUrl() {
   try {
     const result = await audio.loadAudioFromUrl(url);
     state.audioBlob = result.blob;
+    if (!state.project.audio) state.project.audio = { fileName: "", durationMs: 0, storedAudioId: audioId() };
+    state.project.audio.fileName = result.fileName;
+    if (!state.project.audio.storedAudioId) state.project.audio.storedAudioId = audioId();
+    setDurationSec(state.project, result.duration);
     state.project.audioFileName = result.fileName;
     state.project.duration = result.duration;
     const peaks = computePeaks(result.buffer);
     state.waveform?.setPeaks(peaks, result.duration);
     state.waveform?.setDuration(result.duration);
     setStatus(`${result.fileName} · ${formatClock(result.duration)}`);
-    sync.recomputeEnds(state.project.lines, result.duration);
+    sync.recomputeEnds(state.project.lines, state.project.audio.durationMs);
     renderLineList();
     persist();
-    storage.saveAudioBlob(result.blob, result.fileName);
+    await db.saveAudio(state.project.audio.storedAudioId, result.blob, result.fileName);
     updateTimeDisplay();
     updateAudioLoadedUI(result.fileName, result.duration);
     haptics.success();
@@ -491,16 +522,35 @@ async function handleGoogleDocs() {
 function doTap() {
   if (!state.project.lines.length) return;
   if (sync.isSyncComplete(state.project.lines)) return;
-  const t = audio.getCurrentTime();
+  const tMs = Math.round(audio.getCurrentTime() * 1000);
   const idx = Math.min(state.tapIndex, state.project.lines.length - 1);
-  const result = sync.tapLine(state.project, idx, t);
+  const before = sync.snapshotTimings(state.project.lines);
+  const beforeTap = state.tapIndex;
+  const beforeSel = state.selectedIndex;
+  const result = sync.tapLine(state.project, idx, tMs);
   if (!result || result.noop) return;
-  state.undoStack.push(result.prevState);
-  if (state.undoStack.length > 50) state.undoStack.shift();
-  state.tapIndex = result.nextIndex;
-  state.selectedIndex = Math.min(state.tapIndex, state.project.lines.length - 1);
-  renderLineList();
-  persist();
+  const after = sync.snapshotTimings(state.project.lines);
+  const afterTap = result.nextIndex;
+  const afterSel = Math.min(afterTap, state.project.lines.length - 1);
+  // Revert then push as command so redo works
+  sync.undoTimings(state.project.lines, before);
+  history.push({
+    label: "tap",
+    do: () => {
+      sync.undoTimings(state.project.lines, after);
+      state.tapIndex = afterTap;
+      state.selectedIndex = afterSel;
+      renderLineList();
+      persist();
+    },
+    undo: () => {
+      sync.undoTimings(state.project.lines, before);
+      state.tapIndex = beforeTap;
+      state.selectedIndex = beforeSel;
+      renderLineList();
+      persist();
+    },
+  });
   haptics.tap();
   flashTapConfirm();
   if (result.done) showToast(i18n.t("allLinesTimed"));
@@ -508,22 +558,23 @@ function doTap() {
 }
 
 function doUndo() {
-  const prev = state.undoStack.pop();
-  if (!prev) return;
-  sync.undoTimings(state.project.lines, prev);
-  state.tapIndex = sync.nextTapIndex(state.project.lines);
-  state.selectedIndex = Math.min(state.tapIndex, Math.max(0, state.project.lines.length - 1));
-  renderLineList();
-  persist();
+  if (!history.canUndo()) return;
+  history.undo();
+  haptics.soft();
+}
+
+function doRedo() {
+  if (!history.canRedo()) return;
+  history.redo();
   haptics.soft();
 }
 
 function countUntimed() {
-  return state.project.lines.filter((l) => l.start == null).length;
+  return state.project.lines.filter((l) => sync.isLyric(l) && l.startMs == null).length;
 }
 
 function countTimed() {
-  return state.project.lines.filter((l) => l.start != null).length;
+  return state.project.lines.filter((l) => sync.isLyric(l) && l.startMs != null).length;
 }
 
 function updateExportButtons() {
@@ -586,9 +637,12 @@ function exportOpts() {
 function syncFieldsFromProject() {
   $("field-title").value = state.project.title || "";
   $("field-artist").value = state.project.artist || "";
-  $("field-lyrics").value = state.project.lines.map((l) => l.text).join("\n");
-  $("field-fr").value = state.project.lines.map((l) => l.fr || "").join("\n");
-  $("field-en").value = state.project.lines.map((l) => l.en || "").join("\n");
+  $("field-lyrics").value = state.project.lines
+    .filter(sync.isLyric)
+    .map((l) => lineMainText(l))
+    .join("\n");
+  $("field-fr").value = state.project.lines.filter(sync.isLyric).map((l) => lineFr(l)).join("\n");
+  $("field-en").value = state.project.lines.filter(sync.isLyric).map((l) => lineEn(l)).join("\n");
   const s = state.project.settings || {};
   if (s.playbackRate) {
     $("select-speed").value = String(s.playbackRate);
@@ -605,8 +659,9 @@ function syncFieldsFromProject() {
   if (v.translationLang) $("select-video-tr").value = v.translationLang;
   $("opt-include-tr").checked = Boolean(s.includeTranslationInExport);
   if (s.translationLang) $("select-tr-lang").value = s.translationLang;
-  if (state.project.audioFileName) {
-    updateAudioLoadedUI(state.project.audioFileName, state.project.duration);
+  const fileName = state.project.audio?.fileName || state.project.audioFileName;
+  if (fileName) {
+    updateAudioLoadedUI(fileName, durationSec(state.project) || state.project.duration || 0);
   }
 }
 
@@ -633,7 +688,7 @@ function isTypingTarget(el) {
 }
 
 function isDialogOpen() {
-  return Boolean(document.querySelector('.sheet-overlay:not([hidden]), [role="dialog"]:not([hidden])'));
+  return dialogIsOpen();
 }
 
 function setupKeyboard() {
@@ -672,13 +727,38 @@ function setupKeyboard() {
       selectLine(Math.min(state.project.lines.length - 1, state.selectedIndex + 1), true);
       return;
     }
+    if ((e.metaKey || e.ctrlKey) && (key === "z" || key === "Z")) {
+      e.preventDefault();
+      if (e.shiftKey) doRedo();
+      else doUndo();
+      return;
+    }
+    if ((e.metaKey || e.ctrlKey) && (key === "y" || key === "Y")) {
+      e.preventDefault();
+      doRedo();
+      return;
+    }
     if (key === "ArrowLeft" || key === "ArrowRight") {
       e.preventDefault();
-      const step = e.shiftKey ? 0.5 : 0.05;
-      const delta = key === "ArrowLeft" ? -step : step;
+      const stepMs = e.shiftKey ? 500 : 50;
+      const delta = key === "ArrowLeft" ? -stepMs : stepMs;
+      const before = sync.snapshotTimings(state.project.lines);
       sync.nudgeLine(state.project, state.selectedIndex, delta);
-      renderLineList();
-      persist();
+      const after = sync.snapshotTimings(state.project.lines);
+      sync.undoTimings(state.project.lines, before);
+      history.push({
+        label: "nudge",
+        do: () => {
+          sync.undoTimings(state.project.lines, after);
+          renderLineList();
+          persist();
+        },
+        undo: () => {
+          sync.undoTimings(state.project.lines, before);
+          renderLineList();
+          persist();
+        },
+      });
       return;
     }
     if (key === "j" || key === "J") {
@@ -814,7 +894,7 @@ function setupScrubber() {
   if (!scrub) return;
 
   const seekFromScrub = () => {
-    const dur = audio.getDuration() || state.project.duration || 0;
+    const dur = audio.getDuration() || durationSec(state.project) || state.project.duration || 0;
     if (!dur) return;
     const t = (Number(scrub.value) / SCRUB_MAX) * dur;
     audio.seek(t);
@@ -891,31 +971,29 @@ async function offerRestore() {
 }
 
 async function restoreSession(meta) {
-  state.project = {
-    ...sync.createEmptyProject(),
-    ...meta,
-    settings: {
-      ...sync.createEmptyProject().settings,
-      ...(meta.settings || {}),
-      video: {
-        ...sync.createEmptyProject().settings.video,
-        ...(meta.settings?.video || {}),
-      },
-    },
-  };
+  state.project = migrateProject(meta);
+  history.clear();
   syncFieldsFromProject();
   renderLineList();
   state.tapIndex = sync.nextTapIndex(state.project.lines);
-  const audioData = await storage.loadAudioBlob();
-  if (audioData?.blob) {
-    const file = new File([audioData.blob], audioData.fileName || meta.audioFileName || "audio", {
-      type: audioData.blob.type || "audio/mpeg",
-    });
-    await handleAudioFile(file, { stayOnScreen: true });
-  } else if (meta.audioFileName) {
-    setStatus(`${meta.audioFileName}`);
+  let audioData = null;
+  if (state.project.audio?.storedAudioId) {
+    audioData = await db.loadAudio(state.project.audio.storedAudioId);
   }
-  const last = meta.lastScreen;
+  if (!audioData?.blob) {
+    audioData = await storage.loadAudioBlob();
+  }
+  if (audioData?.blob) {
+    const file = new File(
+      [audioData.blob],
+      audioData.fileName || state.project.audio?.fileName || meta.audioFileName || "audio",
+      { type: audioData.blob.type || "audio/mpeg" }
+    );
+    await handleAudioFile(file, { stayOnScreen: true });
+  } else if (state.project.audio?.fileName || meta.audioFileName) {
+    setStatus(`${state.project.audio?.fileName || meta.audioFileName}`);
+  }
+  const last = state.project.lastScreen || meta.lastScreen;
   showScreen(SCREENS.includes(last) ? last : "audio", { persistScreen: false });
 }
 
@@ -943,39 +1021,59 @@ function isValidProjectShape(data) {
   if (!Array.isArray(data.lines)) return false;
   return data.lines.every((l) => {
     if (!l || typeof l !== "object") return false;
-    const startOk = l.start == null || typeof l.start === "number";
-    const endOk = l.end == null || typeof l.end === "number";
+    if (l.type === "section") return true;
+    const startOk =
+      l.start == null ||
+      typeof l.start === "number" ||
+      l.startMs == null ||
+      typeof l.startMs === "number";
+    const endOk =
+      l.end == null ||
+      typeof l.end === "number" ||
+      l.endMs == null ||
+      typeof l.endMs === "number";
     return startOk && endOk;
   });
 }
 
 function mergeImported(data) {
-  state.project.title = data.title || state.project.title;
-  state.project.artist = data.artist || state.project.artist;
-  if (data.duration) state.project.duration = data.duration;
-  if (data.audioFileName) state.project.audioFileName = data.audioFileName;
-  state.project.lines = (data.lines || []).map((l) => ({
-    id: l.id || sync.uid(),
-    start: l.start ?? null,
-    end: l.end ?? null,
-    text: l.text || "",
-    fr: l.fr || "",
-    en: l.en || "",
-  }));
-  if (data.settings) {
-    state.project.settings = {
+  const before = migrateProject(state.project);
+  const incoming = migrateProject({
+    ...state.project,
+    ...data,
+    title: data.title || state.project.title,
+    artist: data.artist || state.project.artist,
+    lines: data.lines || state.project.lines,
+    settings: {
       ...state.project.settings,
-      ...data.settings,
-      video: { ...state.project.settings.video, ...(data.settings.video || {}) },
-    };
-  }
-  sync.recomputeEnds(state.project.lines, state.project.duration);
-  syncFieldsFromProject();
-  state.selectedIndex = 0;
-  state.tapIndex = sync.firstUntimedIndex(state.project.lines);
-  state.undoStack = [];
-  renderLineList();
-  persist();
+      ...(data.settings || {}),
+      video: { ...state.project.settings.video, ...(data.settings?.video || {}) },
+    },
+  });
+  if (data.audio?.durationMs) incoming.audio.durationMs = data.audio.durationMs;
+  else if (data.duration) setDurationSec(incoming, data.duration);
+  if (data.audioFileName && !incoming.audio.fileName) incoming.audio.fileName = data.audioFileName;
+  sync.recomputeEnds(incoming.lines, incoming.audio.durationMs);
+
+  history.push({
+    label: "import",
+    do: () => {
+      state.project = incoming;
+      syncFieldsFromProject();
+      state.selectedIndex = 0;
+      state.tapIndex = sync.firstUntimedIndex(state.project.lines);
+      renderLineList();
+      persist();
+    },
+    undo: () => {
+      state.project = before;
+      syncFieldsFromProject();
+      state.selectedIndex = 0;
+      state.tapIndex = sync.nextTapIndex(state.project.lines);
+      renderLineList();
+      persist();
+    },
+  });
   haptics.success();
 }
 
@@ -1001,10 +1099,18 @@ function setupUI() {
   );
 
   state.waveform = initWaveform($("waveform"), {
-    onMarkerDrag: (index, t) => {
-      sync.setLineStart(state.project, index, t);
+    onMarkerDrag: (index, tSec) => {
+      const before = sync.snapshotTimings(state.project.lines);
+      sync.setLineStart(state.project, index, Math.round(tSec * 1000));
+      const after = sync.snapshotTimings(state.project.lines);
+      // Live preview while dragging (not every move as history — commit on pointerup via separate path)
       state.selectedIndex = index;
       renderLineList();
+      // Store last drag as single command when timings change
+      if (!state._dragCmd) {
+        state._dragCmd = { index, before };
+      }
+      state._dragAfter = after;
       persist();
     },
     onSelect: (index) => selectLine(index, false),
@@ -1026,6 +1132,35 @@ function setupUI() {
   });
   $("btn-tap").addEventListener("click", doTap);
   $("btn-undo").addEventListener("click", doUndo);
+  $("btn-redo")?.addEventListener("click", doRedo);
+  history.subscribe(() => updateTapButtons());
+
+  $("waveform")?.addEventListener("pointerup", () => {
+    if (!state._dragCmd || !state._dragAfter) {
+      state._dragCmd = null;
+      state._dragAfter = null;
+      return;
+    }
+    const before = state._dragCmd.before;
+    const after = state._dragAfter;
+    state._dragCmd = null;
+    state._dragAfter = null;
+    sync.undoTimings(state.project.lines, before);
+    history.push({
+      label: "drag",
+      do: () => {
+        sync.undoTimings(state.project.lines, after);
+        renderLineList();
+        persist();
+      },
+      undo: () => {
+        sync.undoTimings(state.project.lines, before);
+        renderLineList();
+        persist();
+      },
+    });
+  });
+
   $("btn-seek-back")?.addEventListener("click", () => {
     audio.seek(Math.max(0, audio.getCurrentTime() - 5));
     updateTimeDisplay();
@@ -1243,13 +1378,70 @@ function setupUI() {
 async function boot() {
   // Pinch-zoom allowed (B20). Double-tap zoom on Tap is blocked via CSS
   // touch-action: manipulation on #btn-tap / .dock-tap.
+  applyIcons(document);
+  await db.requestPersistentStorage();
   setupUI();
   renderLineList();
   updateTapButtons();
-  await offerRestore();
+
+  // Migrate legacy v1 session into IndexedDB once
+  const prefs = db.loadPrefs();
+  if (prefs.lastProjectId) {
+    const existing = await db.getProject(prefs.lastProjectId);
+    if (existing) {
+      await offerRestoreFromProject(existing);
+    } else {
+      await offerRestore();
+    }
+  } else {
+    const legacy = await db.readLegacySession();
+    if (legacy.meta) {
+      const migrated = migrateProject(legacy.meta);
+      if (legacy.audio?.blob) {
+        if (!migrated.audio.storedAudioId) migrated.audio.storedAudioId = audioId();
+        await db.saveAudio(migrated.audio.storedAudioId, legacy.audio.blob, legacy.audio.fileName || "");
+      }
+      await db.saveProject(migrated);
+      await db.clearLegacySession();
+      await offerRestoreFromProject(migrated);
+    } else {
+      await offerRestore();
+    }
+  }
+
   window.addEventListener("hashchange", () => {
     const name = (location.hash || "").replace(/^#/, "");
     if (SCREENS.includes(name)) showScreen(name, { pushHash: false });
+  });
+}
+
+async function offerRestoreFromProject(project) {
+  if (!project) return;
+  const banner = $("restore-banner");
+  const detail = $("restore-detail");
+  if (!banner) {
+    await restoreSession(project);
+    return;
+  }
+  const when = project.updatedAt ? new Date(project.updatedAt).toLocaleString() : "—";
+  if (detail) {
+    detail.textContent = i18n
+      .t("restoreDetail")
+      .replace("{title}", project.title || "—")
+      .replace("{file}", project.audio?.fileName || "—")
+      .replace("{when}", when);
+  }
+  banner.hidden = false;
+  await new Promise((resolve) => {
+    $("btn-restore").onclick = async () => {
+      banner.hidden = true;
+      await restoreSession(project);
+      resolve();
+    };
+    $("btn-fresh").onclick = async () => {
+      banner.hidden = true;
+      resolve();
+    };
   });
 }
 

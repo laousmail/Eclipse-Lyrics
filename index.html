@@ -9,6 +9,7 @@
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="description" content="Free browser tool to sync song lyrics, export subtitles, and render lyric videos. Made by laousmail." />
   <title>Eclipse Lyrics Sync</title>
+  <link rel="stylesheet" href="css/tokens.css" />
   <link rel="stylesheet" href="css/app.css" />
 </head>
 <body>
@@ -101,7 +102,7 @@
 
         <div id="audio-pick" class="audio-pick">
           <button type="button" id="drop-zone" class="drop-zone" data-i18n-aria="chooseAudio" aria-label="Choose an audio file">
-            <span class="drop-icon" aria-hidden="true">♪</span>
+            <span class="drop-icon" data-icon="music" aria-hidden="true"></span>
             <strong data-i18n="chooseAudio">Choose audio</strong>
             <span class="muted" data-i18n="audioFormats">MP3 · WAV · M4A · OGG</span>
           </button>
@@ -119,7 +120,7 @@
 
         <div id="audio-loaded" class="audio-loaded" hidden>
           <div class="loaded-card">
-            <span class="loaded-icon" aria-hidden="true">♪</span>
+            <span class="loaded-icon" data-icon="music" aria-hidden="true"></span>
             <div class="loaded-meta">
               <p class="loaded-name" id="loaded-file-name">—</p>
               <p class="muted" id="loaded-duration">—</p>
@@ -233,6 +234,7 @@
             </select>
           </label>
           <button type="button" id="btn-undo" class="btn btn-ghost btn-sm" data-i18n="undo" data-i18n-aria="undo" aria-label="Undo" disabled>Undo</button>
+          <button type="button" id="btn-redo" class="btn btn-ghost btn-sm" data-i18n="redo" data-i18n-aria="redo" aria-label="Redo" disabled>Redo</button>
           <span id="time-display" class="time-display" aria-live="off">0:00.00 / 0:00.00</span>
         </div>
 
@@ -358,7 +360,7 @@
     </main>
 
     <div id="player-dock" class="player-dock" hidden>
-      <button type="button" id="btn-play" class="dock-play" data-i18n-aria="play" aria-label="Play">▶</button>
+      <button type="button" id="btn-play" class="dock-play" data-i18n-aria="play" aria-label="Play" data-icon="play"></button>
       <button type="button" id="btn-tap" class="dock-tap" data-i18n-aria="tapLine" aria-label="Tap current line" disabled>
         <span class="dock-tap-label" data-i18n="tapLine">Tap line</span>
         <span id="tap-mark-label" class="dock-tap-hint" data-i18n="markStart">mark start</span>
@@ -369,23 +371,23 @@
 
     <nav class="app-tabbar" aria-label="Main">
       <button type="button" class="tab is-active" data-goto="audio" aria-current="page">
-        <span class="tab-icon" aria-hidden="true">♪</span>
+        <span class="tab-icon" data-icon="music" aria-hidden="true"></span>
         <span data-i18n="tabAudio">Audio</span>
       </button>
       <button type="button" class="tab" data-goto="lyrics">
-        <span class="tab-icon" aria-hidden="true">☰</span>
+        <span class="tab-icon" data-icon="list" aria-hidden="true"></span>
         <span data-i18n="tabLyrics">Lyrics</span>
       </button>
       <button type="button" class="tab" data-goto="sync">
-        <span class="tab-icon" aria-hidden="true">◎</span>
+        <span class="tab-icon" data-icon="target" aria-hidden="true"></span>
         <span data-i18n="tabSync">Sync</span>
       </button>
       <button type="button" class="tab" data-goto="export">
-        <span class="tab-icon" aria-hidden="true">↓</span>
+        <span class="tab-icon" data-icon="download" aria-hidden="true"></span>
         <span data-i18n="tabExport">Export</span>
       </button>
       <button type="button" class="tab" data-goto="video">
-        <span class="tab-icon" aria-hidden="true">▶</span>
+        <span class="tab-icon" data-icon="film" aria-hidden="true"></span>
         <span data-i18n="tabFilm">Film</span>
       </button>
     </nav>
