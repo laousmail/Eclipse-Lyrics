@@ -1229,22 +1229,8 @@ function setupUI() {
 }
 
 async function boot() {
-  // Prevent browser pinch-zoom gestures where possible
-  document.addEventListener(
-    "gesturestart",
-    (e) => {
-      e.preventDefault();
-    },
-    { passive: false }
-  );
-  document.addEventListener(
-    "gesturechange",
-    (e) => {
-      e.preventDefault();
-    },
-    { passive: false }
-  );
-
+  // Pinch-zoom allowed (B20). Double-tap zoom on Tap is blocked via CSS
+  // touch-action: manipulation on #btn-tap / .dock-tap.
   setupUI();
   renderLineList();
   updateTapButtons();
