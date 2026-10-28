@@ -16,6 +16,8 @@ python3 -m http.server 8080
 
 ES modules require HTTP (not `file://`).
 
+Phone-first app shell: bottom tabs (Audio → Lyrics → Sync → Export → Film), sticky thumb-friendly Tap dock on Sync, and language segments for lyrics. Desktop gets the same flow in a centered phone frame.
+
 ## Workflow
 
 1. **Load audio** — drag-and-drop or pick MP3 / WAV / M4A / OGG  

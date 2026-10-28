@@ -15,11 +15,98 @@ const state = {
   audioBlob: null,
   waveform: null,
   syncMode: true,
+  screen: "audio",
 };
 
 video.bindProject(() => state.project);
 
 const $ = (id) => document.getElementById(id);
+
+const SCREENS = ["audio", "lyrics", "sync", "export", "video"];
+
+function showScreen(name, { pushHash = true } = {}) {
+  if (!SCREENS.includes(name)) return;
+  state.screen = name;
+  document.querySelectorAll(".screen").forEach((el) => {
+    const active = el.dataset.screen === name;
+    el.classList.toggle("is-active", active);
+    el.hidden = !active;
+  });
+  document.querySelectorAll(".app-tabbar .tab").forEach((tab) => {
+    const active = tab.dataset.goto === name;
+    tab.classList.toggle("is-active", active);
+    if (active) tab.setAttribute("aria-current", "page");
+    else tab.removeAttribute("aria-current");
+  });
+  updateDockVisibility();
+  if (name === "sync") {
+    requestAnimationFrame(() => {
+      state.waveform?.resize?.();
+      state.waveform?.draw?.();
+    });
+  }
+  if (name === "video") {
+    video.renderFrame(state.project);
+  }
+  const main = $("main");
+  if (main) main.scrollTop = 0;
+  if (pushHash) {
+    const hash = `#${name}`;
+    if (location.hash !== hash) history.replaceState(null, "", hash);
+  }
+}
+
+function updateDockVisibility() {
+  const dock = $("player-dock");
+  const show = state.screen === "sync" || audio.isPlaying();
+  dock.hidden = !show;
+  document.body.classList.toggle("dock-on", show);
+  document.body.classList.add("has-tabbar");
+}
+
+function openSheet(id) {
+  const el = $(id);
+  if (el) el.hidden = false;
+}
+
+function closeSheet(id) {
+  const el = $(id);
+  if (el) el.hidden = true;
+}
+
+function setupNavigation() {
+  document.querySelectorAll("[data-goto]").forEach((el) => {
+    el.addEventListener("click", () => showScreen(el.dataset.goto));
+  });
+
+  document.querySelectorAll("[data-lyric-tab]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const tab = btn.dataset.lyricTab;
+      document.querySelectorAll("[data-lyric-tab]").forEach((b) => {
+        const on = b.dataset.lyricTab === tab;
+        b.classList.toggle("is-active", on);
+        b.setAttribute("aria-selected", on ? "true" : "false");
+      });
+      document.querySelectorAll("[data-lyric-pane]").forEach((pane) => {
+        const on = pane.dataset.lyricPane === tab;
+        pane.classList.toggle("is-active", on);
+        pane.hidden = !on;
+      });
+    });
+  });
+
+  $("btn-more")?.addEventListener("click", () => openSheet("more-sheet"));
+  $("btn-more-close")?.addEventListener("click", () => closeSheet("more-sheet"));
+  $("more-sheet")?.addEventListener("click", (e) => {
+    if (e.target === $("more-sheet")) closeSheet("more-sheet");
+  });
+
+  $("btn-save-project")?.addEventListener("click", () => {
+    closeSheet("more-sheet");
+  });
+  $("input-project")?.addEventListener("change", () => closeSheet("more-sheet"));
+  $("input-import")?.addEventListener("change", () => closeSheet("more-sheet"));
+}
 
 function persist() {
   storage.scheduleSave(state.project);
@@ -44,7 +131,10 @@ function updateTimeDisplay() {
 }
 
 function updatePlayButton() {
-  $("btn-play").textContent = audio.isPlaying() ? "⏸ Pause" : "▶ Play";
+  const playing = audio.isPlaying();
+  $("btn-play").textContent = playing ? "⏸" : "▶";
+  $("btn-play").setAttribute("aria-label", playing ? "Pause" : "Play");
+  updateDockVisibility();
 }
 
 function updateTapButtons() {
@@ -99,7 +189,11 @@ function selectLine(i, seekTo = false) {
 function updateActiveLine(t) {
   const idx = sync.lineAtTime(state.project.lines, t);
   document.querySelectorAll(".line-item").forEach((el) => {
-    el.classList.toggle("active-play", Number(el.dataset.index) === idx);
+    const on = Number(el.dataset.index) === idx;
+    el.classList.toggle("active-play", on);
+    if (on && audio.isPlaying()) {
+      el.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    }
   });
 }
 
@@ -148,6 +242,7 @@ function applyLyricsFromFields() {
   state.undoStack = [];
   renderLineList();
   persist();
+  if (state.project.lines.length) showScreen("sync");
 }
 
 async function handleAudioFile(file) {
@@ -333,15 +428,15 @@ function setupDropZone() {
   const zone = $("drop-zone");
   const input = $("input-audio");
 
-  const openPicker = () => input.click();
+  const openPicker = (e) => {
+    e?.preventDefault?.();
+    input.click();
+  };
   zone.addEventListener("click", openPicker);
-  zone.addEventListener("keydown", (e) => {
-    if (e.key === "Enter" || e.key === " ") {
-      e.preventDefault();
-      openPicker();
-    }
+  input.addEventListener("change", () => {
+    handleAudioFile(input.files?.[0]);
+    input.value = "";
   });
-  input.addEventListener("change", () => handleAudioFile(input.files?.[0]));
 
   ["dragenter", "dragover"].forEach((ev) => {
     zone.addEventListener(ev, (e) => {
@@ -457,8 +552,12 @@ function mergeImported(data) {
 }
 
 function setupUI() {
+  document.body.classList.add("has-tabbar");
+  setupNavigation();
   setupDropZone();
   setupKeyboard();
+  const initial = (location.hash || "").replace(/^#/, "");
+  showScreen(SCREENS.includes(initial) ? initial : "audio", { pushHash: !SCREENS.includes(initial) });
 
   state.waveform = initWaveform($("waveform"), {
     onSeek: (t) => {
@@ -480,6 +579,23 @@ function setupUI() {
   });
   $("btn-tap").addEventListener("click", doTap);
   $("btn-undo").addEventListener("click", doUndo);
+  $("btn-seek-back")?.addEventListener("click", () => {
+    audio.seek(Math.max(0, audio.getCurrentTime() - 5));
+    updateTimeDisplay();
+  });
+  $("btn-seek-fwd")?.addEventListener("click", () => {
+    audio.seek(audio.getCurrentTime() + 5);
+    updateTimeDisplay();
+  });
+
+  const blurOut = $("bg-blur-out");
+  const darkOut = $("bg-darken-out");
+  $("bg-blur")?.addEventListener("input", () => {
+    if (blurOut) blurOut.textContent = $("bg-blur").value;
+  });
+  $("bg-darken")?.addEventListener("input", () => {
+    if (darkOut) darkOut.textContent = $("bg-darken").value;
+  });
 
   $("select-speed").addEventListener("change", () => {
     const rate = Number($("select-speed").value);
@@ -574,10 +690,10 @@ function setupUI() {
     readVideoSettings();
     if (video.isPreviewEnabled()) {
       video.disablePreview();
-      $("btn-preview-video").textContent = "Toggle live preview";
+      $("btn-preview-video").textContent = "Live preview";
     } else {
       video.enablePreview();
-      $("btn-preview-video").textContent = "Stop live preview";
+      $("btn-preview-video").textContent = "Stop preview";
     }
   });
 
@@ -589,12 +705,12 @@ function setupUI() {
     prog.hidden = false;
     $("btn-stop-record").hidden = false;
     $("btn-record").disabled = true;
-    status.textContent = "Recording… keep this tab focused";
+    status.textContent = "Recording… keep this tab open";
 
     await video.startRecording(state.project, {
       onProgress: (p) => {
         bar.style.width = `${Math.round(p * 100)}%`;
-        status.textContent = `Recording… ${Math.round(p * 100)}% — keep this tab focused`;
+        status.textContent = `Recording… ${Math.round(p * 100)}% — keep this tab open`;
       },
       onDone: () => {
         prog.hidden = false;
@@ -602,7 +718,7 @@ function setupUI() {
         status.textContent = "Done — video downloaded";
         $("btn-stop-record").hidden = true;
         $("btn-record").disabled = false;
-        $("btn-preview-video").textContent = "Toggle live preview";
+        $("btn-preview-video").textContent = "Live preview";
       },
       onError: (err) => {
         status.textContent = err?.message || "Recording failed";
@@ -638,6 +754,10 @@ async function boot() {
   renderLineList();
   updateTapButtons();
   await offerRestore();
+  window.addEventListener("hashchange", () => {
+    const name = (location.hash || "").replace(/^#/, "");
+    if (SCREENS.includes(name)) showScreen(name, { pushHash: false });
+  });
 }
 
 boot();

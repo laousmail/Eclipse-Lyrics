@@ -19,7 +19,7 @@ export function createEmptyProject() {
       includeTranslationInExport: false,
       playbackRate: 1,
       video: {
-        aspect: "1920x1080",
+        aspect: "1080x1920",
         style: "fadeUp",
         background: "eclipse",
         blur: 8,
