@@ -1124,7 +1124,7 @@ kbd {
   z-index: 50;
   width: min(100%, 480px);
   display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 0;
   min-height: calc(var(--tabbar-h) + var(--safe-b));
   padding: 0.35rem 0.15rem calc(0.35rem + var(--safe-b));
@@ -1469,13 +1469,73 @@ details.export-preview:not([open]) > *:not(summary) {
   padding-bottom: 0.25rem;
 }
 
-.wave-more {
-  margin: 0 0 0.35rem;
-  padding-bottom: 0.35rem;
-}
-
 .film-customize {
   margin-top: 0.75rem;
+}
+
+.prepare-lyrics-block {
+  margin-top: 1.25rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--line);
+}
+
+.slider-compact .slider-label-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+  font-size: 0.78rem;
+  color: var(--mute);
+  margin-bottom: 0.2rem;
+}
+
+.slider-compact .slider-short {
+  font-weight: 600;
+  color: var(--mute);
+  margin-inline-end: 0.25rem;
+}
+
+.wave-scrub-combo {
+  position: relative;
+  gap: 0;
+}
+
+.wave-tools-icons {
+  position: absolute;
+  top: 0.35rem;
+  right: 0.35rem;
+  z-index: 2;
+  display: flex;
+  gap: 0.2rem;
+  margin: 0;
+}
+
+.wave-icon-btn {
+  width: 2rem;
+  height: 2rem;
+  min-width: 2rem;
+  font-size: 0.75rem;
+  padding: 0;
+  background: color-mix(in srgb, var(--bg) 72%, transparent);
+  border-color: var(--line);
+}
+
+.wave-icon-btn.is-active {
+  border-color: var(--hot);
+  color: var(--hot);
+}
+
+.wave-scrub-combo #waveform {
+  display: block;
+  width: 100%;
+  border-radius: 10px 10px 0 0;
+}
+
+.wave-scrub-combo .scrubber-in-wave {
+  margin-top: -0.15rem;
+  height: 1.35rem;
+  border-radius: 0 0 10px 10px;
+  background: var(--bg2);
 }
 
 .lang-pill,

@@ -63,7 +63,7 @@ const state = {
   audioBlob: null,
   waveform: null,
   peaks: null,
-  screen: "audio",
+  screen: "prepare",
   scrubbing: false,
   audioReady: false,
   lastActiveLine: -1,
@@ -99,16 +99,23 @@ function publishStore(patch = {}) {
 }
 
 const $ = (id) => document.getElementById(id);
-const SCREENS = ["projects", "audio", "lyrics", "sync", "export", "video", "help"];
+const SCREENS = ["projects", "prepare", "sync", "export", "video", "help"];
+/** Legacy hashes / lastScreen values from before Audio+Lyrics merge */
+const SCREEN_ALIASES = { audio: "prepare", lyrics: "prepare" };
 const SCRUB_MAX = 1000;
 let pendingDeleteId = null;
 let renameTargetId = null;
 
+function resolveScreen(name) {
+  return SCREEN_ALIASES[name] || name;
+}
+
 function showScreen(name, { pushHash = true, persistScreen = true } = {}) {
+  name = resolveScreen(name);
   if (!SCREENS.includes(name)) return;
   const prev = state.screen;
   const changed = prev !== name;
-  if (changed && prev === "lyrics" && name !== "lyrics") {
+  if (changed && prev === "prepare" && name !== "prepare") {
     applyLyricsFromGrid({ silent: true, stay: true });
   }
   state.screen = name;
@@ -140,7 +147,7 @@ function showScreen(name, { pushHash = true, persistScreen = true } = {}) {
   if (name === "projects") {
     refreshProjectsList();
   }
-  if (name === "lyrics") {
+  if (name === "prepare") {
     refreshLyricsGrid();
   }
   if (name === "export") {
@@ -206,17 +213,12 @@ function updateAudioLoadedUI(fileName, duration) {
   const pick = $("audio-pick");
   const loaded = $("audio-loaded");
   const prompt = $("meta-prompt");
-  const btn = $("btn-continue-lyrics");
   if (pick) pick.hidden = true;
   if (loaded) loaded.hidden = false;
   if (prompt) prompt.hidden = false;
   if ($("loaded-file-name")) $("loaded-file-name").textContent = fileName || "—";
   if ($("loaded-duration")) $("loaded-duration").textContent = formatClock(duration || 0);
   state.audioReady = true;
-  if (btn) {
-    btn.dataset.i18n = "loadedContinue";
-    btn.textContent = i18n.t("loadedContinue");
-  }
   document.body.classList.add("audio-ready");
 }
 
@@ -224,15 +226,10 @@ function resetAudioPickUI() {
   const pick = $("audio-pick");
   const loaded = $("audio-loaded");
   const prompt = $("meta-prompt");
-  const btn = $("btn-continue-lyrics");
   if (pick) pick.hidden = false;
   if (loaded) loaded.hidden = true;
   if (prompt) prompt.hidden = true;
   state.audioReady = false;
-  if (btn) {
-    btn.dataset.i18n = "continueLyrics";
-    btn.textContent = i18n.t("continueLyrics");
-  }
   document.body.classList.remove("audio-ready");
 }
 
@@ -537,7 +534,7 @@ function applyLyricsFromGrid({ silent = false, stay = false } = {}) {
       // Keep editor rows as typed while staying on Lyrics; refresh only when navigating away/back
       if (!stay) {
         state.lyricsRows = rowsFromProject(state.project);
-        if (state.screen === "lyrics") refreshLyricsGrid();
+        if (state.screen === "prepare") refreshLyricsGrid();
       } else {
         state.lyricsRows = rowsSnapshot;
       }
@@ -549,7 +546,7 @@ function applyLyricsFromGrid({ silent = false, stay = false } = {}) {
     undo: () => {
       state.project.lines = before;
       state.lyricsRows = rowsFromProject(state.project);
-      if (state.screen === "lyrics") refreshLyricsGrid();
+      if (state.screen === "prepare") refreshLyricsGrid();
       state.tapIndex = sync.nextTapIndex(state.project.lines);
       renderLineList();
       persist();
@@ -642,7 +639,7 @@ async function handleAudioFile(file, { stayOnScreen = false } = {}) {
     updateAudioLoadedUI(result.fileName, result.duration);
     haptics.success();
     if (!stayOnScreen) {
-      showScreen("audio");
+      showScreen("prepare");
       requestAnimationFrame(() => {
         const title = $("field-title");
         title?.focus();
@@ -703,7 +700,7 @@ async function handleAudioUrl() {
     updateTimeDisplay();
     updateAudioLoadedUI(result.fileName, result.duration);
     haptics.success();
-    showScreen("audio");
+    showScreen("prepare");
     requestAnimationFrame(() => $("field-title")?.focus());
   } catch (err) {
     console.error(err);
@@ -1235,7 +1232,7 @@ function syncFieldsFromProject() {
   state.lyricsRows = rowsFromProject(state.project);
   if (!state.lyricsRows.length) state.lyricsRows = [{ main: "", fr: "", en: "" }];
   mirrorFieldsFromRows();
-  if (state.screen === "lyrics") refreshLyricsGrid();
+  if (state.screen === "prepare") refreshLyricsGrid();
   const s = state.project.settings || {};
   if (s.tapOffsetMs == null) s.tapOffsetMs = DEFAULT_TAP_OFFSET_MS;
   if (!s.export) s.export = createEmptyProject().settings.export;
@@ -1543,6 +1540,7 @@ function setupNavigation() {
         $("field-title")?.focus();
         // still allow continue — title optional but prompted
       }
+      if (el.closest("#more-sheet")) closeSheet("more-sheet");
       showScreen(el.dataset.goto);
     });
   });
@@ -1577,10 +1575,7 @@ function setupNavigation() {
       haptics.tick();
       updatePlayButton();
       state.waveform?.setEmptyLabel?.(i18n.t("loadWaveform"));
-      if (state.audioReady) {
-        const b = $("btn-continue-lyrics");
-        if (b) b.textContent = i18n.t("loadedContinue");
-      }
+      /* primary CTA stays “Go to sync” on the combined Song screen */
       // Language lives in More — close after pick for a calmer flow
       if (btn.closest("#more-sheet")) closeSheet("more-sheet");
     });
@@ -1731,8 +1726,8 @@ async function restoreSession(meta) {
   } else if (state.project.audio?.fileName || meta.audioFileName) {
     setStatus(`${state.project.audio?.fileName || meta.audioFileName}`);
   }
-  const last = state.project.lastScreen || meta.lastScreen;
-  const screen = SCREENS.includes(last) && last !== "projects" ? last : "audio";
+  const last = resolveScreen(state.project.lastScreen || meta.lastScreen);
+  const screen = SCREENS.includes(last) && last !== "projects" ? last : "prepare";
   showScreen(screen, { persistScreen: false });
 }
 
@@ -1824,8 +1819,8 @@ function setupUI() {
   setupKeyboard();
   setupScrubber();
 
-  // Boot() chooses projects vs last project; avoid flashing audio here
-  const initial = (location.hash || "").replace(/^#/, "");
+  // Boot() chooses projects vs last project; avoid flashing prepare here
+  const initial = resolveScreen((location.hash || "").replace(/^#/, ""));
   if (SCREENS.includes(initial)) {
     showScreen(initial, { pushHash: false, persistScreen: false });
   }
@@ -2530,7 +2525,7 @@ async function startNewProject() {
   syncFieldsFromProject();
   renderLineList();
   await db.saveProject(p);
-  showScreen("audio");
+  showScreen("prepare");
   haptics.tick();
 }
 
@@ -2823,9 +2818,9 @@ async function boot() {
   if (shared) {
     await startNewProject();
     await handleAudioFile(shared, { stayOnScreen: true });
-    showScreen("audio");
+    showScreen("prepare");
   } else {
-    const hash = (location.hash || "").replace(/^#/, "");
+    const hash = resolveScreen((location.hash || "").replace(/^#/, ""));
     if (SCREENS.includes(hash) && hash !== "projects") {
       const lastId = db.loadPrefs().lastProjectId;
       if (lastId) {
@@ -2857,7 +2852,7 @@ async function boot() {
   analytics.trackPageView();
 
   window.addEventListener("hashchange", () => {
-    const name = (location.hash || "").replace(/^#/, "");
+    const name = resolveScreen((location.hash || "").replace(/^#/, ""));
     if (SCREENS.includes(name)) showScreen(name, { pushHash: false });
   });
 }

@@ -18,25 +18,42 @@ describe("keyboard / zoom UX guards", () => {
     assert.match(css, /body\.keyboard-open \.app-tabbar/);
   });
 
-  it("tabbar is 6 columns (Help removed from crush)", () => {
+  it("tabbar is 4 columns (Song + Sync + Film + Projects)", () => {
     const css = readFileSync(new URL("../css/app.css", import.meta.url), "utf8");
     const html = readFileSync(new URL("../index.html", import.meta.url), "utf8");
-    assert.match(css, /grid-template-columns:\s*repeat\(6,/);
+    assert.match(css, /grid-template-columns:\s*repeat\(4,/);
     const tabbar = html.slice(html.indexOf('class="app-tabbar"'), html.indexOf("</nav>", html.indexOf('class="app-tabbar"')));
     const tabs = (tabbar.match(/data-goto="/g) || []).length;
-    assert.equal(tabs, 6);
-    assert.ok(!tabbar.includes('data-goto="help"'));
+    assert.equal(tabs, 4);
+    assert.ok(tabbar.includes('data-goto="prepare"'));
+    assert.ok(tabbar.includes('data-goto="sync"'));
+    assert.ok(tabbar.includes('data-goto="video"'));
+    assert.ok(!tabbar.includes('data-goto="export"'));
+    assert.ok(!tabbar.includes('data-goto="lyrics"'));
+    assert.ok(!tabbar.includes('data-goto="audio"'));
   });
 
-  it("Help is More-sheet only — no always-visible header ?", () => {
+  it("Help + Export are More-sheet only — no header ?", () => {
     const html = readFileSync(new URL("../index.html", import.meta.url), "utf8");
     const topbar = html.slice(html.indexOf('class="app-topbar"'), html.indexOf("</header>", html.indexOf('class="app-topbar"')));
     assert.ok(!topbar.includes('id="btn-help"'));
     assert.ok(!topbar.includes('data-goto="help"'));
     assert.ok(!topbar.includes("lang-pill"));
     assert.ok(topbar.includes('id="btn-more"'));
-    assert.match(html, /id="more-sheet"[\s\S]*?data-goto="help"[\s\S]*?data-i18n="help"/);
+    assert.match(html, /id="more-sheet"[\s\S]*?data-goto="help"/);
+    assert.match(html, /id="more-sheet"[\s\S]*?data-goto="export"/);
     assert.match(html, /id="more-sheet"[\s\S]*?lang-pill/);
+  });
+
+  it("merges audio+lyrics into prepare; waveform has no Waveform label", () => {
+    const html = readFileSync(new URL("../index.html", import.meta.url), "utf8");
+    assert.match(html, /data-screen="prepare"/);
+    assert.ok(!html.includes('data-screen="audio"'));
+    assert.ok(!html.includes('data-screen="lyrics"'));
+    assert.match(html, /wave-scrub-combo/);
+    assert.ok(!html.includes('data-i18n="waveMore"'));
+    assert.match(html, /id="btn-export-srt"/);
+    assert.match(html, /id="btn-tap"/);
   });
 
   it("keeps secondary chrome behind progressive disclosure", () => {
@@ -47,9 +64,6 @@ describe("keyboard / zoom UX guards", () => {
     assert.match(html, /data-i18n="lyricsMore"/);
     assert.match(html, /data-i18n="filmCustomize"/);
     assert.match(css, /details\.simple-more:not\(\[open\]\)/);
-    // Primary actions still present
-    assert.match(html, /id="btn-export-srt"/);
-    assert.match(html, /id="btn-tap"/);
     assert.match(html, /id="btn-new-project"/);
   });
 
@@ -68,13 +82,11 @@ describe("keyboard / zoom UX guards", () => {
     assert.match(css, /\.ios-install-hint[\s\S]*?top:\s*calc\(var\(--safe-t\)\s*\+\s*var\(--topbar-h\)/);
   });
 
-  mainImportsKeyboard();
-});
-
-function mainImportsKeyboard() {
-  it("main.js boots keyboard guards", () => {
+  it("main.js boots keyboard guards and prepare aliases", () => {
     const src = readFileSync(new URL("../js/main.js", import.meta.url), "utf8");
     assert.match(src, /initKeyboardGuards/);
     assert.match(src, /from "\.\/keyboard\.js"/);
+    assert.match(src, /SCREEN_ALIASES/);
+    assert.match(src, /"prepare"/);
   });
-}
+});

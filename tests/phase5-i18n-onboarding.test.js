@@ -7,9 +7,12 @@ import { readFileSync } from "node:fs";
 describe("Phase 5 i18n + onboarding + analytics stub", () => {
   it("has three intro cards and tips for main screens", () => {
     assert.equal(INTRO_CARDS.length, 3);
-    for (const s of ["projects", "audio", "lyrics", "sync", "export", "video", "help"]) {
+    for (const s of ["projects", "prepare", "sync", "export", "video", "help"]) {
       assert.ok(SCREEN_TIPS[s], s);
     }
+    // legacy aliases still resolve
+    assert.ok(SCREEN_TIPS.audio);
+    assert.ok(SCREEN_TIPS.lyrics);
   });
 
   it("includes Kabyle locale strings in i18n source", () => {
