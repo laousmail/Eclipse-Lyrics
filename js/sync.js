@@ -1,36 +1,32 @@
-/** Tap-to-sync logic, nudging, undo, line helpers. */
+/** Tap-to-sync logic, nudging, line helpers — integer milliseconds. */
 
-let idCounter = 0;
+import {
+  uid,
+  createEmptyProject,
+  createLyricLine,
+  lineMainText,
+  lineFr,
+  lineEn,
+  isLyric,
+  durationSec,
+  msToSec,
+  secToMs,
+  migrateProject,
+} from "./core/project.js";
 
-export function uid() {
-  idCounter += 1;
-  return `L${Date.now().toString(36)}_${idCounter}`;
-}
-
-export function createEmptyProject() {
-  return {
-    title: "",
-    artist: "",
-    audioFileName: "",
-    duration: 0,
-    lines: [],
-    settings: {
-      translationLang: "fr",
-      includeTranslationInExport: false,
-      playbackRate: 1,
-      video: {
-        aspect: "1080x1920",
-        style: "fadeUp",
-        background: "eclipse",
-        blur: 8,
-        darken: 45,
-        zoom: true,
-        showTranslation: false,
-        translationLang: "fr",
-      },
-    },
-  };
-}
+export {
+  uid,
+  createEmptyProject,
+  createLyricLine,
+  lineMainText,
+  lineFr,
+  lineEn,
+  isLyric,
+  durationSec,
+  msToSec,
+  secToMs,
+  migrateProject,
+};
 
 export function parseLyricText(text) {
   return String(text || "")
@@ -77,9 +73,9 @@ export function applyLyrics(project, mainText, frText, enText) {
     warnings.push({ key: "warnEnCount", en: en.length, main: main.length });
   }
 
-  const prev = project.lines || [];
+  const prev = (project.lines || []).filter(isLyric);
   const map = lcsIndexMap(
-    prev.map((l) => l.text),
+    prev.map((l) => lineMainText(l)),
     main
   );
   const usedOld = new Set(map.filter((idx) => idx >= 0));
@@ -91,7 +87,6 @@ export function applyLyrics(project, mainText, frText, enText) {
     let oldIdx = map[i];
     let kind = "match";
     if (oldIdx < 0) {
-      // Edited line staying in the same slot (old index unused by LCS)
       if (prev[i] && !usedOld.has(i)) {
         oldIdx = i;
         usedOld.add(i);
@@ -104,76 +99,86 @@ export function applyLyrics(project, mainText, frText, enText) {
     const old = oldIdx >= 0 ? prev[oldIdx] : null;
     if (kind === "edit") changed += 1;
     if (kind === "add") added += 1;
-    if (kind === "match" && old && old.text !== text) changed += 1;
+    if (kind === "match" && old && lineMainText(old) !== text) changed += 1;
 
-    return {
-      id: old?.id || uid(),
-      // Exact LCS match or same-slot edit keeps timing; pure inserts are untimed
-      start: kind === "add" ? null : (old?.start ?? null),
-      end: kind === "add" ? null : (old?.end ?? null),
-      text,
+    return createLyricLine({
+      id: old?.id,
+      startMs: kind === "add" ? null : (old?.startMs ?? null),
+      endMs: kind === "add" ? null : (old?.endMs ?? null),
+      kab: text,
       fr: fr[i] || "",
       en: en[i] || "",
-    };
+      endManual: kind === "add" ? false : Boolean(old?.endManual),
+    });
   });
 
-  recomputeEnds(lines, project.duration);
-
+  recomputeEnds(lines, project.audio?.durationMs || 0);
   return { lines, warnings, main, fr, en, changed, added };
 }
 
-export function recomputeEnds(lines, duration = 0) {
+/** @param {number} durationMs song length in integer milliseconds */
+export function recomputeEnds(lines, durationMs = 0) {
+  const dur = Math.max(0, Math.round(Number(durationMs) || 0));
   for (let i = 0; i < lines.length; i++) {
-    const next = lines[i + 1];
-    if (lines[i].start == null) {
-      lines[i].end = null;
+    const line = lines[i];
+    if (!isLyric(line)) continue;
+    const next = lines.slice(i + 1).find(isLyric);
+    if (line.startMs == null) {
+      line.endMs = null;
       continue;
     }
-    // Preserve manually set end on the last line (B5)
-    if (lines[i].endManual && i === lines.length - 1) continue;
-    if (next && next.start != null) {
-      lines[i].end = next.start;
-    } else if (duration > 0) {
-      lines[i].end = duration;
+    // Preserve manually set end on the last timed lyric (B5)
+    if (line.endManual && !(next && next.startMs != null)) continue;
+    if (next && next.startMs != null) {
+      line.endMs = next.startMs;
+    } else if (dur > 0) {
+      line.endMs = dur;
     } else {
-      lines[i].end = lines[i].start + 3;
+      line.endMs = line.startMs + 3000;
     }
   }
   return lines;
 }
 
-export function tapLine(project, lineIndex, time) {
+/** @param {number} timeMs */
+export function tapLine(project, lineIndex, timeMs) {
   const lines = project.lines;
   if (!lines.length) return null;
 
-  const t = snapTime(time);
+  const t = snapMs(timeMs);
   const prevState = snapshotTimings(lines);
-  const allStarted = lines.every((l) => l.start != null);
-  const last = lines[lines.length - 1];
+  const lyrics = lines.map((l, i) => ({ l, i })).filter(({ l }) => isLyric(l));
+  if (!lyrics.length) return null;
 
-  // After every line has a start, next tap sets the last line's end, then done
+  const allStarted = lyrics.every(({ l }) => l.startMs != null);
+  const lastEntry = lyrics[lyrics.length - 1];
+  const last = lastEntry.l;
+
   if (allStarted) {
     if (last.endManual) {
       return { prevState, nextIndex: lines.length, done: true, noop: true };
     }
-    const minEnd = last.start + 0.01;
-    last.end = Math.max(minEnd, t);
+    const minEnd = last.startMs + 10;
+    last.endMs = Math.max(minEnd, t);
     last.endManual = true;
     return { prevState, nextIndex: lines.length, done: true, setEnd: true };
   }
 
   if (lineIndex < 0 || lineIndex >= lines.length) return null;
+  const line = lines[lineIndex];
+  if (!isLyric(line)) return null;
 
-  lines[lineIndex].start = t;
-  lines[lineIndex].endManual = false;
-  if (lineIndex > 0 && lines[lineIndex - 1].start != null && !lines[lineIndex - 1].endManual) {
-    lines[lineIndex - 1].end = t;
+  line.startMs = t;
+  line.endManual = false;
+  const prevLyric = lyrics.filter(({ i }) => i < lineIndex).at(-1);
+  if (prevLyric && prevLyric.l.startMs != null && !prevLyric.l.endManual) {
+    prevLyric.l.endMs = t;
   }
-  recomputeEnds(lines, project.duration);
+  recomputeEnds(lines, project.audio?.durationMs || 0);
 
-  const nextUntimed = lines.findIndex((l) => l.start == null);
+  const nextUntimed = lines.findIndex((l) => isLyric(l) && l.startMs == null);
   if (nextUntimed === -1) {
-    return { prevState, nextIndex: lines.length - 1, awaitingEnd: true };
+    return { prevState, nextIndex: lastEntry.i, awaitingEnd: true };
   }
   return { prevState, nextIndex: nextUntimed };
 }
@@ -181,86 +186,106 @@ export function tapLine(project, lineIndex, time) {
 export function undoTimings(lines, prevState) {
   if (!prevState) return;
   for (let i = 0; i < lines.length; i++) {
-    if (prevState[i]) {
-      lines[i].start = prevState[i].start;
-      lines[i].end = prevState[i].end;
+    if (prevState[i] && isLyric(lines[i])) {
+      lines[i].startMs = prevState[i].startMs;
+      lines[i].endMs = prevState[i].endMs;
       lines[i].endManual = prevState[i].endManual || false;
     }
   }
 }
 
 export function snapshotTimings(lines) {
-  return lines.map((l) => ({ start: l.start, end: l.end, endManual: Boolean(l.endManual) }));
+  return lines.map((l) =>
+    isLyric(l)
+      ? { startMs: l.startMs, endMs: l.endMs, endManual: Boolean(l.endManual) }
+      : { startMs: null, endMs: null, endManual: false }
+  );
 }
 
-/** Neighbour clamp so markers never cross (±10 ms gap). */
-export function clampLineStart(lines, lineIndex, time, duration = 0) {
-  const GAP = 0.01; // 10 ms
+/** Neighbour clamp (±10 ms gap). timeMs in ms. */
+export function clampLineStart(lines, lineIndex, timeMs, durationMs = 0) {
+  const GAP = 10;
   let min = 0;
-  let max = duration > 0 ? duration : Number.POSITIVE_INFINITY;
+  let max = durationMs > 0 ? durationMs : Number.POSITIVE_INFINITY;
   for (let i = lineIndex - 1; i >= 0; i--) {
-    if (lines[i]?.start != null) {
-      min = lines[i].start + GAP;
+    if (isLyric(lines[i]) && lines[i].startMs != null) {
+      min = lines[i].startMs + GAP;
       break;
     }
   }
   for (let i = lineIndex + 1; i < lines.length; i++) {
-    if (lines[i]?.start != null) {
-      max = lines[i].start - GAP;
+    if (isLyric(lines[i]) && lines[i].startMs != null) {
+      max = lines[i].startMs - GAP;
       break;
     }
   }
   if (max < min) max = min;
-  const t = Math.max(min, Math.min(max, time));
-  return snapTime(Math.max(0, t));
+  const t = Math.max(min, Math.min(max, timeMs));
+  return snapMs(Math.max(0, t));
 }
 
-export function nudgeLine(project, lineIndex, delta) {
+/** @param {number} deltaMs */
+export function nudgeLine(project, lineIndex, deltaMs) {
   const line = project.lines[lineIndex];
-  if (!line || line.start == null) return;
-  line.start = clampLineStart(project.lines, lineIndex, line.start + delta, project.duration);
-  recomputeEnds(project.lines, project.duration);
+  if (!line || !isLyric(line) || line.startMs == null) return;
+  const dur = project.audio?.durationMs || 0;
+  line.startMs = clampLineStart(project.lines, lineIndex, line.startMs + deltaMs, dur);
+  recomputeEnds(project.lines, dur);
 }
 
-export function setLineStart(project, lineIndex, time) {
+/** @param {number} timeMs */
+export function setLineStart(project, lineIndex, timeMs) {
   const line = project.lines[lineIndex];
-  if (!line) return;
-  line.start = clampLineStart(project.lines, lineIndex, time, project.duration);
-  recomputeEnds(project.lines, project.duration);
+  if (!line || !isLyric(line)) return;
+  const dur = project.audio?.durationMs || 0;
+  line.startMs = clampLineStart(project.lines, lineIndex, timeMs, dur);
+  recomputeEnds(project.lines, dur);
 }
 
+export function snapMs(ms, step = 10) {
+  return Math.round(Number(ms) / step) * step;
+}
+
+/** @deprecated use snapMs */
 export function snapTime(t, step = 0.01) {
-  return Math.round(t / step) * step;
+  return msToSec(snapMs(secToMs(t) ?? 0, Math.round(step * 1000))) ?? 0;
 }
 
-export function lineAtTime(lines, time) {
+/** @param {number} timeMs */
+export function lineAtTime(lines, timeMs) {
   let active = -1;
+  const t = Math.round(Number(timeMs) || 0);
   for (let i = 0; i < lines.length; i++) {
     const l = lines[i];
-    if (l.start == null) continue;
-    if (time >= l.start) active = i;
+    if (!isLyric(l) || l.startMs == null) continue;
+    if (t >= l.startMs) active = i;
     else break;
   }
   return active;
 }
 
 export function firstUntimedIndex(lines) {
-  const i = lines.findIndex((l) => l.start == null);
+  const i = lines.findIndex((l) => isLyric(l) && l.startMs == null);
   return i === -1 ? Math.max(0, lines.length - 1) : i;
 }
 
-/** Tap pointer: untimed line, or lines.length when awaiting/done last end. */
 export function nextTapIndex(lines) {
-  const untimed = lines.findIndex((l) => l.start == null);
+  const untimed = lines.findIndex((l) => isLyric(l) && l.startMs == null);
   if (untimed !== -1) return untimed;
   if (!lines.length) return 0;
-  const last = lines[lines.length - 1];
-  if (last.start != null && !last.endManual) return lines.length; // awaiting end tap
-  return lines.length; // done
+  const lyrics = lines.filter(isLyric);
+  const last = lyrics.at(-1);
+  if (last?.startMs != null && !last.endManual) return lines.length;
+  return lines.length;
 }
 
 export function isSyncComplete(lines) {
-  return lines.length > 0 && lines.every((l) => l.start != null) && Boolean(lines.at(-1)?.endManual);
+  const lyrics = lines.filter(isLyric);
+  return (
+    lyrics.length > 0 &&
+    lyrics.every((l) => l.startMs != null) &&
+    Boolean(lyrics.at(-1)?.endManual)
+  );
 }
 
 export function formatTime(seconds, { millis = false } = {}) {
@@ -278,6 +303,10 @@ export function formatTime(seconds, { millis = false } = {}) {
   return `${m}:${String(whole).padStart(2, "0")}.${String(cs).padStart(2, "0")}`;
 }
 
+export function formatMs(ms, opts) {
+  return formatTime(msToSec(ms) ?? 0, opts);
+}
+
 export function timedLines(lines) {
-  return lines.filter((l) => l.start != null);
+  return lines.filter((l) => isLyric(l) && l.startMs != null);
 }

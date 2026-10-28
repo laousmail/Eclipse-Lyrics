@@ -1,0 +1,76 @@
+/* Design tokens — colors, spacing, radius, type, motion */
+
+:root {
+  /* Color */
+  --bg: #070605;
+  --bg2: #110e0c;
+  --bg3: #1b1613;
+  --surface: #1a1412;
+  --ink: #f2e9dd;
+  --text: var(--ink);
+  --mute: #b0a699;
+  --line: #2b241e;
+  --hot: #ff6a13;
+  --gold: #ffb347;
+  --on: #1a0a02;
+  --glass: rgba(7, 6, 5, 0.86);
+  --warn: #ffb020;
+  --danger: #ff4d3a;
+  --grad: linear-gradient(110deg, var(--hot), var(--gold));
+
+  /* Type */
+  --sans: "Outfit", "Noto Sans", system-ui, sans-serif;
+  --lyric: "Noto Sans", "Noto Sans Tifinagh", "Outfit", system-ui, sans-serif;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --fs-xs: 0.75rem;
+  --fs-sm: 0.875rem;
+  --fs-md: 1rem;
+  --fs-lg: 1.125rem;
+  --fs-xl: 1.35rem;
+  --fs-2xl: 1.75rem;
+  --lh-tight: 1.2;
+  --lh-body: 1.45;
+
+  /* Spacing */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.25rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+  --gutter: var(--space-4);
+  --gap-safe: 0.85rem;
+
+  /* Radius */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius: 16px;
+  --radius-lg: 20px;
+  --radius-pill: 99px;
+
+  /* Motion */
+  --ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --dur-fast: 120ms;
+  --dur: 180ms;
+  --dur-slow: 280ms;
+
+  /* Layout chrome */
+  --topbar-h: 3.5rem;
+  --tabbar-h: 4.25rem;
+  --dock-h: 5.35rem;
+  --safe-t: env(safe-area-inset-top, 0px);
+  --safe-b: env(safe-area-inset-bottom, 0px);
+  --touch: 2.85rem; /* ≥ 44px */
+  --touch-lg: 3.25rem;
+
+  color-scheme: dark;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --dur-fast: 0ms;
+    --dur: 0ms;
+    --dur-slow: 0ms;
+  }
+}

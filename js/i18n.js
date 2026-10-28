@@ -57,6 +57,7 @@ const STRINGS = {
     goStart: "Start",
     speed: "Speed",
     undo: "Undo",
+    redo: "Redo",
     lines: "Lines",
     shortcuts:
       "Space tap · P play · ←→ nudge · ↑↓ select · J/L ±5s · ,/. speed",
@@ -203,6 +204,7 @@ const STRINGS = {
     goStart: "Début",
     speed: "Vitesse",
     undo: "Annuler",
+    redo: "Rétablir",
     lines: "Lignes",
     shortcuts:
       "Espace tap · P lecture · ←→ décaler · ↑↓ choisir · J/L ±5s · ,/. vitesse",

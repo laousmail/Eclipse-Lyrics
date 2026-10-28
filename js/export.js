@@ -1,10 +1,29 @@
 /** LRC, SRT, VTT, JSON writers and import. */
 
-import { recomputeEnds, uid } from "./sync.js";
+import { recomputeEnds, uid, isLyric, lineMainText, lineFr, lineEn, msToSec, secToMs } from "./sync.js";
+import { createLyricLine, migrateProject } from "./core/project.js";
 import { triggerDownload } from "./storage.js";
 
 function pad(n, w = 2) {
   return String(n).padStart(w, "0");
+}
+
+function lineStartSec(line) {
+  if (line.startMs != null) return msToSec(line.startMs);
+  if (line.start != null) return Number(line.start);
+  return null;
+}
+
+function lineEndSec(line) {
+  if (line.endMs != null) return msToSec(line.endMs);
+  if (line.end != null) return Number(line.end);
+  return null;
+}
+
+function durationMsOf(project) {
+  if (project?.audio?.durationMs) return project.audio.durationMs;
+  if (project?.duration) return secToMs(project.duration) || 0;
+  return 0;
 }
 
 /** Round seconds → integer ms, then split with integer math (no 1000 overflow). */
@@ -42,13 +61,13 @@ export function toVttTime(seconds) {
 }
 
 function ensureEnds(project) {
-  recomputeEnds(project.lines, project.duration || 0);
+  recomputeEnds(project.lines, durationMsOf(project));
 }
 
 function cueText(line, { includeTr, trLang }) {
-  let text = line.text;
+  let text = lineMainText(line);
   if (includeTr) {
-    const tr = trLang === "en" ? line.en : line.fr;
+    const tr = trLang === "en" ? lineEn(line) : lineFr(line);
     if (tr) text += `\n${tr}`;
   }
   return text;
@@ -61,8 +80,10 @@ export function toLRC(project) {
   if (project.artist) lines.push(`[ar:${project.artist}]`);
   lines.push("");
   for (const line of project.lines) {
-    if (line.start == null) continue;
-    lines.push(`${toLrcTime(line.start)}${line.text}`);
+    if (!isLyric(line)) continue;
+    const start = lineStartSec(line);
+    if (start == null) continue;
+    lines.push(`${toLrcTime(start)}${lineMainText(line)}`);
   }
   return lines.join("\n") + "\n";
 }
@@ -72,10 +93,12 @@ export function toSRT(project, opts = {}) {
   const blocks = [];
   let n = 1;
   for (const line of project.lines) {
-    if (line.start == null) continue;
-    const end = line.end != null ? line.end : line.start + 3;
+    if (!isLyric(line)) continue;
+    const start = lineStartSec(line);
+    if (start == null) continue;
+    const end = lineEndSec(line) != null ? lineEndSec(line) : start + 3;
     const text = cueText(line, opts);
-    blocks.push(`${n}\n${toSrtTime(line.start)} --> ${toSrtTime(end)}\n${text}\n`);
+    blocks.push(`${n}\n${toSrtTime(start)} --> ${toSrtTime(end)}\n${text}\n`);
     n += 1;
   }
   return blocks.join("\n");
@@ -85,10 +108,12 @@ export function toVTT(project, opts = {}) {
   ensureEnds(project);
   const blocks = ["WEBVTT", ""];
   for (const line of project.lines) {
-    if (line.start == null) continue;
-    const end = line.end != null ? line.end : line.start + 3;
+    if (!isLyric(line)) continue;
+    const start = lineStartSec(line);
+    if (start == null) continue;
+    const end = lineEndSec(line) != null ? lineEndSec(line) : start + 3;
     const text = cueText(line, opts);
-    blocks.push(`${toVttTime(line.start)} --> ${toVttTime(end)}\n${text}\n`);
+    blocks.push(`${toVttTime(start)} --> ${toVttTime(end)}\n${text}\n`);
   }
   return blocks.join("\n");
 }
@@ -131,29 +156,57 @@ export function downloadPerLanguage(project, format = "srt") {
   const ext = format === "vtt" ? "vtt" : "srt";
   const base = safeBase(project);
 
-  const mainProj = {
-    ...project,
-    lines: project.lines.map((l) => ({ ...l, fr: "", en: "" })),
-  };
+  const stripTr = (l) =>
+    isLyric(l)
+      ? createLyricLine({
+          id: l.id,
+          startMs: l.startMs,
+          endMs: l.endMs,
+          kab: lineMainText(l),
+          endManual: l.endManual,
+        })
+      : l;
+
+  const mainProj = { ...project, lines: project.lines.map(stripTr) };
   triggerDownload(
     new Blob([writer(mainProj, { includeTr: false })], { type: "text/plain;charset=utf-8" }),
     `${base}.main.${ext}`
   );
 
-  if (project.lines.some((l) => l.fr)) {
+  if (project.lines.some((l) => lineFr(l))) {
     const frProj = {
       ...project,
-      lines: project.lines.map((l) => ({ ...l, text: l.fr || l.text, fr: "", en: "" })),
+      lines: project.lines.map((l) =>
+        isLyric(l)
+          ? createLyricLine({
+              id: l.id,
+              startMs: l.startMs,
+              endMs: l.endMs,
+              kab: lineFr(l) || lineMainText(l),
+              endManual: l.endManual,
+            })
+          : l
+      ),
     };
     triggerDownload(
       new Blob([writer(frProj, { includeTr: false })], { type: "text/plain;charset=utf-8" }),
       `${base}.fr.${ext}`
     );
   }
-  if (project.lines.some((l) => l.en)) {
+  if (project.lines.some((l) => lineEn(l))) {
     const enProj = {
       ...project,
-      lines: project.lines.map((l) => ({ ...l, text: l.en || l.text, fr: "", en: "" })),
+      lines: project.lines.map((l) =>
+        isLyric(l)
+          ? createLyricLine({
+              id: l.id,
+              startMs: l.startMs,
+              endMs: l.endMs,
+              kab: lineEn(l) || lineMainText(l),
+              endManual: l.endManual,
+            })
+          : l
+      ),
     };
     triggerDownload(
       new Blob([writer(enProj, { includeTr: false })], { type: "text/plain;charset=utf-8" }),
@@ -184,7 +237,7 @@ export function parseImportedProject(text, filename = "", opts = {}) {
   if (lower.endsWith(".json") || text.trim().startsWith("{")) {
     const data = JSON.parse(text);
     if (!Array.isArray(data.lines)) throw new Error("Invalid project JSON");
-    return data;
+    return migrateProject(data);
   }
   if (lower.endsWith(".lrc") || /^\s*\[(\d{2}):/.test(text) || text.includes("[ti:")) {
     return importLRC(text);
@@ -250,19 +303,17 @@ function importLRC(text) {
     if (!stamps.length) continue;
     const lyric = raw.slice(lastIndex).trim();
     for (const start of stamps) {
-      lines.push({
-        id: uid(),
-        start: start + offsetMs / 1000,
-        end: null,
-        text: lyric,
-        fr: "",
-        en: "",
-      });
+      lines.push(
+        createLyricLine({
+          startMs: Math.round((start + offsetMs / 1000) * 1000),
+          kab: lyric,
+        })
+      );
     }
   }
-  lines.sort((a, b) => a.start - b.start);
-  recomputeEnds(lines);
-  return { title, artist, audioFileName: "", duration: 0, lines, settings: {} };
+  lines.sort((a, b) => (a.startMs || 0) - (b.startMs || 0));
+  recomputeEnds(lines, 0);
+  return migrateProject({ title, artist, lines, settings: {} });
 }
 
 function importSRT(text, opts = {}) {
@@ -290,16 +341,16 @@ function importSRT(text, opts = {}) {
     } else {
       text = body.join("\n");
     }
-    lines.push({
-      id: uid(),
-      start,
-      end,
-      text,
-      fr,
-      en: "",
-    });
+    lines.push(
+      createLyricLine({
+        startMs: secToMs(start),
+        endMs: secToMs(end),
+        kab: text,
+        fr,
+      })
+    );
   }
-  return { title: "", artist: "", audioFileName: "", duration: 0, lines, settings: {} };
+  return migrateProject({ title: "", artist: "", lines, settings: {} });
 }
 
 function importVTT(text, opts = {}) {

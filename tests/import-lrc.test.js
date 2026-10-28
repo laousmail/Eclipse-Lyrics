@@ -1,6 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { parseImportedProject } from "../js/export.js";
+import { lineMainText } from "../js/sync.js";
 
 describe("B8 LRC import", () => {
   it("duplicates multi-timestamp lines and sorts", () => {
@@ -12,11 +13,11 @@ describe("B8 LRC import", () => {
     assert.equal(proj.title, "Test");
     assert.equal(proj.lines.length, 3);
     assert.deepEqual(
-      proj.lines.map((l) => [l.start, l.text]),
+      proj.lines.map((l) => [l.startMs, lineMainText(l)]),
       [
-        [5.5, "intro"],
-        [12, "chorus"],
-        [90, "chorus"],
+        [5500, "intro"],
+        [12000, "chorus"],
+        [90000, "chorus"],
       ]
     );
   });
@@ -26,6 +27,6 @@ describe("B8 LRC import", () => {
 [00:01.00]hello
 `;
     const proj = parseImportedProject(lrc, "x.lrc");
-    assert.equal(proj.lines[0].start, 2);
+    assert.equal(proj.lines[0].startMs, 2000);
   });
 });

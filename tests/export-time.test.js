@@ -1,6 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { toLrcTime, toSrtTime, toVttTime, toSRT, parseImportedProject } from "../js/export.js";
+import { createEmptyProject, createLyricLine } from "../js/sync.js";
 
 describe("B1 export rounding", () => {
   it("formats 1.999s without ms overflow", () => {
@@ -16,27 +17,25 @@ describe("B1 export rounding", () => {
   });
 
   it("SRT export → import → export is identical", () => {
-    const project = {
-      title: "",
-      artist: "",
-      duration: 12.5,
-      lines: [
-        { id: "a", start: 1.999, end: null, text: "Awal", fr: "", en: "" },
-        { id: "b", start: 4.5, end: null, text: "Ɣer", fr: "", en: "" },
-      ],
-      settings: {},
-    };
+    const project = createEmptyProject();
+    project.audio.durationMs = 12500;
+    project.lines = [
+      createLyricLine({ id: "a", startMs: 1999, endMs: null, kab: "Awal" }),
+      createLyricLine({ id: "b", startMs: 4500, endMs: null, kab: "Ɣer" }),
+    ];
     const first = toSRT(project, { includeTr: false });
     const imported = parseImportedProject(first, "x.srt");
     const second = toSRT(
       {
         ...project,
-        duration: imported.lines.at(-1)?.end ?? project.duration,
-        lines: imported.lines.map((l) => ({ ...l, fr: l.fr || "", en: l.en || "" })),
+        audio: {
+          ...project.audio,
+          durationMs: imported.lines.at(-1)?.endMs ?? project.audio.durationMs,
+        },
+        lines: imported.lines,
       },
       { includeTr: false }
     );
     assert.equal(second, first);
   });
 });
-
