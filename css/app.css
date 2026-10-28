@@ -211,13 +211,16 @@ a:hover {
 }
 
 .app-topbar {
-  position: sticky;
-  top: 0;
+  /* Flex sibling of .app-screens — not sticky on the phone shell.
+     Sticky + wrap previously painted the header over screen titles. */
+  position: relative;
   z-index: 40;
+  flex: 0 0 auto;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 0.75rem;
+  flex-wrap: nowrap;
+  gap: 0.65rem;
   min-height: calc(var(--topbar-h) + var(--safe-t));
   padding: var(--safe-t) var(--gutter) 0;
   background: var(--glass);
@@ -232,7 +235,7 @@ a:hover {
   gap: 0.65rem;
   min-width: 0;
   flex: 1 1 auto;
-  padding: 0.55rem 0;
+  padding: 0.45rem 0;
 }
 
 .brand-mark {
@@ -872,10 +875,12 @@ kbd {
 }
 
 .film-sticky {
+  /* Sticky inside .app-screens (header is a sibling, not overlaid) */
   position: sticky;
-  top: calc(var(--topbar-h, 3.25rem) + 0.25rem);
+  top: 0;
   z-index: 5;
   background: linear-gradient(180deg, var(--bg) 70%, transparent);
+  padding-top: 0.15rem;
   padding-bottom: 0.5rem;
   margin-bottom: 0.35rem;
 }
@@ -1386,27 +1391,25 @@ kbd {
   min-width: 0;
 }
 
-/* Phones: Install text btn overlaps brand — offer it from More sheet instead.
-   Topbar wraps so “Eclipse Lyrics” isn’t ellipsized beside EN/FR/KAB. */
+/* Phones: Install text btn → More sheet. Single-row header (Help removed) so
+   brand + lang + ⋮ fit ~390px without wrapping over screen titles. */
 @media (max-width: 1023px) {
   #btn-install {
     display: none !important;
   }
 
   .app-topbar {
-    flex-wrap: wrap;
-    align-items: center;
-    row-gap: 0.15rem;
-    padding-bottom: 0.35rem;
+    flex-wrap: nowrap;
+    gap: 0.45rem;
   }
 
   .brand {
     flex: 1 1 auto;
-    min-width: min(100%, 11rem);
+    min-width: 0;
   }
 
   .topbar-tools {
-    flex: 1 1 auto;
+    flex: 0 0 auto;
     justify-content: flex-end;
     gap: 0.3rem;
   }
@@ -2458,8 +2461,9 @@ kbd {
   position: fixed;
   left: 50%;
   transform: translateX(-50%);
-  top: calc(var(--safe-t) + 0.5rem);
-  z-index: 90;
+  /* Sit below the app header — never cover brand / lang / More */
+  top: calc(var(--safe-t) + var(--topbar-h) + 0.4rem);
+  z-index: 55;
   width: min(100% - 1.5rem, 24rem);
   display: flex;
   gap: 0.5rem;

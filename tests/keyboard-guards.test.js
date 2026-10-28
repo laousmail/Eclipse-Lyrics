@@ -28,10 +28,30 @@ describe("keyboard / zoom UX guards", () => {
     assert.ok(!tabbar.includes('data-goto="help"'));
   });
 
+  it("Help is More-sheet only — no always-visible header ?", () => {
+    const html = readFileSync(new URL("../index.html", import.meta.url), "utf8");
+    const topbar = html.slice(html.indexOf('class="app-topbar"'), html.indexOf("</header>", html.indexOf('class="app-topbar"')));
+    assert.ok(!topbar.includes('id="btn-help"'));
+    assert.ok(!topbar.includes('data-goto="help"'));
+    const more = html.slice(html.indexOf('id="more-sheet"'), html.indexOf("</div>", html.indexOf('id="more-sheet"') + 200));
+    assert.ok(html.includes('id="more-sheet"') && html.includes('data-goto="help"'));
+    // Help row lives in the More sheet list
+    assert.match(html, /id="more-sheet"[\s\S]*?data-goto="help"[\s\S]*?data-i18n="help"/);
+  });
+
   it("hides desktop step-seg on mobile (no brand overlap)", () => {
     const css = readFileSync(new URL("../css/app.css", import.meta.url), "utf8");
     assert.match(css, /\.step-seg\.desktop-workspace-only[\s\S]*?display:\s*none/);
     assert.match(css, /@media \(min-width:\s*1024px\)[\s\S]*?\.step-seg\.desktop-workspace-only[\s\S]*?display:\s*inline-flex/);
+  });
+
+  it("phone topbar is a non-sticky flex sibling (no wrap over content)", () => {
+    const css = readFileSync(new URL("../css/app.css", import.meta.url), "utf8");
+    const topbarBlock = css.slice(css.indexOf(".app-topbar {"), css.indexOf(".brand {"));
+    assert.match(topbarBlock, /flex:\s*0\s+0\s+auto/);
+    assert.match(topbarBlock, /position:\s*relative/);
+    assert.ok(!/position:\s*sticky/.test(topbarBlock));
+    assert.match(css, /\.ios-install-hint[\s\S]*?top:\s*calc\(var\(--safe-t\)\s*\+\s*var\(--topbar-h\)/);
   });
 
   mainImportsKeyboard();
