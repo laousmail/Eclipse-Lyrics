@@ -330,7 +330,15 @@ function applyLyricsFromFields() {
   const warn = $("translation-warn");
   if (result.warnings.length) {
     warn.hidden = false;
-    warn.textContent = result.warnings.join(" ");
+    warn.textContent = result.warnings
+      .map((w) =>
+        i18n
+          .t(w.key)
+          .replace("{fr}", String(w.fr ?? ""))
+          .replace("{en}", String(w.en ?? ""))
+          .replace("{main}", String(w.main ?? ""))
+      )
+      .join(" ");
   } else {
     warn.hidden = true;
     warn.textContent = "";

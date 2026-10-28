@@ -71,10 +71,10 @@ export function applyLyrics(project, mainText, frText, enText) {
 
   const warnings = [];
   if (fr.length && fr.length !== main.length) {
-    warnings.push(`French has ${fr.length} lines, main has ${main.length}.`);
+    warnings.push({ key: "warnFrCount", fr: fr.length, main: main.length });
   }
   if (en.length && en.length !== main.length) {
-    warnings.push(`English has ${en.length} lines, main has ${main.length}.`);
+    warnings.push({ key: "warnEnCount", en: en.length, main: main.length });
   }
 
   const prev = project.lines || [];

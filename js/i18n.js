@@ -134,6 +134,18 @@ const STRINGS = {
     recordTabHidden: "Recording paused — keep this tab visible, then resume.",
     resumeRecording: "Resume recording",
     recordingFailed: "Recording failed",
+    warnFrCount: "French has {fr} lines, main has {main}.",
+    warnEnCount: "English has {en} lines, main has {main}.",
+    restoreDetail: "{title} · {file} · {when}",
+    aspect916: "9:16 Reels / TikTok",
+    aspect169: "16:9 YouTube",
+    aspect11: "1:1 Square",
+    styleFadeUp: "Fade up",
+    styleGlowSweep: "Glow sweep",
+    styleSmoke: "Smoke",
+    bgEclipse: "Eclipse glow",
+    bgImage: "Cover image",
+    bgVideo: "Background video",
   },
   fr: {
     metaDescription:
