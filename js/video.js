@@ -86,6 +86,21 @@ function stopLoop() {
   rafId = 0;
 }
 
+export async function ensureVideoFonts() {
+  if (typeof document === "undefined" || !document.fonts?.load) return;
+  try {
+    await Promise.all([
+      document.fonts.load('600 48px "Noto Sans"'),
+      document.fonts.load('400 48px "Noto Sans"'),
+      document.fonts.load('600 48px "Noto Sans Tifinagh"'),
+      document.fonts.load('400 48px "Noto Sans Tifinagh"'),
+      document.fonts.load('600 48px Outfit'),
+    ]);
+  } catch {
+    /* fonts may be unavailable offline; canvas falls back */
+  }
+}
+
 export function renderFrame(project, overrideTime) {
   const canvas = document.getElementById("video-canvas");
   if (!canvas || !project) return;

@@ -1115,12 +1115,13 @@ function setupUI() {
     video.renderFrame(state.project);
   });
 
-  $("btn-preview-video").addEventListener("click", () => {
+  $("btn-preview-video").addEventListener("click", async () => {
     readVideoSettings();
     if (video.isPreviewEnabled()) {
       video.disablePreview();
       $("btn-preview-video").textContent = i18n.t("livePreview");
     } else {
+      await video.ensureVideoFonts();
       video.enablePreview();
       $("btn-preview-video").textContent = i18n.t("stopPreview");
     }
