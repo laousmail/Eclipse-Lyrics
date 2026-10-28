@@ -20,7 +20,7 @@ const STRINGS = {
     loadLead: "Your file stays on this phone. Nothing is uploaded.",
     chooseAudio: "Choose audio",
     audioFormats: "MP3 · WAV · M4A · OGG",
-    orFromLink: "Or paste an audio link",
+    orFromLink: "Direct .mp3 link (must allow downloads)",
     audioUrlPlaceholder: "https://…/song.mp3",
     loadUrl: "Load link",
     changeAudio: "Replace audio",
@@ -244,6 +244,8 @@ const STRINGS = {
     errAudioUrlEmpty: "Colle d’abord un lien audio.",
     errGdocs:
       "Impossible de lire ce Google Doc. Vérifie qu’il est public (Toute personne avec le lien peut consulter), ou colle les paroles à la main.",
+    errGdocsCors:
+      "Copie les paroles du doc et colle-les ici — le navigateur a bloqué le téléchargement Google Docs.",
     errGdocsEmpty: "Colle d’abord un lien Google Docs.",
     errGdocsBad: "Ça ne ressemble pas à un lien Google Docs.",
     loadingAudio: "Chargement…",
