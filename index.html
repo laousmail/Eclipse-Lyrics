@@ -71,6 +71,51 @@
     </div>
   </div>
 
+  <div id="calibrate-dialog" class="sheet-overlay" hidden role="dialog" aria-modal="true" aria-labelledby="calibrate-title">
+    <div class="sheet">
+      <p id="calibrate-title" class="sheet-title" data-i18n="calibrateTitle">Tap latency</p>
+      <p class="muted" data-i18n="calibrateLead">Tap along with 8 clicks. We’ll measure your average delay and set the offset.</p>
+      <p id="calibrate-status" class="calibrate-status" aria-live="polite">Ready</p>
+      <div class="calibrate-pulse" id="calibrate-pulse" aria-hidden="true"></div>
+      <div class="sheet-actions sheet-actions-stack">
+        <button type="button" id="btn-calibrate-start" class="btn btn-fill" data-i18n="calibrateStart">Start</button>
+        <button type="button" id="btn-calibrate-tap" class="btn btn-ghost" data-i18n="calibrateTap" disabled>Tap</button>
+        <button type="button" id="btn-calibrate-save" class="btn btn-fill" data-i18n="calibrateSave" hidden>Save offset</button>
+        <button type="button" id="btn-calibrate-close" class="btn btn-ghost" data-i18n="close">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="line-menu-sheet" class="sheet-overlay" hidden role="dialog" aria-modal="true" aria-labelledby="line-menu-title">
+    <div class="sheet">
+      <p id="line-menu-title" class="sheet-title" data-i18n="lineMenuTitle">Line</p>
+      <div class="sheet-list">
+        <button type="button" class="sheet-row" data-line-action="edit" data-i18n="lineEdit">Edit text</button>
+        <button type="button" class="sheet-row" data-line-action="split" data-i18n="lineSplit">Split here</button>
+        <button type="button" class="sheet-row" data-line-action="merge" data-i18n="lineMerge">Merge with next</button>
+        <button type="button" class="sheet-row" data-line-action="insert" data-i18n="lineInsert">Insert line below</button>
+        <button type="button" class="sheet-row" data-line-action="delete" data-i18n="lineDelete">Delete</button>
+        <button type="button" class="sheet-row" data-line-action="clear" data-i18n="lineClear">Clear time</button>
+        <button type="button" class="sheet-row" data-line-action="startFrom" data-i18n="lineStartFrom">Start tapping from here</button>
+      </div>
+      <button type="button" id="btn-line-menu-close" class="btn btn-ghost sheet-dismiss" data-i18n="close">Close</button>
+    </div>
+  </div>
+
+  <div id="line-edit-dialog" class="sheet-overlay" hidden role="dialog" aria-modal="true" aria-labelledby="line-edit-title">
+    <div class="sheet">
+      <p id="line-edit-title" class="sheet-title" data-i18n="lineEdit">Edit text</p>
+      <label class="field">
+        <span data-i18n="main">Main</span>
+        <input type="text" id="field-line-edit" autocomplete="off" />
+      </label>
+      <div class="sheet-actions">
+        <button type="button" id="btn-line-edit-save" class="btn btn-fill" data-i18n="save">Save</button>
+        <button type="button" id="btn-line-edit-cancel" class="btn btn-ghost" data-i18n="close">Close</button>
+      </div>
+    </div>
+  </div>
+
   <div class="app">
     <header class="app-topbar">
       <div class="brand">
@@ -80,7 +125,15 @@
           <p class="brand-tag" data-i18n="brandTag">by laousmail</p>
         </div>
       </div>
+      <nav class="step-seg desktop-workspace-only" role="tablist" aria-label="Steps">
+        <button type="button" class="step-seg-btn is-active" data-goto="audio" data-i18n="tabAudio">Audio</button>
+        <button type="button" class="step-seg-btn" data-goto="lyrics" data-i18n="tabLyrics">Lyrics</button>
+        <button type="button" class="step-seg-btn" data-goto="sync" data-i18n="tabSync">Sync</button>
+        <button type="button" class="step-seg-btn" data-goto="export" data-i18n="tabExport">Export</button>
+        <button type="button" class="step-seg-btn" data-goto="video" data-i18n="tabFilm">Film</button>
+      </nav>
       <div class="topbar-tools">
+        <button type="button" class="btn btn-fill btn-sm desktop-workspace-only" data-goto="export" data-i18n="export">Export</button>
         <div class="lang-pill" role="group" aria-label="Language">
           <button type="button" class="lang-btn" data-lang="en" aria-pressed="true">EN</button>
           <button type="button" class="lang-btn" data-lang="fr" aria-pressed="false">FR</button>
@@ -153,7 +206,7 @@
         <header class="screen-head">
           <p class="eyebrow" data-i18n="step2">Step 2</p>
           <h2 id="lyrics-heading" data-i18n="pasteLyrics">Paste lyrics</h2>
-          <p class="screen-lead" data-i18n="lyricsLead">One line per row. Switch language with the tabs.</p>
+          <p class="screen-lead" data-i18n="lyricsLead">One row per line. Main, French and English side by side. Lines like [Chorus] become section markers.</p>
         </header>
 
         <div class="gdocs-block">
@@ -166,83 +219,105 @@
           <p id="gdocs-error" class="warn" hidden role="alert"></p>
         </div>
 
-        <div class="seg" role="tablist" aria-label="Lyric language">
-          <button type="button" class="seg-btn is-active" role="tab" aria-selected="true" data-lyric-tab="main" data-i18n="main">Main</button>
-          <button type="button" class="seg-btn" role="tab" aria-selected="false" data-lyric-tab="fr" data-i18n="french">French</button>
-          <button type="button" class="seg-btn" role="tab" aria-selected="false" data-lyric-tab="en" data-i18n="english">English</button>
+        <div class="lyrics-tools">
+          <button type="button" id="btn-add-row" class="btn btn-ghost btn-sm" data-i18n="addRow">Add row</button>
+          <button type="button" id="btn-remove-empty" class="btn btn-ghost btn-sm" data-i18n="removeEmpty">Remove empty</button>
         </div>
 
-        <div class="lyric-panes">
-          <label class="field lyric-pane is-active" data-lyric-pane="main">
-            <span class="visually-hidden" data-i18n="main">Main</span>
-            <textarea id="field-lyrics" rows="12" spellcheck="false" data-i18n-placeholder="lyricsPlaceholder" placeholder="One line per row"></textarea>
-          </label>
-          <label class="field lyric-pane" data-lyric-pane="fr" hidden>
-            <span class="visually-hidden" data-i18n="french">French</span>
-            <textarea id="field-fr" rows="12" spellcheck="false" data-i18n-placeholder="frPlaceholder" placeholder="Matching line count (optional)"></textarea>
-          </label>
-          <label class="field lyric-pane" data-lyric-pane="en" hidden>
-            <span class="visually-hidden" data-i18n="english">English</span>
-            <textarea id="field-en" rows="12" spellcheck="false" data-i18n-placeholder="enPlaceholder" placeholder="Matching line count (optional)"></textarea>
-          </label>
+        <div id="lyrics-grid" class="lyrics-grid" role="table" aria-label="Lyric grid"></div>
+        <!-- Hidden mirrors for import / gdocs paste compatibility -->
+        <textarea id="field-lyrics" class="visually-hidden" rows="1" tabindex="-1" aria-hidden="true"></textarea>
+        <textarea id="field-fr" class="visually-hidden" rows="1" tabindex="-1" aria-hidden="true"></textarea>
+        <textarea id="field-en" class="visually-hidden" rows="1" tabindex="-1" aria-hidden="true"></textarea>
+
+        <div id="kabyle-bar" class="kabyle-bar" role="toolbar" data-i18n-aria="kabyleBar" aria-label="Kabyle characters">
+          <button type="button" class="kabyle-key" data-char="ɛ">ɛ</button>
+          <button type="button" class="kabyle-key" data-char="ɣ">ɣ</button>
+          <button type="button" class="kabyle-key" data-char="č">č</button>
+          <button type="button" class="kabyle-key" data-char="ḍ">ḍ</button>
+          <button type="button" class="kabyle-key" data-char="ḥ">ḥ</button>
+          <button type="button" class="kabyle-key" data-char="ṛ">ṛ</button>
+          <button type="button" class="kabyle-key" data-char="ṣ">ṣ</button>
+          <button type="button" class="kabyle-key" data-char="ṭ">ṭ</button>
+          <button type="button" class="kabyle-key" data-char="ẓ">ẓ</button>
+          <button type="button" class="kabyle-key" data-char="ǧ">ǧ</button>
         </div>
 
         <p id="translation-warn" class="warn" hidden role="status"></p>
+        <p id="char-warn" class="warn" hidden role="status"></p>
         <div class="btn-stack">
-          <button type="button" id="btn-apply-lyrics" class="btn btn-fill" data-i18n="applyLyrics">Apply lyrics</button>
-          <button type="button" class="btn btn-ghost screen-next" data-goto="sync" data-i18n="goSync">Go to sync</button>
+          <button type="button" class="btn btn-fill screen-next" data-goto="sync" data-i18n="goSync">Go to sync</button>
         </div>
       </section>
 
       <!-- SYNC -->
       <section id="screen-sync" class="screen screen-sync" data-screen="sync" aria-labelledby="sync-heading" hidden>
-        <header class="screen-head screen-head-compact">
-          <p class="eyebrow" data-i18n="step3">Step 3</p>
-          <h2 id="sync-heading" data-i18n="tapSync">Tap to sync</h2>
+        <header class="screen-head screen-head-compact sync-head">
+          <div class="sync-head-row">
+            <div>
+              <p class="eyebrow" data-i18n="step3">Step 3</p>
+              <h2 id="sync-heading" data-i18n="tapSync">Tap to sync</h2>
+            </div>
+            <div id="progress-chip" class="progress-chip" aria-live="polite">
+              <svg class="progress-ring" viewBox="0 0 36 36" aria-hidden="true">
+                <circle class="progress-ring-bg" cx="18" cy="18" r="15" />
+                <circle id="progress-ring-fg" class="progress-ring-fg" cx="18" cy="18" r="15" />
+              </svg>
+              <span id="progress-chip-label">0 / 0</span>
+            </div>
+          </div>
+          <div class="sync-toolbar">
+            <label class="speed-chip">
+              <span data-i18n="speed">Speed</span>
+              <select id="select-speed" aria-label="Playback speed">
+                <option value="0.5">0.5×</option>
+                <option value="0.75">0.75×</option>
+                <option value="1" selected>1×</option>
+                <option value="1.25">1.25×</option>
+                <option value="1.5">1.5×</option>
+              </select>
+            </label>
+            <button type="button" id="btn-undo" class="btn btn-ghost btn-sm" data-i18n="undo" data-i18n-aria="undo" aria-label="Undo" disabled>Undo</button>
+            <button type="button" id="btn-redo" class="btn btn-ghost btn-sm" data-i18n="redo" data-i18n-aria="redo" aria-label="Redo" disabled>Redo</button>
+            <button type="button" id="btn-gap" class="btn btn-ghost btn-sm" data-i18n="gap" title="G">Gap</button>
+            <button type="button" id="btn-tap-mode" class="btn btn-ghost btn-sm" data-mode="simple" data-i18n="tapModeSimple">Simple tap</button>
+            <button type="button" id="btn-review" class="btn btn-ghost btn-sm" aria-pressed="false" data-i18n="reviewMode">Review</button>
+            <button type="button" id="btn-calibrate" class="btn btn-ghost btn-sm" data-i18n="calibrate">Calibrate</button>
+            <span id="offset-chip" class="offset-chip">Offset −150 ms</span>
+            <span id="time-display" class="time-display" aria-live="off">0:00.00 / 0:00.00</span>
+          </div>
         </header>
 
-        <div class="preview-card" id="karaoke-preview" aria-live="polite">
-          <p class="preview-prev" id="preview-prev"></p>
-          <p class="preview-current" id="preview-current">—</p>
-          <p class="preview-next" id="preview-next"></p>
-          <p class="preview-tr" id="preview-tr"></p>
-        </div>
-
-        <div class="waveform-wrap">
-          <canvas id="waveform" width="1200" height="110" data-i18n-aria="waveformTip" aria-label="Audio waveform. Drag markers to adjust times."></canvas>
-          <p class="tip muted" data-i18n="waveformTip">Scroll to zoom · drag markers to fine-tune times</p>
-        </div>
-
-        <div class="scrubber-block">
-          <div class="scrubber-head">
-            <span class="subhead" data-i18n="scrubLabel">Scrub timeline</span>
-            <button type="button" id="btn-go-start" class="btn btn-ghost btn-sm" data-i18n="goStart">Start</button>
+        <div class="sync-workspace">
+          <div class="sync-preview-col">
+            <div class="preview-card preview-compact" id="karaoke-preview" aria-live="polite">
+              <p class="preview-current" id="preview-current">—</p>
+              <p class="preview-next" id="preview-next"></p>
+              <p class="preview-tr" id="preview-tr"></p>
+              <p class="preview-prev visually-hidden" id="preview-prev"></p>
+            </div>
           </div>
-          <input type="range" id="scrubber" class="scrubber" min="0" max="1000" value="0" step="1" data-i18n-aria="scrubLabel" aria-label="Scrub timeline" />
-          <p class="tip muted" data-i18n="scrubHint">Slide to jump in the song — separate from Tap</p>
-        </div>
 
-        <div class="sync-toolbar">
-          <label class="speed-chip">
-            <span data-i18n="speed">Speed</span>
-            <select id="select-speed" aria-label="Playback speed">
-              <option value="0.5">0.5×</option>
-              <option value="0.75">0.75×</option>
-              <option value="1" selected>1×</option>
-              <option value="1.25">1.25×</option>
-              <option value="1.5">1.5×</option>
-            </select>
-          </label>
-          <button type="button" id="btn-undo" class="btn btn-ghost btn-sm" data-i18n="undo" data-i18n-aria="undo" aria-label="Undo" disabled>Undo</button>
-          <button type="button" id="btn-redo" class="btn btn-ghost btn-sm" data-i18n="redo" data-i18n-aria="redo" aria-label="Redo" disabled>Redo</button>
-          <span id="time-display" class="time-display" aria-live="off">0:00.00 / 0:00.00</span>
-        </div>
+          <div class="sync-list-col">
+            <ul id="line-list" class="line-list" role="listbox" aria-label="Lyric lines"></ul>
+          </div>
 
-        <h3 class="subhead" data-i18n="lines">Lines</h3>
-        <ul id="line-list" class="line-list" role="listbox" aria-label="Lyric lines"></ul>
+          <div class="sync-wave-col">
+            <div class="waveform-wrap waveform-strip">
+              <div class="wave-tools">
+                <button type="button" id="btn-wave-zoom-out" class="btn btn-ghost btn-sm" aria-label="Zoom out">−</button>
+                <button type="button" id="btn-wave-zoom-in" class="btn btn-ghost btn-sm" aria-label="Zoom in">+</button>
+                <button type="button" id="btn-wave-follow" class="btn btn-ghost btn-sm is-active" aria-pressed="true" data-i18n="follow">Follow</button>
+                <button type="button" id="btn-go-start" class="btn btn-ghost btn-sm" data-i18n="goStart">Start</button>
+              </div>
+              <canvas id="waveform" width="1200" height="160" data-i18n-aria="waveformTip" aria-label="Audio waveform. Drag regions to adjust times."></canvas>
+              <input type="range" id="scrubber" class="scrubber scrubber-in-wave" min="0" max="1000" value="0" step="1" data-i18n-aria="scrubLabel" aria-label="Scrub timeline" />
+            </div>
+          </div>
+        </div>
 
         <p class="shortcuts desktop-only muted" data-i18n="shortcuts">
-          Space tap · P play · ←→ nudge · ↑↓ select · J/L ±5s · ,/. speed
+          Space tap · G gap · P play · ←→ nudge · ↑↓ select · J/L ±5s · ,/. speed
         </p>
       </section>
 
@@ -365,6 +440,7 @@
         <span class="dock-tap-label" data-i18n="tapLine">Tap line</span>
         <span id="tap-mark-label" class="dock-tap-hint" data-i18n="markStart">mark start</span>
       </button>
+      <button type="button" id="btn-dock-gap" class="dock-seek" data-i18n="gap" data-i18n-aria="gap" aria-label="Gap">Gap</button>
       <button type="button" id="btn-seek-back" class="dock-seek" data-i18n="back5" data-i18n-aria="back5" aria-label="Back 5 seconds">−5s</button>
       <button type="button" id="btn-seek-fwd" class="dock-seek" data-i18n="fwd5" data-i18n-aria="fwd5" aria-label="Forward 5 seconds">＋5s</button>
     </div>

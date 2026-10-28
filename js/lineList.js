@@ -5,7 +5,10 @@ import { formatMs, lineMainText, lineFr, lineEn, isLyric } from "./sync.js";
 /**
  * Update #line-list rows in place (create/update/remove by data-id).
  */
-export function renderLineListInPlace(listEl, { lines, selectedIndex, tapIndex, onSelect }) {
+export function renderLineListInPlace(
+  listEl,
+  { lines, selectedIndex, tapIndex, reviewMode = false, onSelect, onMenu, onNudge, onReplay }
+) {
   if (!listEl) return;
 
   const wanted = new Set(lines.map((l) => l.id));
@@ -26,8 +29,33 @@ export function renderLineListInPlace(listEl, { lines, selectedIndex, tapIndex, 
         <span class="text">
           <p class="text-main"></p>
           <p class="text-tr"></p>
+        </span>
+        <span class="line-actions">
+          <button type="button" class="line-menu-btn" aria-label="Line menu">⋯</button>
+          <span class="line-review-tools">
+            <button type="button" class="line-nudge" data-dir="-1" aria-label="Nudge earlier">◀</button>
+            <button type="button" class="line-nudge" data-dir="1" aria-label="Nudge later">▶</button>
+            <button type="button" class="line-replay" aria-label="Replay line">↺</button>
+          </span>
         </span>`;
-      li.addEventListener("click", () => onSelect?.(i, true));
+      let pressTimer = null;
+      li.addEventListener("pointerdown", (e) => {
+        if (e.target.closest(".line-actions")) return;
+        if (e.pointerType !== "touch" && e.pointerType !== "pen") return;
+        pressTimer = window.setTimeout(() => {
+          pressTimer = null;
+          onMenu?.(i);
+        }, 480);
+      });
+      const clearPress = () => {
+        if (pressTimer) {
+          clearTimeout(pressTimer);
+          pressTimer = null;
+        }
+      };
+      li.addEventListener("pointerup", clearPress);
+      li.addEventListener("pointercancel", clearPress);
+      li.addEventListener("pointermove", clearPress);
     }
 
     li.dataset.index = String(i);
@@ -52,16 +80,40 @@ export function renderLineListInPlace(listEl, { lines, selectedIndex, tapIndex, 
       trEl.textContent = trParts.join(" · ");
     }
 
-    // Rebind click with current index
-    li.onclick = () => onSelect?.(i, true);
+    li.onclick = (e) => {
+      if (e.target.closest(".line-actions")) return;
+      onSelect?.(i, true);
+    };
+
+    const menuBtn = li.querySelector(".line-menu-btn");
+    if (menuBtn) {
+      menuBtn.onclick = (e) => {
+        e.stopPropagation();
+        onMenu?.(i);
+      };
+    }
+
+    li.querySelectorAll(".line-nudge").forEach((btn) => {
+      btn.onclick = (e) => {
+        e.stopPropagation();
+        onNudge?.(i, Number(btn.dataset.dir) * 50);
+      };
+      btn.style.display = reviewMode && isLyric(line) && line.startMs != null ? "" : "none";
+    });
+    const replay = li.querySelector(".line-replay");
+    if (replay) {
+      replay.onclick = (e) => {
+        e.stopPropagation();
+        onReplay?.(i);
+      };
+      replay.style.display = reviewMode && isLyric(line) && line.startMs != null ? "" : "none";
+    }
 
     if (isNew) {
-      // Insert at correct position
       const ref = listEl.children[i];
       if (ref) listEl.insertBefore(li, ref);
       else listEl.appendChild(li);
     } else {
-      // Ensure order
       const ref = listEl.children[i];
       if (ref !== li) {
         if (ref) listEl.insertBefore(li, ref);
