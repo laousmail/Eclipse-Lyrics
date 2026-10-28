@@ -28,10 +28,14 @@ const $ = (id) => document.getElementById(id);
 const SCREENS = ["audio", "lyrics", "sync", "export", "video"];
 const SCRUB_MAX = 1000;
 
-function showScreen(name, { pushHash = true } = {}) {
+function showScreen(name, { pushHash = true, persistScreen = true } = {}) {
   if (!SCREENS.includes(name)) return;
   const changed = state.screen !== name;
   state.screen = name;
+  if (persistScreen) {
+    state.project.lastScreen = name;
+    if (changed) persist();
+  }
   document.querySelectorAll(".screen").forEach((el) => {
     const active = el.dataset.screen === name;
     el.classList.toggle("is-active", active);
@@ -342,7 +346,7 @@ function applyLyricsFromFields() {
   }
 }
 
-async function handleAudioFile(file) {
+async function handleAudioFile(file, { stayOnScreen = false } = {}) {
   if (!file) return;
   setStatus(i18n.t("loadingAudio"));
   try {
@@ -361,13 +365,15 @@ async function handleAudioFile(file) {
     updateTimeDisplay();
     updateAudioLoadedUI(result.fileName, result.duration);
     haptics.success();
-    // Prompt for title — stay on audio screen, focus title
-    showScreen("audio");
-    requestAnimationFrame(() => {
-      const title = $("field-title");
-      title?.focus();
-      title?.scrollIntoView({ block: "center", behavior: "smooth" });
-    });
+    if (!stayOnScreen) {
+      // Prompt for title — stay on audio screen, focus title
+      showScreen("audio");
+      requestAnimationFrame(() => {
+        const title = $("field-title");
+        title?.focus();
+        title?.scrollIntoView({ block: "center", behavior: "smooth" });
+      });
+    }
   } catch (err) {
     console.error(err);
     setStatus(i18n.t("errAudioLoad"));
@@ -877,16 +883,18 @@ async function restoreSession(meta) {
   };
   syncFieldsFromProject();
   renderLineList();
-  state.tapIndex = sync.firstUntimedIndex(state.project.lines);
+  state.tapIndex = sync.nextTapIndex(state.project.lines);
   const audioData = await storage.loadAudioBlob();
   if (audioData?.blob) {
     const file = new File([audioData.blob], audioData.fileName || meta.audioFileName || "audio", {
       type: audioData.blob.type || "audio/mpeg",
     });
-    await handleAudioFile(file);
+    await handleAudioFile(file, { stayOnScreen: true });
   } else if (meta.audioFileName) {
     setStatus(`${meta.audioFileName}`);
   }
+  const last = meta.lastScreen;
+  showScreen(SCREENS.includes(last) ? last : "audio", { persistScreen: false });
 }
 
 function askImportMultiLine() {
