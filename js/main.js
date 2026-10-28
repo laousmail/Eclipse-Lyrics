@@ -870,7 +870,11 @@ async function offerRestore() {
   const banner = $("restore-banner");
   const detail = $("restore-detail");
   const when = meta.savedAt ? new Date(meta.savedAt).toLocaleString() : "—";
-  detail.textContent = `${meta.title || "—"} · ${meta.audioFileName || "—"} · ${when}`;
+  detail.textContent = i18n
+    .t("restoreDetail")
+    .replace("{title}", meta.title || "—")
+    .replace("{file}", meta.audioFileName || "—")
+    .replace("{when}", when);
   banner.hidden = false;
   await new Promise((resolve) => {
     $("btn-restore").onclick = async () => {

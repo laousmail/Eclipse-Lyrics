@@ -163,7 +163,7 @@ const STRINGS = {
     startFresh: "Recommencer",
     step1: "Étape 1",
     loadAudio: "Charger l’audio",
-    loadLead: "Le fichier reste sur ce téléphone. Rien n’est envoyé.",
+    loadLead: "Le fichier reste sur cet appareil. Rien n’est envoyé.",
     chooseAudio: "Choisir l’audio",
     audioFormats: "MP3 · WAV · M4A · OGG",
     orFromLink: "Lien .mp3 direct (doit autoriser le téléchargement)",
