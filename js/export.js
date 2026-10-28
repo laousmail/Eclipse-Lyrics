@@ -7,30 +7,38 @@ function pad(n, w = 2) {
   return String(n).padStart(w, "0");
 }
 
-function toLrcTime(seconds) {
-  const m = Math.floor(seconds / 60);
-  const s = seconds % 60;
-  const whole = Math.floor(s);
-  const cs = Math.round((s - whole) * 100);
-  return `[${pad(m)}:${pad(whole)}.${pad(cs)}]`;
+/** Round seconds → integer ms, then split with integer math (no 1000 overflow). */
+export function secondsToParts(seconds) {
+  let total = Math.round(Number(seconds) * 1000);
+  if (!Number.isFinite(total) || total < 0) total = 0;
+  const ms = total % 1000;
+  const totalSec = Math.floor(total / 1000);
+  const s = totalSec % 60;
+  const totalMin = Math.floor(totalSec / 60);
+  const m = totalMin % 60;
+  const h = Math.floor(totalMin / 60);
+  return { h, m, s, ms, totalMs: total };
 }
 
-function toSrtTime(seconds) {
-  const h = Math.floor(seconds / 3600);
-  const m = Math.floor((seconds % 3600) / 60);
-  const s = seconds % 60;
-  const whole = Math.floor(s);
-  const ms = Math.round((s - whole) * 1000);
-  return `${pad(h)}:${pad(m)}:${pad(whole)},${pad(ms, 3)}`;
+export function toLrcTime(seconds) {
+  // Centiseconds via integer path: round(ms/10) from total ms
+  const { totalMs } = secondsToParts(seconds);
+  let totalCs = Math.round(totalMs / 10);
+  const cs = totalCs % 100;
+  const totalSec = Math.floor(totalCs / 100);
+  const s = totalSec % 60;
+  const m = Math.floor(totalSec / 60);
+  return `[${pad(m)}:${pad(s)}.${pad(cs)}]`;
 }
 
-function toVttTime(seconds) {
-  const h = Math.floor(seconds / 3600);
-  const m = Math.floor((seconds % 3600) / 60);
-  const s = seconds % 60;
-  const whole = Math.floor(s);
-  const ms = Math.round((s - whole) * 1000);
-  return `${pad(h)}:${pad(m)}:${pad(whole)}.${pad(ms, 3)}`;
+export function toSrtTime(seconds) {
+  const { h, m, s, ms } = secondsToParts(seconds);
+  return `${pad(h)}:${pad(m)}:${pad(s)},${pad(ms, 3)}`;
+}
+
+export function toVttTime(seconds) {
+  const { h, m, s, ms } = secondsToParts(seconds);
+  return `${pad(h)}:${pad(m)}:${pad(s)}.${pad(ms, 3)}`;
 }
 
 function ensureEnds(project) {
