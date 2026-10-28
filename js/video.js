@@ -218,13 +218,21 @@ export async function startRecording(project, { onProgress, onDone, onError, onH
   recordedChunks = [];
   const mime = pickMime();
   onVisibilityWarn = onHidden || null;
+  const squareish = Math.abs(w - h) < Math.min(w, h) * 0.2;
+  const bits = squareish ? 6_000_000 : 10_000_000;
+  const recorderOpts = { videoBitsPerSecond: bits };
+  if (mime) recorderOpts.mimeType = mime;
 
   try {
-    recorder = new MediaRecorder(combined, mime ? { mimeType: mime } : undefined);
+    recorder = new MediaRecorder(combined, recorderOpts);
   } catch (err) {
-    recorder = null;
-    onError?.(err);
-    return;
+    try {
+      recorder = new MediaRecorder(combined, mime ? { mimeType: mime } : undefined);
+    } catch (err2) {
+      recorder = null;
+      onError?.(err2);
+      return;
+    }
   }
 
   recorder.ondataavailable = (e) => {
