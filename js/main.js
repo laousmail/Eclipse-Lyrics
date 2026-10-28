@@ -489,6 +489,64 @@ function doUndo() {
   haptics.soft();
 }
 
+function countUntimed() {
+  return state.project.lines.filter((l) => l.start == null).length;
+}
+
+function countTimed() {
+  return state.project.lines.filter((l) => l.start != null).length;
+}
+
+function updateExportButtons() {
+  const timed = countTimed();
+  [
+    "btn-export-lrc",
+    "btn-export-srt",
+    "btn-export-vtt",
+    "btn-export-json",
+    "btn-export-tr-files",
+  ].forEach((id) => {
+    const btn = $(id);
+    if (btn) btn.disabled = timed === 0 && id !== "btn-export-json";
+  });
+}
+
+function askExportGuard(untimed) {
+  return new Promise((resolve) => {
+    const detail = $("export-guard-detail");
+    if (detail) {
+      detail.textContent = i18n.t("exportGuardDetail").replace("{n}", String(untimed));
+    }
+    openSheet("export-guard-dialog");
+    const finish = (ok) => {
+      closeSheet("export-guard-dialog");
+      $("btn-export-anyway").onclick = null;
+      $("btn-export-fix").onclick = null;
+      resolve(ok);
+    };
+    $("btn-export-anyway").onclick = () => finish(true);
+    $("btn-export-fix").onclick = () => {
+      finish(false);
+      showScreen("sync");
+    };
+  });
+}
+
+async function runExport(fn) {
+  const timed = countTimed();
+  if (timed === 0) {
+    showToast(i18n.t("exportNoneTimed"));
+    return;
+  }
+  const untimed = countUntimed();
+  if (untimed > 0) {
+    const ok = await askExportGuard(untimed);
+    if (!ok) return;
+  }
+  fn();
+  haptics.success();
+}
+
 function exportOpts() {
   return {
     includeTr: $("opt-include-tr").checked,

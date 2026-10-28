@@ -124,6 +124,11 @@ const STRINGS = {
     importDialogLead: "Some cues have more than one text line. How should we import them?",
     importJoinLines: "Join into one lyric line",
     importSecondIsTr: "Second line is translation",
+    exportGuardTitle: "Untimed lines",
+    exportGuardDetail: "{n} lines have no time. Export anyway?",
+    exportAnyway: "Export anyway",
+    exportGoFix: "Go fix",
+    exportNoneTimed: "Time at least one line before exporting.",
   },
   fr: {
     metaDescription:
