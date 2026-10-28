@@ -181,9 +181,26 @@ function updatePlayButton() {
 
 function updateTapButtons() {
   const hasLines = state.project.lines.length > 0;
+  const done = sync.isSyncComplete(state.project.lines);
   const tap = $("btn-tap");
   const undo = $("btn-undo");
-  if (tap) tap.disabled = !hasLines || !state.project.audioFileName;
+  const mark = $("tap-mark-label");
+  if (tap) {
+    tap.disabled = !hasLines || !state.project.audioFileName || done;
+    tap.classList.toggle("is-done", done);
+  }
+  if (mark) {
+    if (done) mark.textContent = i18n.t("allLinesTimed");
+    else if (
+      state.project.lines.length &&
+      state.project.lines.every((l) => l.start != null) &&
+      !state.project.lines.at(-1)?.endManual
+    ) {
+      mark.textContent = i18n.t("markEnd");
+    } else {
+      mark.textContent = i18n.t("markStart");
+    }
+  }
   if (undo) undo.disabled = state.undoStack.length === 0;
 }
 
@@ -210,7 +227,7 @@ function renderLineList() {
       li.classList.add("selected");
       li.setAttribute("aria-selected", "true");
     }
-    if (i === state.tapIndex) li.classList.add("next-tap");
+    if (i === state.tapIndex && state.tapIndex < state.project.lines.length) li.classList.add("next-tap");
     const time = line.start != null ? formatClock(line.start) : "—:—";
     li.innerHTML = `
       <span class="time">${time}</span>
@@ -444,18 +461,20 @@ async function handleGoogleDocs() {
 
 function doTap() {
   if (!state.project.lines.length) return;
+  if (sync.isSyncComplete(state.project.lines)) return;
   const t = audio.getCurrentTime();
-  const idx = state.tapIndex;
+  const idx = Math.min(state.tapIndex, state.project.lines.length - 1);
   const result = sync.tapLine(state.project, idx, t);
-  if (!result) return;
+  if (!result || result.noop) return;
   state.undoStack.push(result.prevState);
   if (state.undoStack.length > 50) state.undoStack.shift();
   state.tapIndex = result.nextIndex;
-  state.selectedIndex = state.tapIndex;
+  state.selectedIndex = Math.min(state.tapIndex, state.project.lines.length - 1);
   renderLineList();
   persist();
   haptics.tap();
   flashTapConfirm();
+  if (result.done) showToast(i18n.t("allLinesTimed"));
   scrollTapLineIntoView();
 }
 
@@ -463,8 +482,8 @@ function doUndo() {
   const prev = state.undoStack.pop();
   if (!prev) return;
   sync.undoTimings(state.project.lines, prev);
-  state.tapIndex = sync.firstUntimedIndex(state.project.lines);
-  state.selectedIndex = state.tapIndex;
+  state.tapIndex = sync.nextTapIndex(state.project.lines);
+  state.selectedIndex = Math.min(state.tapIndex, Math.max(0, state.project.lines.length - 1));
   renderLineList();
   persist();
   haptics.soft();

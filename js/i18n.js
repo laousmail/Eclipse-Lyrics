@@ -115,6 +115,8 @@ const STRINGS = {
     loadingDocs: "Fetching document…",
     lyricsRematch: "{changed} lines changed, {added} added",
     lyricsRematchNone: "Lyrics updated",
+    markEnd: "mark end",
+    allLinesTimed: "All lines timed ✓",
   },
   fr: {
     metaDescription:
@@ -232,6 +234,8 @@ const STRINGS = {
     loadingDocs: "Récupération du document…",
     lyricsRematch: "{changed} lignes modifiées, {added} ajoutée(s)",
     lyricsRematchNone: "Paroles mises à jour",
+    markEnd: "marquer la fin",
+    allLinesTimed: "Toutes les lignes calées ✓",
   },
 };
 

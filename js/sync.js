@@ -129,6 +129,8 @@ export function recomputeEnds(lines, duration = 0) {
       lines[i].end = null;
       continue;
     }
+    // Preserve manually set end on the last line (B5)
+    if (lines[i].endManual && i === lines.length - 1) continue;
     if (next && next.start != null) {
       lines[i].end = next.start;
     } else if (duration > 0) {
@@ -142,18 +144,38 @@ export function recomputeEnds(lines, duration = 0) {
 
 export function tapLine(project, lineIndex, time) {
   const lines = project.lines;
-  if (lineIndex < 0 || lineIndex >= lines.length) return null;
+  if (!lines.length) return null;
 
   const t = snapTime(time);
   const prevState = snapshotTimings(lines);
+  const allStarted = lines.every((l) => l.start != null);
+  const last = lines[lines.length - 1];
+
+  // After every line has a start, next tap sets the last line's end, then done
+  if (allStarted) {
+    if (last.endManual) {
+      return { prevState, nextIndex: lines.length, done: true, noop: true };
+    }
+    const minEnd = last.start + 0.01;
+    last.end = Math.max(minEnd, t);
+    last.endManual = true;
+    return { prevState, nextIndex: lines.length, done: true, setEnd: true };
+  }
+
+  if (lineIndex < 0 || lineIndex >= lines.length) return null;
 
   lines[lineIndex].start = t;
-  if (lineIndex > 0 && lines[lineIndex - 1].start != null) {
+  lines[lineIndex].endManual = false;
+  if (lineIndex > 0 && lines[lineIndex - 1].start != null && !lines[lineIndex - 1].endManual) {
     lines[lineIndex - 1].end = t;
   }
   recomputeEnds(lines, project.duration);
 
-  return { prevState, nextIndex: Math.min(lineIndex + 1, lines.length - 1) };
+  const nextUntimed = lines.findIndex((l) => l.start == null);
+  if (nextUntimed === -1) {
+    return { prevState, nextIndex: lines.length - 1, awaitingEnd: true };
+  }
+  return { prevState, nextIndex: nextUntimed };
 }
 
 export function undoTimings(lines, prevState) {
@@ -162,12 +184,13 @@ export function undoTimings(lines, prevState) {
     if (prevState[i]) {
       lines[i].start = prevState[i].start;
       lines[i].end = prevState[i].end;
+      lines[i].endManual = prevState[i].endManual || false;
     }
   }
 }
 
 export function snapshotTimings(lines) {
-  return lines.map((l) => ({ start: l.start, end: l.end }));
+  return lines.map((l) => ({ start: l.start, end: l.end, endManual: Boolean(l.endManual) }));
 }
 
 /** Neighbour clamp so markers never cross (±10 ms gap). */
@@ -224,6 +247,20 @@ export function lineAtTime(lines, time) {
 export function firstUntimedIndex(lines) {
   const i = lines.findIndex((l) => l.start == null);
   return i === -1 ? Math.max(0, lines.length - 1) : i;
+}
+
+/** Tap pointer: untimed line, or lines.length when awaiting/done last end. */
+export function nextTapIndex(lines) {
+  const untimed = lines.findIndex((l) => l.start == null);
+  if (untimed !== -1) return untimed;
+  if (!lines.length) return 0;
+  const last = lines[lines.length - 1];
+  if (last.start != null && !last.endManual) return lines.length; // awaiting end tap
+  return lines.length; // done
+}
+
+export function isSyncComplete(lines) {
+  return lines.length > 0 && lines.every((l) => l.start != null) && Boolean(lines.at(-1)?.endManual);
 }
 
 export function formatTime(seconds, { millis = false } = {}) {
