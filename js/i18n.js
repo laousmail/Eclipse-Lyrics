@@ -120,6 +120,10 @@ const STRINGS = {
     errProjectJson: "That project file isn’t valid JSON.",
     errProjectShape: "Project file is missing a valid lines list.",
     errImport: "Import failed",
+    importDialogTitle: "Multi-line cues",
+    importDialogLead: "Some cues have more than one text line. How should we import them?",
+    importJoinLines: "Join into one lyric line",
+    importSecondIsTr: "Second line is translation",
   },
   fr: {
     metaDescription:
@@ -239,6 +243,13 @@ const STRINGS = {
     lyricsRematchNone: "Paroles mises à jour",
     markEnd: "marquer la fin",
     allLinesTimed: "Toutes les lignes calées ✓",
+    errProjectJson: "Ce fichier projet n’est pas un JSON valide.",
+    errProjectShape: "Le fichier projet n’a pas de liste de lignes valide.",
+    errImport: "Échec de l’import",
+    importDialogTitle: "Cues multi-lignes",
+    importDialogLead: "Certains cues ont plusieurs lignes de texte. Comment les importer ?",
+    importJoinLines: "Fusionner en une seule ligne",
+    importSecondIsTr: "La 2ᵉ ligne est la traduction",
   },
 };
 

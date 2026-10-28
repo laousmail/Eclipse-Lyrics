@@ -826,6 +826,36 @@ async function restoreSession(meta) {
   }
 }
 
+function askImportMultiLine() {
+  return new Promise((resolve) => {
+    const dialog = $("import-dialog");
+    if (!dialog) {
+      resolve({ secondLineIsTranslation: false });
+      return;
+    }
+    openSheet("import-dialog");
+    const finish = (secondLineIsTranslation) => {
+      closeSheet("import-dialog");
+      $("btn-import-join").onclick = null;
+      $("btn-import-tr").onclick = null;
+      resolve({ secondLineIsTranslation });
+    };
+    $("btn-import-join").onclick = () => finish(false);
+    $("btn-import-tr").onclick = () => finish(true);
+  });
+}
+
+function isValidProjectShape(data) {
+  if (!data || typeof data !== "object" || Array.isArray(data)) return false;
+  if (!Array.isArray(data.lines)) return false;
+  return data.lines.every((l) => {
+    if (!l || typeof l !== "object") return false;
+    const startOk = l.start == null || typeof l.start === "number";
+    const endOk = l.end == null || typeof l.end === "number";
+    return startOk && endOk;
+  });
+}
+
 function mergeImported(data) {
   state.project.title = data.title || state.project.title;
   state.project.artist = data.artist || state.project.artist;
@@ -978,7 +1008,17 @@ function setupUI() {
     if (!file) return;
     const text = await file.text();
     try {
-      mergeImported(exp.parseImportedProject(text, file.name));
+      const lower = file.name.toLowerCase();
+      const isCue =
+        lower.endsWith(".srt") ||
+        lower.endsWith(".vtt") ||
+        text.trim().startsWith("WEBVTT") ||
+        /\d{1,2}:\d{2}[,.]\d/.test(text);
+      let opts = {};
+      if (isCue && !lower.endsWith(".lrc") && exp.hasMultiLineCues(text, file.name)) {
+        opts = await askImportMultiLine();
+      }
+      mergeImported(exp.parseImportedProject(text, file.name, opts));
     } catch (err) {
       showToast(err.message || i18n.t("errImport"));
     }

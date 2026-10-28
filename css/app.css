@@ -1050,6 +1050,10 @@ kbd {
   margin-top: 1.1rem;
 }
 
+.sheet-actions-stack .btn {
+  width: 100%;
+}
+
 .sheet-list {
   display: grid;
   margin: 0.75rem 0 1rem;

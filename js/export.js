@@ -162,7 +162,24 @@ export function downloadPerLanguage(project, format = "srt") {
   }
 }
 
-export function parseImportedProject(text, filename = "") {
+/** True when any cue body has 2+ text lines (SRT/VTT). */
+export function hasMultiLineCues(text, filename = "") {
+  const lower = filename.toLowerCase();
+  if (lower.endsWith(".lrc") || lower.endsWith(".json")) return false;
+  const raw = text.replace(/^\uFEFF/, "").replace(/^WEBVTT[^\n]*\n/, "");
+  const blocks = raw.trim().split(/\n\s*\n/);
+  for (const block of blocks) {
+    const parts = block.split(/\r?\n/).filter((p) => p.trim().length);
+    if (parts.length < 2) continue;
+    let idx = 0;
+    if (/^\d+$/.test(parts[0].trim())) idx = 1;
+    if (!parts[idx]?.includes("-->")) continue;
+    if (parts.slice(idx + 1).filter((p) => p.trim()).length >= 2) return true;
+  }
+  return false;
+}
+
+export function parseImportedProject(text, filename = "", opts = {}) {
   const lower = filename.toLowerCase();
   if (lower.endsWith(".json") || text.trim().startsWith("{")) {
     const data = JSON.parse(text);
@@ -173,9 +190,28 @@ export function parseImportedProject(text, filename = "") {
     return importLRC(text);
   }
   if (lower.endsWith(".vtt") || text.trim().startsWith("WEBVTT")) {
-    return importVTT(text);
+    return importVTT(text, opts);
   }
-  return importSRT(text);
+  return importSRT(text, opts);
+}
+
+/** Parse (hh:)?mm:ss[,.]mmm → seconds. */
+export function parseCueTime(raw) {
+  const m = String(raw)
+    .trim()
+    .match(/^(?:(\d{1,2}):)?(\d{1,2}):(\d{1,2})[,.](\d{1,3})$/);
+  if (!m) return null;
+  const h = m[1] != null ? Number(m[1]) : 0;
+  const min = Number(m[2]);
+  const sec = Number(m[3]);
+  const fracRaw = m[4];
+  const ms =
+    fracRaw.length === 3
+      ? Number(fracRaw)
+      : fracRaw.length === 2
+        ? Number(fracRaw) * 10
+        : Number(fracRaw) * 100;
+  return h * 3600 + min * 60 + sec + ms / 1000;
 }
 
 function importLRC(text) {
@@ -211,37 +247,47 @@ function importLRC(text) {
   return { title, artist, audioFileName: "", duration: 0, lines, settings: {} };
 }
 
-function importSRT(text) {
+function importSRT(text, opts = {}) {
+  const secondLineIsTranslation = Boolean(opts.secondLineIsTranslation);
   const blocks = text.replace(/^\uFEFF/, "").trim().split(/\n\s*\n/);
   const lines = [];
   for (const block of blocks) {
-    const parts = block.split(/\r?\n/).filter(Boolean);
+    const parts = block.split(/\r?\n/).filter((p) => p.trim().length);
     if (parts.length < 2) continue;
     let idx = 0;
-    if (/^\d+$/.test(parts[0])) idx = 1;
+    if (/^\d+$/.test(parts[0].trim())) idx = 1;
     const timeLine = parts[idx];
-    const tm = timeLine.match(
-      /(\d{2}):(\d{2}):(\d{2})[,.](\d{3})\s*-->\s*(\d{2}):(\d{2}):(\d{2})[,.](\d{3})/
-    );
-    if (!tm) continue;
-    const start =
-      Number(tm[1]) * 3600 + Number(tm[2]) * 60 + Number(tm[3]) + Number(tm[4]) / 1000;
-    const end =
-      Number(tm[5]) * 3600 + Number(tm[6]) * 60 + Number(tm[7]) + Number(tm[8]) / 1000;
-    const body = parts.slice(idx + 1);
+    if (!timeLine || !timeLine.includes("-->")) continue;
+    const [left, right] = timeLine.split("-->").map((s) => s.trim().split(/\s+/)[0]);
+    const start = parseCueTime(left);
+    const end = parseCueTime(right);
+    if (start == null || end == null) continue;
+    const body = parts.slice(idx + 1).map((s) => s.trim()).filter(Boolean);
+    let text = "";
+    let fr = "";
+    if (secondLineIsTranslation && body.length >= 2) {
+      text = body[0];
+      fr = body[1];
+      if (body.length > 2) text = [body[0], ...body.slice(2)].join("\n");
+    } else {
+      text = body.join("\n");
+    }
     lines.push({
       id: uid(),
       start,
       end,
-      text: body[0] || "",
-      fr: body[1] || "",
+      text,
+      fr,
       en: "",
     });
   }
   return { title: "", artist: "", audioFileName: "", duration: 0, lines, settings: {} };
 }
 
-function importVTT(text) {
-  const cleaned = text.replace(/^\uFEFF/, "").replace(/^WEBVTT[^\n]*\n/, "");
-  return importSRT(cleaned);
+function importVTT(text, opts = {}) {
+  const cleaned = text
+    .replace(/^\uFEFF/, "")
+    .replace(/^WEBVTT[^\n]*\n/, "")
+    .replace(/^(NOTE|STYLE|REGION)[\s\S]*?(?:\n\n|$)/gm, "\n");
+  return importSRT(cleaned, opts);
 }
