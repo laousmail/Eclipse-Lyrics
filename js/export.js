@@ -3,6 +3,8 @@
 import { recomputeEnds, uid, isLyric, lineMainText, lineFr, lineEn, msToSec, secToMs } from "./sync.js";
 import { createLyricLine, migrateProject } from "./core/project.js";
 import { triggerDownload } from "./storage.js";
+import { createZip } from "./zip.js";
+import { toEclipseJson } from "./projectFile.js";
 
 function pad(n, w = 2) {
   return String(n).padStart(w, "0");
@@ -73,13 +75,82 @@ function cueText(line, { includeTr, trLang }) {
   return text;
 }
 
-export function toLRC(project) {
-  ensureEnds(project);
+/** Normalize language mode from UI / legacy opts. */
+export function resolveExportLang(opts = {}) {
+  const mode = opts.languages || opts.mode || "main";
+  if (mode === "main+fr" || (opts.includeTr && opts.trLang === "fr")) {
+    return { includeTr: true, trLang: "fr", mode: "main+fr" };
+  }
+  if (mode === "main+en" || (opts.includeTr && opts.trLang === "en")) {
+    return { includeTr: true, trLang: "en", mode: "main+en" };
+  }
+  if (mode === "separate") return { includeTr: false, trLang: "fr", mode: "separate" };
+  return { includeTr: false, trLang: "fr", mode: "main" };
+}
+
+/**
+ * Apply global offset, min duration, max gap to a cloned line list (ms).
+ * Does not mutate the project.
+ */
+export function prepareExportLines(project, exportSettings = {}) {
+  const offset = Math.round(Number(exportSettings.globalOffsetMs) || 0);
+  const minLineMs = Math.max(0, Math.round(Number(exportSettings.minLineMs) ?? 700));
+  const maxGapMs = Math.max(0, Math.round(Number(exportSettings.maxGapMs) ?? 8000));
+  const dur = durationMsOf(project);
+
+  const lines = (project.lines || []).map((l) => {
+    if (!isLyric(l) || l.startMs == null) return { ...l, text: l.text ? { ...l.text } : l.text };
+    const startMs = Math.max(0, l.startMs + offset);
+    let endMs = l.endMs != null ? l.endMs + offset : null;
+    return {
+      ...l,
+      startMs,
+      endMs,
+      text: l.text ? { ...l.text } : l.text,
+      endManual: l.endManual,
+    };
+  });
+
+  // Recompute sequential ends then enforce min duration + max gap
+  recomputeEnds(lines, dur > 0 ? dur + Math.max(0, offset) : 0);
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    if (!isLyric(line) || line.startMs == null) continue;
+    let end = line.endMs != null ? line.endMs : line.startMs + minLineMs;
+    if (end - line.startMs < minLineMs) end = line.startMs + minLineMs;
+    if (maxGapMs > 0 && end - line.startMs > maxGapMs) end = line.startMs + maxGapMs;
+    // Don't overrun next lyric start
+    for (let j = i + 1; j < lines.length; j++) {
+      if (isLyric(lines[j]) && lines[j].startMs != null) {
+        end = Math.min(end, lines[j].startMs);
+        break;
+      }
+    }
+    if (end < line.startMs + 10) end = line.startMs + 10;
+    line.endMs = end;
+  }
+  return lines;
+}
+
+function projectForExport(project, opts = {}) {
+  const exportSettings = {
+    ...(project.settings?.export || {}),
+    ...(opts.export || {}),
+    globalOffsetMs: opts.globalOffsetMs ?? project.settings?.export?.globalOffsetMs,
+    minLineMs: opts.minLineMs ?? project.settings?.export?.minLineMs,
+    maxGapMs: opts.maxGapMs ?? project.settings?.export?.maxGapMs,
+  };
+  const lines = prepareExportLines(project, exportSettings);
+  return { ...project, lines };
+}
+
+export function toLRC(project, opts = {}) {
+  const p = projectForExport(project, opts);
   const lines = [];
-  if (project.title) lines.push(`[ti:${project.title}]`);
-  if (project.artist) lines.push(`[ar:${project.artist}]`);
+  if (p.title) lines.push(`[ti:${p.title}]`);
+  if (p.artist) lines.push(`[ar:${p.artist}]`);
   lines.push("");
-  for (const line of project.lines) {
+  for (const line of p.lines) {
     if (!isLyric(line)) continue;
     const start = lineStartSec(line);
     if (start == null) continue;
@@ -89,15 +160,16 @@ export function toLRC(project) {
 }
 
 export function toSRT(project, opts = {}) {
-  ensureEnds(project);
+  const lang = resolveExportLang(opts);
+  const p = projectForExport(project, opts);
   const blocks = [];
   let n = 1;
-  for (const line of project.lines) {
+  for (const line of p.lines) {
     if (!isLyric(line)) continue;
     const start = lineStartSec(line);
     if (start == null) continue;
     const end = lineEndSec(line) != null ? lineEndSec(line) : start + 3;
-    const text = cueText(line, opts);
+    const text = cueText(line, lang);
     blocks.push(`${n}\n${toSrtTime(start)} --> ${toSrtTime(end)}\n${text}\n`);
     n += 1;
   }
@@ -105,17 +177,66 @@ export function toSRT(project, opts = {}) {
 }
 
 export function toVTT(project, opts = {}) {
-  ensureEnds(project);
+  const lang = resolveExportLang(opts);
+  const p = projectForExport(project, opts);
   const blocks = ["WEBVTT", ""];
-  for (const line of project.lines) {
+  for (const line of p.lines) {
     if (!isLyric(line)) continue;
     const start = lineStartSec(line);
     if (start == null) continue;
     const end = lineEndSec(line) != null ? lineEndSec(line) : start + 3;
-    const text = cueText(line, opts);
+    const text = cueText(line, lang);
     blocks.push(`${toVttTime(start)} --> ${toVttTime(end)}\n${text}\n`);
   }
   return blocks.join("\n");
+}
+
+export function toTXT(project) {
+  return (project.lines || [])
+    .filter(isLyric)
+    .map((l) => lineMainText(l))
+    .filter(Boolean)
+    .join("\n") + "\n";
+}
+
+/** First N cues as plain text for preview (SRT-shaped). */
+export function previewCues(project, opts = {}, limit = 10) {
+  const srt = toSRT(project, opts);
+  const blocks = srt.trim().split(/\n\s*\n/).filter(Boolean);
+  return blocks.slice(0, limit).join("\n\n") + (blocks.length > limit ? "\n\n…" : "");
+}
+
+/**
+ * Lyrics JSON for laousmail.com — release entry shape + timed lyrics.
+ * Matches fields used in releases.js so it can be merged into LAOUSMAIL_RELEASES.
+ */
+export function toLaousmailReleaseJson(project) {
+  const p = projectForExport(project);
+  const year = new Date().getFullYear();
+  return {
+    title: p.title || "",
+    year,
+    artist: p.artist || "laousmail",
+    lang: {
+      en: "Kabyle · Amazigh",
+      fr: "Kabyle · Amazigh",
+    },
+    description: {
+      en: "",
+      fr: "",
+    },
+    lyrics: (p.lines || [])
+      .filter((l) => isLyric(l) && l.startMs != null)
+      .map((l) => ({
+        startMs: l.startMs,
+        endMs: l.endMs,
+        text: {
+          kab: lineMainText(l),
+          fr: lineFr(l),
+          en: lineEn(l),
+        },
+      })),
+  };
 }
 
 export function toJSON(project) {
@@ -130,8 +251,8 @@ function safeBase(project) {
   return t.replace(/[^\p{L}\p{N}\-_ ]+/gu, "").replace(/\s+/g, "-").slice(0, 60) || "lyrics";
 }
 
-export function downloadLRC(project) {
-  const blob = new Blob([toLRC(project)], { type: "text/plain;charset=utf-8" });
+export function downloadLRC(project, opts) {
+  const blob = new Blob([toLRC(project, opts)], { type: "text/plain;charset=utf-8" });
   triggerDownload(blob, `${safeBase(project)}.lrc`);
 }
 
@@ -146,16 +267,74 @@ export function downloadVTT(project, opts) {
 }
 
 export function downloadJSON(project) {
-  const blob = new Blob([toJSON(project)], { type: "application/json;charset=utf-8" });
-  triggerDownload(blob, `${safeBase(project)}.json`);
+  const blob = new Blob([toEclipseJson(project)], { type: "application/json;charset=utf-8" });
+  triggerDownload(blob, `${safeBase(project)}.eclipse.json`);
 }
 
-/** Export separate files for main / fr / en where content exists. */
-export function downloadPerLanguage(project, format = "srt") {
+export function downloadTXT(project) {
+  const blob = new Blob([toTXT(project)], { type: "text/plain;charset=utf-8" });
+  triggerDownload(blob, `${safeBase(project)}.txt`);
+}
+
+export function downloadLaousmailJson(project) {
+  const blob = new Blob([JSON.stringify(toLaousmailReleaseJson(project), null, 2)], {
+    type: "application/json;charset=utf-8",
+  });
+  triggerDownload(blob, `${safeBase(project)}.releases.json`);
+}
+
+export function srtBlob(project, opts) {
+  return new Blob([toSRT(project, opts)], { type: "application/x-subrip;charset=utf-8" });
+}
+
+export async function copyText(text) {
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(text);
+    return true;
+  }
+  return false;
+}
+
+export async function shareFiles(files, title = "Eclipse Lyrics") {
+  if (!navigator.share) return false;
+  try {
+    if (navigator.canShare && !navigator.canShare({ files })) {
+      await navigator.share({ title, text: title });
+      return true;
+    }
+    await navigator.share({ files, title });
+    return true;
+  } catch (err) {
+    if (err?.name === "AbortError") return false;
+    throw err;
+  }
+}
+
+/** ZIP of SRT + VTT + LRC + project JSON + laousmail JSON (+ per-lang if separate). */
+export function downloadAllZip(project, opts = {}) {
+  const base = safeBase(project);
+  const lang = resolveExportLang(opts);
+  const files = [
+    { name: `${base}.srt`, data: toSRT(project, opts) },
+    { name: `${base}.vtt`, data: toVTT(project, opts) },
+    { name: `${base}.lrc`, data: toLRC(project, opts) },
+    { name: `${base}.txt`, data: toTXT(project) },
+    { name: `${base}.eclipse.json`, data: toEclipseJson(project) },
+    { name: `${base}.releases.json`, data: JSON.stringify(toLaousmailReleaseJson(project), null, 2) },
+  ];
+  if (lang.mode === "separate") {
+    const per = buildPerLanguageStrings(project, "srt", opts);
+    for (const [name, body] of per) files.push({ name, data: body });
+  }
+  const zip = createZip(files);
+  triggerDownload(zip, `${base}-subtitles.zip`);
+}
+
+function buildPerLanguageStrings(project, format, opts) {
   const writer = format === "vtt" ? toVTT : toSRT;
   const ext = format === "vtt" ? "vtt" : "srt";
   const base = safeBase(project);
-
+  const out = [];
   const stripTr = (l) =>
     isLyric(l)
       ? createLyricLine({
@@ -166,13 +345,8 @@ export function downloadPerLanguage(project, format = "srt") {
           endManual: l.endManual,
         })
       : l;
-
   const mainProj = { ...project, lines: project.lines.map(stripTr) };
-  triggerDownload(
-    new Blob([writer(mainProj, { includeTr: false })], { type: "text/plain;charset=utf-8" }),
-    `${base}.main.${ext}`
-  );
-
+  out.push([`${base}.main.${ext}`, writer(mainProj, { ...opts, languages: "main" })]);
   if (project.lines.some((l) => lineFr(l))) {
     const frProj = {
       ...project,
@@ -188,10 +362,7 @@ export function downloadPerLanguage(project, format = "srt") {
           : l
       ),
     };
-    triggerDownload(
-      new Blob([writer(frProj, { includeTr: false })], { type: "text/plain;charset=utf-8" }),
-      `${base}.fr.${ext}`
-    );
+    out.push([`${base}.fr.${ext}`, writer(frProj, { ...opts, languages: "main" })]);
   }
   if (project.lines.some((l) => lineEn(l))) {
     const enProj = {
@@ -208,10 +379,15 @@ export function downloadPerLanguage(project, format = "srt") {
           : l
       ),
     };
-    triggerDownload(
-      new Blob([writer(enProj, { includeTr: false })], { type: "text/plain;charset=utf-8" }),
-      `${base}.en.${ext}`
-    );
+    out.push([`${base}.en.${ext}`, writer(enProj, { ...opts, languages: "main" })]);
+  }
+  return out;
+}
+
+/** Export separate files for main / fr / en where content exists. */
+export function downloadPerLanguage(project, format = "srt", opts = {}) {
+  for (const [name, body] of buildPerLanguageStrings(project, format, opts)) {
+    triggerDownload(new Blob([body], { type: "text/plain;charset=utf-8" }), name);
   }
 }
 

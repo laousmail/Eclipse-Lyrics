@@ -1,10 +1,24 @@
-/** Subtle Vibration API helpers — no-op when unsupported. */
+/** Subtle Vibration API helpers — no-op when unsupported or before a gesture. */
 
 const canVibrate =
   typeof navigator !== "undefined" && typeof navigator.vibrate === "function";
 
+let unlocked = false;
+
+function unlock() {
+  unlocked = true;
+  if (typeof window === "undefined") return;
+  window.removeEventListener("pointerdown", unlock, true);
+  window.removeEventListener("keydown", unlock, true);
+}
+
+if (typeof window !== "undefined") {
+  window.addEventListener("pointerdown", unlock, true);
+  window.addEventListener("keydown", unlock, true);
+}
+
 function pulse(pattern) {
-  if (!canVibrate) return;
+  if (!canVibrate || !unlocked) return;
   try {
     navigator.vibrate(pattern);
   } catch {
