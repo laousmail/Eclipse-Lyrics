@@ -61,8 +61,10 @@ export const INTRO_CARDS = [
 
 export const SCREEN_TIPS = {
   projects: "tipProjects",
-  audio: "tipAudio",
-  lyrics: "tipLyrics",
+  prepare: "tipPrepare",
+  // legacy tip keys kept for older localStorage tip maps
+  audio: "tipPrepare",
+  lyrics: "tipPrepare",
   sync: "tipSync",
   export: "tipExport",
   video: "tipFilm",

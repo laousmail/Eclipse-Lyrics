@@ -85,6 +85,7 @@
       </div>
       <div class="sheet-list">
         <button type="button" id="btn-goto-projects" class="sheet-row" data-goto="projects" data-i18n="tabProjects">Projects</button>
+        <button type="button" id="btn-sheet-export" class="sheet-row" data-goto="export" data-i18n="export">Export</button>
         <button type="button" id="btn-save-project" class="sheet-row" data-i18n="saveProject">Save project file</button>
         <button type="button" id="btn-export-bundle" class="sheet-row" data-i18n="exportBundle">Export with audio (.eclipselyrics)</button>
         <button type="button" id="btn-sheet-demo" class="sheet-row" data-i18n="tryDemo">Try with a demo song</button>
@@ -208,10 +209,8 @@
       </div>
       <nav class="step-seg desktop-workspace-only" aria-label="Steps">
         <button type="button" class="step-seg-btn" data-goto="projects" data-i18n="tabProjects">Projects</button>
-        <button type="button" class="step-seg-btn is-active" data-goto="audio" data-i18n="tabAudio">Audio</button>
-        <button type="button" class="step-seg-btn" data-goto="lyrics" data-i18n="tabLyrics">Lyrics</button>
+        <button type="button" class="step-seg-btn is-active" data-goto="prepare" data-i18n="tabSong">Song</button>
         <button type="button" class="step-seg-btn" data-goto="sync" data-i18n="tabSync">Sync</button>
-        <button type="button" class="step-seg-btn" data-goto="export" data-i18n="tabExport">Export</button>
         <button type="button" class="step-seg-btn" data-goto="video" data-i18n="tabFilm">Film</button>
       </nav>
       <div class="topbar-tools">
@@ -242,12 +241,12 @@
         <p id="projects-empty" class="empty-state muted" hidden data-i18n="projectsEmpty">No projects yet. Create one to start.</p>
       </section>
 
-      <!-- AUDIO -->
-      <section id="screen-audio" class="screen" data-screen="audio" aria-labelledby="load-heading" hidden>
+      <!-- PREPARE: audio + lyrics (one screen) -->
+      <section id="screen-prepare" class="screen" data-screen="prepare" aria-labelledby="prepare-heading" hidden>
         <header class="screen-head">
           <p class="eyebrow" data-i18n="step1">Step 1</p>
-          <h2 id="load-heading" data-i18n="loadAudio">Load audio</h2>
-          <p class="screen-lead" data-i18n="loadLead">Your file stays on this device. Nothing is uploaded.</p>
+          <h2 id="prepare-heading" data-i18n="prepareTitle">Song</h2>
+          <p class="screen-lead" data-i18n="prepareLead">Load audio, name the track, then edit lyrics — all on this page.</p>
         </header>
 
         <div id="audio-pick" class="audio-pick">
@@ -283,7 +282,7 @@
 
         <div id="meta-prompt" class="meta-prompt" hidden>
           <p class="prompt-title" data-i18n="titlePrompt">What’s the song called?</p>
-          <p class="muted screen-lead" data-i18n="titlePromptLead">Name it, then continue to paste your lyrics.</p>
+          <p class="muted screen-lead" data-i18n="titlePromptLead">Name it, then edit your lyrics below.</p>
         </div>
 
         <div class="field-stack">
@@ -297,58 +296,51 @@
           </label>
         </div>
         <p id="audio-status" class="status-pill" aria-live="polite" data-i18n="noAudio">No audio loaded</p>
-        <button type="button" id="btn-continue-lyrics" class="btn btn-fill" data-goto="lyrics" data-i18n="continueLyrics">Continue to lyrics</button>
-      </section>
 
-      <!-- LYRICS -->
-      <section id="screen-lyrics" class="screen" data-screen="lyrics" aria-labelledby="lyrics-heading" hidden>
-        <header class="screen-head">
-          <p class="eyebrow" data-i18n="step2">Step 2</p>
-          <h2 id="lyrics-heading" data-i18n="pasteLyrics">Paste lyrics</h2>
-          <p class="screen-lead" data-i18n="lyricsLead">One row per line. Main, French and English side by side. Lines like [Chorus] become section markers.</p>
-        </header>
-
-        <div class="lyrics-tools">
-          <button type="button" id="btn-add-row" class="btn btn-ghost btn-sm" data-i18n="addRow">Add row</button>
-        </div>
-
-        <details class="simple-more">
-          <summary data-i18n="lyricsMore">Import &amp; clean up</summary>
-          <div class="gdocs-block">
-            <p class="subhead" data-i18n="gdocsLabel">Import from Google Docs</p>
-            <div class="url-row">
-              <input type="url" id="field-gdocs" inputmode="url" autocomplete="off" data-i18n-placeholder="gdocsPlaceholder" placeholder="Public Google Docs link" />
-              <button type="button" id="btn-gdocs" class="btn btn-ghost" data-i18n="gdocsFetch">Fetch lyrics</button>
-            </div>
-            <p class="tip muted" data-i18n="gdocsHint">The document must be public (Anyone with the link → Viewer). Private docs can’t be read in the browser.</p>
-            <p id="gdocs-error" class="warn" hidden role="alert"></p>
+        <div class="prepare-lyrics-block">
+          <h3 class="subhead" data-i18n="pasteLyrics">Paste lyrics</h3>
+          <div class="lyrics-tools">
+            <button type="button" id="btn-add-row" class="btn btn-ghost btn-sm" data-i18n="addRow">Add row</button>
           </div>
-          <button type="button" id="btn-remove-empty" class="btn btn-ghost btn-sm" data-i18n="removeEmpty">Remove empty</button>
-        </details>
 
-        <div id="lyrics-grid" class="lyrics-grid" role="table" aria-label="Lyric grid"></div>
-        <!-- Hidden mirrors for import / gdocs paste compatibility -->
-        <textarea id="field-lyrics" class="visually-hidden" rows="1" tabindex="-1" aria-hidden="true"></textarea>
-        <textarea id="field-fr" class="visually-hidden" rows="1" tabindex="-1" aria-hidden="true"></textarea>
-        <textarea id="field-en" class="visually-hidden" rows="1" tabindex="-1" aria-hidden="true"></textarea>
+          <details class="simple-more">
+            <summary data-i18n="lyricsMore">Import &amp; clean up</summary>
+            <div class="gdocs-block">
+              <p class="subhead" data-i18n="gdocsLabel">Import from Google Docs</p>
+              <div class="url-row">
+                <input type="url" id="field-gdocs" inputmode="url" autocomplete="off" data-i18n-placeholder="gdocsPlaceholder" placeholder="Public Google Docs link" />
+                <button type="button" id="btn-gdocs" class="btn btn-ghost" data-i18n="gdocsFetch">Fetch lyrics</button>
+              </div>
+              <p class="tip muted" data-i18n="gdocsHint">The document must be public (Anyone with the link → Viewer). Private docs can’t be read in the browser.</p>
+              <p id="gdocs-error" class="warn" hidden role="alert"></p>
+            </div>
+            <button type="button" id="btn-remove-empty" class="btn btn-ghost btn-sm" data-i18n="removeEmpty">Remove empty</button>
+          </details>
 
-        <div id="kabyle-bar" class="kabyle-bar" role="toolbar" data-i18n-aria="kabyleBar" aria-label="Kabyle characters">
-          <button type="button" class="kabyle-key" data-char="ɛ">ɛ</button>
-          <button type="button" class="kabyle-key" data-char="ɣ">ɣ</button>
-          <button type="button" class="kabyle-key" data-char="č">č</button>
-          <button type="button" class="kabyle-key" data-char="ḍ">ḍ</button>
-          <button type="button" class="kabyle-key" data-char="ḥ">ḥ</button>
-          <button type="button" class="kabyle-key" data-char="ṛ">ṛ</button>
-          <button type="button" class="kabyle-key" data-char="ṣ">ṣ</button>
-          <button type="button" class="kabyle-key" data-char="ṭ">ṭ</button>
-          <button type="button" class="kabyle-key" data-char="ẓ">ẓ</button>
-          <button type="button" class="kabyle-key" data-char="ǧ">ǧ</button>
+          <div id="lyrics-grid" class="lyrics-grid" role="table" aria-label="Lyric grid"></div>
+          <textarea id="field-lyrics" class="visually-hidden" rows="1" tabindex="-1" aria-hidden="true"></textarea>
+          <textarea id="field-fr" class="visually-hidden" rows="1" tabindex="-1" aria-hidden="true"></textarea>
+          <textarea id="field-en" class="visually-hidden" rows="1" tabindex="-1" aria-hidden="true"></textarea>
+
+          <div id="kabyle-bar" class="kabyle-bar" role="toolbar" data-i18n-aria="kabyleBar" aria-label="Kabyle characters">
+            <button type="button" class="kabyle-key" data-char="ɛ">ɛ</button>
+            <button type="button" class="kabyle-key" data-char="ɣ">ɣ</button>
+            <button type="button" class="kabyle-key" data-char="č">č</button>
+            <button type="button" class="kabyle-key" data-char="ḍ">ḍ</button>
+            <button type="button" class="kabyle-key" data-char="ḥ">ḥ</button>
+            <button type="button" class="kabyle-key" data-char="ṛ">ṛ</button>
+            <button type="button" class="kabyle-key" data-char="ṣ">ṣ</button>
+            <button type="button" class="kabyle-key" data-char="ṭ">ṭ</button>
+            <button type="button" class="kabyle-key" data-char="ẓ">ẓ</button>
+            <button type="button" class="kabyle-key" data-char="ǧ">ǧ</button>
+          </div>
+
+          <p id="translation-warn" class="warn" hidden role="status"></p>
+          <p id="char-warn" class="warn" hidden role="status"></p>
         </div>
 
-        <p id="translation-warn" class="warn" hidden role="status"></p>
-        <p id="char-warn" class="warn" hidden role="status"></p>
         <div class="btn-stack">
-          <button type="button" class="btn btn-fill screen-next" data-goto="sync" data-i18n="goSync">Go to sync</button>
+          <button type="button" id="btn-continue-lyrics" class="btn btn-fill screen-next" data-goto="sync" data-i18n="goSync">Go to sync</button>
         </div>
       </section>
 
@@ -357,7 +349,7 @@
         <header class="screen-head screen-head-compact sync-head">
           <div class="sync-head-row">
             <div>
-              <p class="eyebrow" data-i18n="step3">Step 3</p>
+              <p class="eyebrow" data-i18n="step2">Step 2</p>
               <h2 id="sync-heading" data-i18n="tapSync">Tap to sync</h2>
             </div>
             <div id="progress-chip" class="progress-chip" aria-live="polite">
@@ -410,17 +402,14 @@
           </div>
 
           <div class="sync-wave-col">
-            <div class="waveform-wrap waveform-strip">
-              <details class="simple-more wave-more">
-                <summary data-i18n="waveMore">Waveform</summary>
-                <div class="wave-tools">
-                  <button type="button" id="btn-wave-zoom-out" class="btn btn-ghost btn-sm" aria-label="Zoom out">−</button>
-                  <button type="button" id="btn-wave-zoom-in" class="btn btn-ghost btn-sm" aria-label="Zoom in">+</button>
-                  <button type="button" id="btn-wave-follow" class="btn btn-ghost btn-sm is-active" aria-pressed="true" data-i18n="follow">Follow</button>
-                  <button type="button" id="btn-go-start" class="btn btn-ghost btn-sm" data-i18n="goStart">Start</button>
-                </div>
-              </details>
-              <canvas id="waveform" width="1200" height="160" data-i18n-aria="waveformTip" aria-label="Audio waveform. Drag regions to adjust times."></canvas>
+            <div class="waveform-wrap waveform-strip wave-scrub-combo" data-i18n-aria="waveformTip" aria-label="Waveform and scrubber">
+              <div class="wave-tools wave-tools-icons" role="toolbar" data-i18n-aria="waveTools" aria-label="Waveform tools">
+                <button type="button" id="btn-wave-zoom-out" class="icon-btn wave-icon-btn" aria-label="Zoom out" title="−">−</button>
+                <button type="button" id="btn-wave-zoom-in" class="icon-btn wave-icon-btn" aria-label="Zoom in" title="+">+</button>
+                <button type="button" id="btn-wave-follow" class="icon-btn wave-icon-btn is-active" aria-pressed="true" data-i18n-aria="follow" aria-label="Follow" title="Follow">◉</button>
+                <button type="button" id="btn-go-start" class="icon-btn wave-icon-btn" data-i18n-aria="goStart" aria-label="Start" title="Start">⏮</button>
+              </div>
+              <canvas id="waveform" width="1200" height="160" aria-hidden="true"></canvas>
               <input type="range" id="scrubber" class="scrubber scrubber-in-wave" min="0" max="1000" value="0" step="1" data-i18n-aria="scrubLabel" aria-label="Scrub timeline" />
             </div>
           </div>
@@ -431,10 +420,10 @@
         </p>
       </section>
 
-      <!-- EXPORT -->
+      <!-- EXPORT (More menu only — not a tab) -->
       <section id="screen-export" class="screen" data-screen="export" aria-labelledby="export-heading" hidden>
         <header class="screen-head">
-          <p class="eyebrow" data-i18n="step4">Step 4</p>
+          <p class="eyebrow" data-i18n="export">Export</p>
           <h2 id="export-heading" data-i18n="export">Export</h2>
           <p class="screen-lead" data-i18n="exportLead">Download subtitle files for YouTube, the web, or your player.</p>
         </header>
@@ -532,7 +521,7 @@
       <!-- VIDEO / FILM -->
       <section id="screen-video" class="screen screen-film" data-screen="video" aria-labelledby="video-heading" hidden>
         <header class="screen-head screen-head-compact">
-          <p class="eyebrow" data-i18n="step5">Step 5</p>
+          <p class="eyebrow" data-i18n="step3">Step 3</p>
           <h2 id="video-heading" data-i18n="lyricVideo">Lyric video</h2>
           <p class="screen-lead" data-i18n="videoLead">Offline MP4 when supported — works in the background.</p>
         </header>
@@ -542,15 +531,16 @@
             <canvas id="video-canvas" width="540" height="960" aria-label="Lyric video preview"></canvas>
           </div>
           <div class="film-scrub">
-            <label class="field film-scrub-field">
+            <label class="field film-scrub-field slider-compact">
               <span class="visually-hidden" data-i18n="previewScrub">Preview scrubber</span>
               <input type="range" id="video-scrub" min="0" max="1000" value="0" step="1" />
             </label>
             <div class="film-scrub-meta">
               <span id="video-scrub-time" class="muted">0:00</span>
-              <label class="field field-inline">
-                <span data-i18n="jumpToLine">Jump to line</span>
-                <select id="select-jump-line"></select>
+              <label class="field field-inline slider-compact">
+                <span class="slider-short" data-i18n="lineShort" aria-hidden="true">#</span>
+                <span class="visually-hidden" data-i18n="jumpToLine">Jump to line</span>
+                <select id="select-jump-line" aria-label="Jump to line"></select>
               </label>
             </div>
           </div>
@@ -587,9 +577,9 @@
                 <option value="blurIn" data-i18n="styleBlurIn">Blur in</option>
               </select>
             </label>
-            <label class="field">
-              <span><span data-i18n="inOutSpeed">In / out speed</span> <output id="inout-out" for="inout-speed">0.15</output></span>
-              <input type="range" id="inout-speed" min="0.05" max="0.4" step="0.01" value="0.15" />
+            <label class="field slider-compact">
+              <span class="slider-label-row"><span data-i18n="inOutShort">In/out</span> <output id="inout-out" for="inout-speed">0.15</output></span>
+              <input type="range" id="inout-speed" min="0.05" max="0.4" step="0.01" value="0.15" data-i18n-aria="inOutSpeed" aria-label="In / out speed" />
             </label>
             <label class="check-row"><input type="checkbox" id="video-show-tr" /> <span data-i18n="showTr">Show translation</span></label>
             <label class="field">
@@ -616,10 +606,9 @@
                 <option value="Noto Sans Tifinagh">Noto Sans Tifinagh</option>
               </select>
             </label>
-            <label class="field">
-              <span><span data-i18n="fontSize">Size</span> <output id="font-size-out" for="font-size">0</output></span>
-              <input type="range" id="font-size" min="0" max="96" value="0" />
-              <span class="tip muted" data-i18n="fontSizeAuto">0 = auto</span>
+            <label class="field slider-compact">
+              <span class="slider-label-row"><span data-i18n="sizeShort">Size</span> <output id="font-size-out" for="font-size">0</output></span>
+              <input type="range" id="font-size" min="0" max="96" value="0" data-i18n-aria="fontSize" aria-label="Size" />
             </label>
             <label class="field">
               <span data-i18n="fontWeight">Weight</span>
@@ -639,9 +628,9 @@
                 <option value="title" data-i18n="caseTitle">Title Case</option>
               </select>
             </label>
-            <label class="field">
-              <span><span data-i18n="letterSpacing">Letter spacing</span> <output id="letter-spacing-out" for="letter-spacing">0</output></span>
-              <input type="range" id="letter-spacing" min="-2" max="8" step="0.5" value="0" />
+            <label class="field slider-compact">
+              <span class="slider-label-row"><span data-i18n="trackingShort">Track</span> <output id="letter-spacing-out" for="letter-spacing">0</output></span>
+              <input type="range" id="letter-spacing" min="-2" max="8" step="0.5" value="0" data-i18n-aria="letterSpacing" aria-label="Letter spacing" />
             </label>
             <label class="field">
               <span data-i18n="position">Position</span>
@@ -659,9 +648,9 @@
                 <option value="right" data-i18n="alignRight">Right</option>
               </select>
             </label>
-            <label class="field">
-              <span><span data-i18n="maxWidth">Max width %</span> <output id="max-width-out" for="max-width">82</output></span>
-              <input type="range" id="max-width" min="50" max="95" value="82" />
+            <label class="field slider-compact">
+              <span class="slider-label-row"><span data-i18n="widthShort">Width</span> <output id="max-width-out" for="max-width">82</output></span>
+              <input type="range" id="max-width" min="50" max="95" value="82" data-i18n-aria="maxWidth" aria-label="Max width %" />
             </label>
             <label class="field">
               <span data-i18n="textColor">Text color</span>
@@ -693,13 +682,13 @@
               <span data-i18n="solidColor">Solid color</span>
               <input type="color" id="solid-color" value="#000000" />
             </label>
-            <label class="field">
-              <span><span data-i18n="blur">Blur</span> <output id="bg-blur-out" for="bg-blur">8</output></span>
-              <input type="range" id="bg-blur" min="0" max="20" value="8" />
+            <label class="field slider-compact">
+              <span class="slider-label-row"><span data-i18n="blur">Blur</span> <output id="bg-blur-out" for="bg-blur">8</output></span>
+              <input type="range" id="bg-blur" min="0" max="20" value="8" aria-label="Blur" />
             </label>
-            <label class="field">
-              <span><span data-i18n="darken">Darken</span> <output id="bg-darken-out" for="bg-darken">45</output></span>
-              <input type="range" id="bg-darken" min="0" max="90" value="45" />
+            <label class="field slider-compact">
+              <span class="slider-label-row"><span data-i18n="darkenShort">Dark</span> <output id="bg-darken-out" for="bg-darken">45</output></span>
+              <input type="range" id="bg-darken" min="0" max="90" value="45" data-i18n-aria="darken" aria-label="Darken" />
             </label>
             <label class="check-row"><input type="checkbox" id="bg-zoom" checked /> <span data-i18n="slowZoom">Slow zoom</span></label>
           </div>
@@ -814,27 +803,19 @@
         <span class="tab-icon" data-icon="list" aria-hidden="true"></span>
         <span data-i18n="tabProjects">Projects</span>
       </button>
-      <button type="button" class="tab" data-goto="audio">
+      <button type="button" class="tab" data-goto="prepare">
         <span class="tab-icon" data-icon="music" aria-hidden="true"></span>
-        <span data-i18n="tabAudio">Audio</span>
-      </button>
-      <button type="button" class="tab" data-goto="lyrics">
-        <span class="tab-icon" data-icon="list" aria-hidden="true"></span>
-        <span data-i18n="tabLyrics">Lyrics</span>
+        <span data-i18n="tabSong">Song</span>
       </button>
       <button type="button" class="tab" data-goto="sync">
         <span class="tab-icon" data-icon="target" aria-hidden="true"></span>
         <span data-i18n="tabSync">Sync</span>
       </button>
-      <button type="button" class="tab" data-goto="export">
-        <span class="tab-icon" data-icon="download" aria-hidden="true"></span>
-        <span data-i18n="tabExport">Export</span>
-      </button>
       <button type="button" class="tab" data-goto="video">
         <span class="tab-icon" data-icon="film" aria-hidden="true"></span>
         <span data-i18n="tabFilm">Film</span>
       </button>
-      <!-- Help is More-sheet only — keeps tabbar at 6 and header clear -->
+      <!-- Export + Help live in More (⋮) — 4 primary tabs -->
     </nav>
   </div>
 
