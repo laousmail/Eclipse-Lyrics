@@ -1,6 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { parseCueTime, parseImportedProject, hasMultiLineCues } from "../js/export.js";
+import { lineMainText, lineFr } from "../js/sync.js";
 
 describe("B7 SRT/VTT import", () => {
   it("parses times with and without hours", () => {
@@ -18,8 +19,8 @@ Line three
 `;
     assert.equal(hasMultiLineCues(srt, "x.srt"), true);
     const proj = parseImportedProject(srt, "x.srt");
-    assert.equal(proj.lines[0].text, "Line one\nLine two\nLine three");
-    assert.equal(proj.lines[0].fr, "");
+    assert.equal(lineMainText(proj.lines[0]), "Line one\nLine two\nLine three");
+    assert.equal(lineFr(proj.lines[0]), "");
   });
 
   it("maps second line to translation when opted in", () => {
@@ -30,8 +31,8 @@ Hello
 Bonjour
 `;
     const proj = parseImportedProject(vtt, "x.vtt", { secondLineIsTranslation: true });
-    assert.equal(proj.lines[0].start, 83.456);
-    assert.equal(proj.lines[0].text, "Hello");
-    assert.equal(proj.lines[0].fr, "Bonjour");
+    assert.equal(proj.lines[0].startMs, 83456);
+    assert.equal(lineMainText(proj.lines[0]), "Hello");
+    assert.equal(lineFr(proj.lines[0]), "Bonjour");
   });
 });
