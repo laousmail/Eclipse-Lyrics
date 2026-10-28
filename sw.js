@@ -28,6 +28,7 @@ const PRECACHE = [
   "./js/onboarding.js",
   "./js/demo.js",
   "./js/analytics.js",
+  "./js/keyboard.js",
   "./js/ui/toast.js",
   "./js/ui/dialog.js",
   "./js/ui/icons.js",

@@ -123,7 +123,7 @@ html {
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
   background: var(--bg);
-  touch-action: manipulation;
+  /* Allow intentional pinch (B20 a11y). Buttons/controls opt into manipulation. */
   overscroll-behavior: none;
 }
 
@@ -139,12 +139,12 @@ body {
   -webkit-font-smoothing: antialiased;
   overflow-x: clip;
   overscroll-behavior: none;
-  touch-action: manipulation;
-  /* Fixed app viewport — no rubber-band page zoom feel */
+  /* Fixed app shell; --kb-inset shrinks usable height when the OS keyboard opens */
   position: fixed;
   inset: 0;
   width: 100%;
   height: 100%;
+  height: 100dvh;
 }
 
 .visually-hidden {
@@ -231,6 +231,7 @@ a:hover {
   align-items: center;
   gap: 0.65rem;
   min-width: 0;
+  flex: 1 1 auto;
   padding: 0.55rem 0;
 }
 
@@ -254,6 +255,10 @@ a:hover {
   font-size: 1.05rem;
   letter-spacing: -0.01em;
   line-height: 1.15;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
 }
 
 .brand-tag {
@@ -292,11 +297,14 @@ a:hover {
   overflow: auto;
   -webkit-overflow-scrolling: touch;
   padding: 1rem var(--gutter) 1.25rem;
-  scroll-padding-bottom: 1rem;
+  /* Keep focused fields clear of dock/tabbar/keyboard */
+  scroll-padding-bottom: calc(var(--kb-inset, 0px) + var(--tabbar-h) + var(--safe-b) + 1.25rem);
+  scroll-padding-top: 1rem;
 }
 
 body.dock-on .app-screens {
   padding-bottom: calc(var(--dock-h) + 0.75rem);
+  scroll-padding-bottom: calc(var(--kb-inset, 0px) + var(--dock-h) + var(--tabbar-h) + var(--safe-b) + 1.25rem);
 }
 
 body.has-tabbar .app-screens {
@@ -305,6 +313,22 @@ body.has-tabbar .app-screens {
 
 body.dock-on.has-tabbar .app-screens {
   padding-bottom: calc(var(--dock-h) + var(--tabbar-h) + var(--safe-b) + 1rem);
+}
+
+/* While typing: hide chrome that would cover the field; pad for keyboard */
+body.keyboard-open .app-tabbar,
+body.keyboard-open .player-dock,
+body.keyboard-open .screen-tip,
+body.keyboard-open .ios-install-hint {
+  visibility: hidden;
+  pointer-events: none;
+}
+
+body.keyboard-open.has-tabbar .app-screens,
+body.keyboard-open.dock-on.has-tabbar .app-screens,
+body.keyboard-open.dock-on .app-screens {
+  padding-bottom: calc(var(--kb-inset, 0px) + 1.25rem);
+  scroll-padding-bottom: calc(var(--kb-inset, 0px) + 1.5rem);
 }
 
 .screen {
@@ -440,11 +464,23 @@ body.dock-on.has-tabbar .app-screens {
   min-width: 0;
 }
 
+/* ≥16px on controls — prevents iOS focus-zoom (label text can stay smaller) */
 .field input,
 .field textarea,
 .field select,
-.speed-chip select {
-  font: inherit;
+.speed-chip select,
+.url-row input,
+.lyrics-row-fields input,
+#field-rename,
+input[type="text"],
+input[type="search"],
+input[type="url"],
+input[type="email"],
+input[type="number"],
+textarea,
+select {
+  font-size: 16px;
+  line-height: 1.35;
   color: var(--ink);
   background: var(--bg2);
   border: 1px solid var(--line);
@@ -452,11 +488,14 @@ body.dock-on.has-tabbar .app-screens {
   padding: 0.75rem 0.9rem;
   min-height: var(--touch);
   width: 100%;
+  max-width: 100%;
   appearance: none;
   -webkit-appearance: none;
+  touch-action: manipulation;
 }
 
-.field textarea {
+.field textarea,
+textarea {
   font-family: var(--lyric);
   min-height: 14rem;
   line-height: 1.45;
@@ -1080,14 +1119,15 @@ kbd {
   z-index: 50;
   width: min(100%, 480px);
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 0;
   min-height: calc(var(--tabbar-h) + var(--safe-b));
-  padding: 0.35rem 0.25rem calc(0.35rem + var(--safe-b));
+  padding: 0.35rem 0.15rem calc(0.35rem + var(--safe-b));
   background: var(--glass);
   -webkit-backdrop-filter: blur(16px);
   backdrop-filter: blur(16px);
   border-top: 1px solid var(--line);
+  touch-action: manipulation;
 }
 
 .tab {
@@ -1095,20 +1135,29 @@ kbd {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 0.2rem;
+  gap: 0.15rem;
   min-height: 3.4rem;
-  padding: 0.35rem 0.2rem;
+  min-width: 0;
+  padding: 0.3rem 0.1rem;
   border: 0;
   background: none;
   color: var(--mute);
   font: inherit;
-  font-size: 0.7rem;
+  font-size: 0.62rem;
   font-weight: 500;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.01em;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
   border-radius: 12px;
+  touch-action: manipulation;
   transition: color 0.18s var(--ease), transform 0.15s var(--ease), background 0.18s;
+}
+
+.tab > span:last-child {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .tab:active {
@@ -1332,7 +1381,46 @@ kbd {
 .topbar-tools {
   display: flex;
   align-items: center;
-  gap: 0.55rem;
+  gap: 0.45rem;
+  flex: 0 0 auto;
+  min-width: 0;
+}
+
+/* Phones: Install text btn overlaps brand — offer it from More sheet instead.
+   Topbar wraps so “Eclipse Lyrics” isn’t ellipsized beside EN/FR/KAB. */
+@media (max-width: 1023px) {
+  #btn-install {
+    display: none !important;
+  }
+
+  .app-topbar {
+    flex-wrap: wrap;
+    align-items: center;
+    row-gap: 0.15rem;
+    padding-bottom: 0.35rem;
+  }
+
+  .brand {
+    flex: 1 1 auto;
+    min-width: min(100%, 11rem);
+  }
+
+  .topbar-tools {
+    flex: 1 1 auto;
+    justify-content: flex-end;
+    gap: 0.3rem;
+  }
+
+  .lang-btn {
+    min-width: 2.05rem;
+    min-height: 2.2rem;
+    font-size: 0.72rem;
+  }
+
+  .icon-btn {
+    width: 2.5rem;
+    height: 2.5rem;
+  }
 }
 
 .lang-pill,
@@ -1399,7 +1487,7 @@ kbd {
 }
 
 .url-row input {
-  font: inherit;
+  font-size: 16px;
   color: var(--ink);
   background: var(--bg2);
   border: 1px solid var(--line);
@@ -1862,14 +1950,14 @@ kbd {
 
 .lyrics-row-fields input {
   width: 100%;
-  min-height: 2.4rem;
-  padding: 0.45rem 0.65rem;
+  min-height: 2.6rem;
+  padding: 0.55rem 0.65rem;
   border-radius: 10px;
   border: 1px solid var(--line);
   background: var(--bg);
   color: var(--ink);
   font-family: var(--lyric);
-  font-size: 0.95rem;
+  font-size: 16px; /* iOS: no focus-zoom */
 }
 
 .lyrics-row-fields input:focus-visible {
@@ -1909,6 +1997,15 @@ kbd {
   border-radius: 999px;
   border: 1px solid var(--line);
   background: var(--bg2);
+  flex-shrink: 1;
+  min-width: 0;
+  overflow-x: auto;
+}
+
+/* Must beat .step-seg { display:inline-flex } — was overlapping brand on phones */
+.step-seg.desktop-workspace-only,
+.desktop-workspace-only {
+  display: none;
 }
 
 .step-seg-btn {
@@ -1964,7 +2061,8 @@ kbd {
 
 /* Desktop workspace ≥1024 */
 @media (min-width: 1024px) {
-  .desktop-workspace-only {
+  .desktop-workspace-only,
+  .step-seg.desktop-workspace-only {
     display: inline-flex;
   }
 
@@ -2066,7 +2164,8 @@ kbd {
 .toast {
   position: fixed;
   left: 50%;
-  bottom: calc(5.5rem + env(safe-area-inset-bottom, 0px));
+  /* Sit above tabbar (+ dock when visible); rise with keyboard */
+  bottom: calc(var(--tabbar-h) + var(--safe-b) + var(--kb-inset, 0px) + 0.65rem);
   transform: translateX(-50%) translateY(0.5rem);
   z-index: 80;
   max-width: min(92vw, 22rem);
@@ -2401,6 +2500,45 @@ kbd {
 
 body.dock-on .screen-tip {
   bottom: calc(var(--tabbar-h) + var(--dock-h) + var(--safe-b) + 0.5rem);
+}
+
+body.dock-on .toast {
+  bottom: calc(var(--tabbar-h) + var(--dock-h) + var(--safe-b) + var(--kb-inset, 0px) + 0.65rem);
+}
+
+/* Keyboard open: chrome hidden — toast sits just above the keyboard */
+body.keyboard-open .toast,
+body.keyboard-open.dock-on .toast {
+  bottom: calc(var(--kb-inset, 0px) + var(--safe-b) + 0.75rem);
+}
+
+/* Sheets: keep above keyboard when open */
+body.keyboard-open .sheet-overlay {
+  align-items: flex-end;
+  padding-bottom: var(--kb-inset, 0px);
+}
+
+body.keyboard-open .sheet {
+  max-height: min(70dvh, calc(100dvh - var(--kb-inset, 0px) - 2rem));
+  overflow: auto;
+}
+
+/* Waveform: intentional pinch only here (own handlers); block browser pan-zoom */
+#waveform,
+.waveform-wrap {
+  touch-action: none;
+}
+
+/* Primary chrome: no double-tap zoom */
+.btn,
+.icon-btn,
+.dock-play,
+.dock-tap,
+.dock-seek,
+.lang-btn,
+.step-seg-btn,
+.kabyle-key {
+  touch-action: manipulation;
 }
 
 /* Ensure muted text meets contrast on dark bg */

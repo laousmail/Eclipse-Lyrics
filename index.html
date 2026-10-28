@@ -82,6 +82,7 @@
         <button type="button" id="btn-save-project" class="sheet-row" data-i18n="saveProject">Save project file</button>
         <button type="button" id="btn-export-bundle" class="sheet-row" data-i18n="exportBundle">Export with audio (.eclipselyrics)</button>
         <button type="button" id="btn-sheet-demo" class="sheet-row" data-i18n="tryDemo">Try with a demo song</button>
+        <button type="button" id="btn-sheet-install" class="sheet-row" hidden data-i18n="installApp">Install app</button>
         <button type="button" class="sheet-row" data-goto="help" data-i18n="help">Help</button>
         <label class="sheet-row file-row">
           <span data-i18n="openProject">Open project file</span>
@@ -824,10 +825,7 @@
         <span class="tab-icon" data-icon="film" aria-hidden="true"></span>
         <span data-i18n="tabFilm">Film</span>
       </button>
-      <button type="button" class="tab" data-goto="help">
-        <span class="tab-icon" aria-hidden="true">?</span>
-        <span data-i18n="help">Help</span>
-      </button>
+      <!-- Help stays in topbar (?) + More sheet — 6 tabs fit 390px without crush -->
     </nav>
   </div>
 

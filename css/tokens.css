@@ -62,6 +62,7 @@
   --dock-h: 5.35rem;
   --safe-t: env(safe-area-inset-top, 0px);
   --safe-b: env(safe-area-inset-bottom, 0px);
+  --kb-inset: 0px; /* visualViewport keyboard inset — set by js/keyboard.js */
   --touch: 2.85rem; /* ≥ 44px */
   --touch-lg: 3.25rem;
 
