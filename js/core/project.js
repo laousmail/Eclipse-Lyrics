@@ -70,9 +70,10 @@ export function createEmptyProject() {
       includeTranslationInExport: false,
       playbackRate: 1,
       export: {
-        languages: "main",
+        languages: "main", // main | main+fr | main+en | separate
         globalOffsetMs: 0,
         minLineMs: 700,
+        maxGapMs: 8000,
       },
       video: {
         aspect: "1080x1920",

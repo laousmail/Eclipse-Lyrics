@@ -16,36 +16,49 @@
   <a class="skip-link" href="#main" data-i18n="skip">Skip to main content</a>
   <div id="toast" class="toast" hidden role="status" aria-live="polite"></div>
 
-  <div id="restore-banner" class="sheet-overlay" hidden role="dialog" aria-modal="true" aria-labelledby="restore-title">
-    <div class="sheet">
-      <p id="restore-title" class="sheet-title" data-i18n="restoreTitle">Restore your last session?</p>
-      <p class="muted" id="restore-detail"></p>
-      <div class="sheet-actions">
-        <button type="button" id="btn-restore" class="btn btn-fill" data-i18n="restore">Restore</button>
-        <button type="button" id="btn-fresh" class="btn btn-ghost" data-i18n="startFresh">Start fresh</button>
-      </div>
-    </div>
-  </div>
-
   <div id="more-sheet" class="sheet-overlay" hidden role="dialog" aria-modal="true" aria-labelledby="more-title">
     <div class="sheet">
       <p id="more-title" class="sheet-title" data-i18n="moreTitle">Project</p>
       <div class="sheet-list">
-        <button type="button" id="btn-save-project" class="sheet-row" data-i18n="saveProject">Save project</button>
+        <button type="button" id="btn-goto-projects" class="sheet-row" data-goto="projects" data-i18n="tabProjects">Projects</button>
+        <button type="button" id="btn-save-project" class="sheet-row" data-i18n="saveProject">Save project file</button>
+        <button type="button" id="btn-export-bundle" class="sheet-row" data-i18n="exportBundle">Export with audio (.eclipselyrics)</button>
         <label class="sheet-row file-row">
-          <span data-i18n="openProject">Open project</span>
-          <input type="file" id="input-project" accept=".json,application/json" hidden />
+          <span data-i18n="openProject">Open project file</span>
+          <input type="file" id="input-project" accept=".json,.eclipse.json,.eclipselyrics,.zip,application/json,application/zip" hidden />
         </label>
         <label class="sheet-row file-row">
           <span data-i18n="importSubtitles">Import subtitles</span>
           <input type="file" id="input-import" accept=".lrc,.srt,.vtt,text/plain" hidden />
         </label>
       </div>
-      <div class="lang-row" role="group" data-i18n-aria="langSwitch" aria-label="Language">
-        <button type="button" class="lang-btn" data-lang="en" aria-pressed="true">EN</button>
-        <button type="button" class="lang-btn" data-lang="fr" aria-pressed="false">FR</button>
-      </div>
+      <p id="storage-usage" class="muted tip"></p>
       <button type="button" id="btn-more-close" class="btn btn-ghost sheet-dismiss" data-i18n="close">Close</button>
+    </div>
+  </div>
+
+  <div id="rename-dialog" class="sheet-overlay" hidden role="dialog" aria-modal="true" aria-labelledby="rename-title">
+    <div class="sheet">
+      <p id="rename-title" class="sheet-title" data-i18n="renameProject">Rename project</p>
+      <label class="field">
+        <span data-i18n="title">Title</span>
+        <input type="text" id="field-rename" autocomplete="off" />
+      </label>
+      <div class="sheet-actions">
+        <button type="button" id="btn-rename-save" class="btn btn-fill" data-i18n="save">Save</button>
+        <button type="button" id="btn-rename-cancel" class="btn btn-ghost" data-i18n="close">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="delete-dialog" class="sheet-overlay" hidden role="dialog" aria-modal="true" aria-labelledby="delete-title">
+    <div class="sheet">
+      <p id="delete-title" class="sheet-title" data-i18n="deleteProject">Delete project?</p>
+      <p class="muted" id="delete-detail"></p>
+      <div class="sheet-actions sheet-actions-stack">
+        <button type="button" id="btn-delete-confirm" class="btn btn-fill" data-i18n="deleteConfirm">Delete</button>
+        <button type="button" id="btn-delete-cancel" class="btn btn-ghost" data-i18n="close">Close</button>
+      </div>
     </div>
   </div>
 
@@ -126,6 +139,7 @@
         </div>
       </div>
       <nav class="step-seg desktop-workspace-only" role="tablist" aria-label="Steps">
+        <button type="button" class="step-seg-btn" data-goto="projects" data-i18n="tabProjects">Projects</button>
         <button type="button" class="step-seg-btn is-active" data-goto="audio" data-i18n="tabAudio">Audio</button>
         <button type="button" class="step-seg-btn" data-goto="lyrics" data-i18n="tabLyrics">Lyrics</button>
         <button type="button" class="step-seg-btn" data-goto="sync" data-i18n="tabSync">Sync</button>
@@ -145,8 +159,27 @@
     </header>
 
     <main id="main" class="app-screens" tabindex="-1">
+      <!-- PROJECTS -->
+      <section id="screen-projects" class="screen is-active" data-screen="projects" aria-labelledby="projects-heading">
+        <header class="screen-head">
+          <p class="eyebrow" data-i18n="library">Library</p>
+          <h2 id="projects-heading" data-i18n="projectsTitle">Projects</h2>
+          <p class="screen-lead" data-i18n="projectsLead">All songs stay on this device. Open one or start a new sync.</p>
+        </header>
+        <div class="projects-toolbar">
+          <button type="button" id="btn-new-project" class="btn btn-fill" data-i18n="newProject">New project</button>
+          <label class="btn btn-ghost file-btn">
+            <span data-i18n="openProject">Open project file</span>
+            <input type="file" id="input-project-home" accept=".json,.eclipse.json,.eclipselyrics,.zip,application/json,application/zip" hidden />
+          </label>
+        </div>
+        <p id="projects-storage" class="muted tip"></p>
+        <ul id="projects-list" class="projects-list" role="list"></ul>
+        <p id="projects-empty" class="empty-state muted" hidden data-i18n="projectsEmpty">No projects yet. Create one to start.</p>
+      </section>
+
       <!-- AUDIO -->
-      <section id="screen-audio" class="screen is-active" data-screen="audio" aria-labelledby="load-heading">
+      <section id="screen-audio" class="screen" data-screen="audio" aria-labelledby="load-heading" hidden>
         <header class="screen-head">
           <p class="eyebrow" data-i18n="step1">Step 1</p>
           <h2 id="load-heading" data-i18n="loadAudio">Load audio</h2>
@@ -329,37 +362,99 @@
           <p class="screen-lead" data-i18n="exportLead">Download subtitle files for YouTube, the web, or your player.</p>
         </header>
 
-        <label class="check-row">
-          <input type="checkbox" id="opt-include-tr" />
-          <span data-i18n="includeTr">Include translation as second line (SRT / VTT)</span>
-        </label>
+        <article class="song-details-card">
+          <h3 class="subhead" data-i18n="songDetails">Song details</h3>
+          <div class="field-stack">
+            <label class="field">
+              <span data-i18n="title">Title</span>
+              <input type="text" id="field-export-title" data-i18n-placeholder="titlePlaceholder" placeholder="Song title" autocomplete="off" />
+            </label>
+            <label class="field">
+              <span data-i18n="artist">Artist</span>
+              <input type="text" id="field-export-artist" data-i18n-placeholder="artistPlaceholder" placeholder="Artist" autocomplete="off" />
+            </label>
+          </div>
+        </article>
+
         <label class="field">
-          <span data-i18n="trLang">Translation language</span>
-          <select id="select-tr-lang" aria-label="Translation language for export">
-            <option value="fr">Français / French</option>
-            <option value="en">English / Anglais</option>
+          <span data-i18n="exportLanguages">Languages in the file</span>
+          <select id="select-export-lang" aria-label="Languages in the file">
+            <option value="main" data-i18n="langMainOnly">Main only</option>
+            <option value="main+fr" data-i18n="langMainFr">Main + FR (2 lines)</option>
+            <option value="main+en" data-i18n="langMainEn">Main + EN</option>
+            <option value="separate" data-i18n="langSeparate">One file per language</option>
           </select>
         </label>
 
-        <div class="export-cards">
-          <article class="export-card">
-            <button type="button" id="btn-export-lrc" class="btn btn-ghost export-tile" data-i18n="exportLrcTitle">LRC</button>
-            <p class="export-desc" data-i18n="exportLrcDesc">For music apps and lyric players that show lines as the song plays.</p>
-          </article>
-          <article class="export-card">
-            <button type="button" id="btn-export-srt" class="btn btn-ghost export-tile" data-i18n="exportSrtTitle">SRT</button>
-            <p class="export-desc" data-i18n="exportSrtDesc">The usual subtitle file for YouTube — upload it with your video.</p>
-          </article>
-          <article class="export-card">
-            <button type="button" id="btn-export-vtt" class="btn btn-ghost export-tile" data-i18n="exportVttTitle">VTT</button>
-            <p class="export-desc" data-i18n="exportVttDesc">For websites and HTML5 video players on the web.</p>
-          </article>
-          <article class="export-card">
-            <button type="button" id="btn-export-json" class="btn btn-ghost export-tile" data-i18n="exportJsonTitle">JSON</button>
-            <p class="export-desc" data-i18n="exportJsonDesc">Your full project to reopen later or use in the laousmail player.</p>
-          </article>
+        <div class="export-options">
+          <label class="field">
+            <span data-i18n="globalOffset">Global offset (ms)</span>
+            <input type="number" id="field-global-offset" step="10" value="0" />
+          </label>
+          <label class="field">
+            <span data-i18n="minLineMs">Minimum line duration (ms)</span>
+            <input type="number" id="field-min-line" step="50" min="0" value="700" />
+          </label>
+          <label class="field">
+            <span data-i18n="maxGapMs">Max gap before clearing (ms)</span>
+            <input type="number" id="field-max-gap" step="100" min="0" value="8000" />
+          </label>
         </div>
-        <button type="button" id="btn-export-tr-files" class="btn btn-ghost" data-i18n="onePerLang">One file per language</button>
+
+        <!-- Hidden legacy mirrors for older wiring -->
+        <input type="checkbox" id="opt-include-tr" hidden tabindex="-1" aria-hidden="true" />
+        <select id="select-tr-lang" hidden tabindex="-1" aria-hidden="true">
+          <option value="fr">fr</option>
+          <option value="en">en</option>
+        </select>
+
+        <article class="export-card export-card-primary">
+          <h3 class="export-primary-title" data-i18n="youtubeSrtTitle">YouTube subtitles (.srt)</h3>
+          <p class="export-desc" data-i18n="youtubeSrtHow">YouTube Studio → Subtitles → Upload file → With timing</p>
+          <div class="btn-stack">
+            <button type="button" id="btn-export-srt" class="btn btn-fill" data-i18n="downloadSrt">Download .srt</button>
+            <div class="btn-row">
+              <button type="button" id="btn-copy-srt" class="btn btn-ghost" data-i18n="copy">Copy</button>
+              <button type="button" id="btn-share-srt" class="btn btn-ghost" data-i18n="share">Share</button>
+            </div>
+          </div>
+        </article>
+
+        <details class="export-more">
+          <summary data-i18n="moreFormats">More formats</summary>
+          <div class="export-cards">
+            <article class="export-card">
+              <button type="button" id="btn-export-lrc" class="btn btn-ghost export-tile" data-i18n="exportLrcTitle">LRC</button>
+              <p class="export-desc" data-i18n="exportLrcDesc">For music apps and lyric players that show lines as the song plays.</p>
+            </article>
+            <article class="export-card">
+              <button type="button" id="btn-export-vtt" class="btn btn-ghost export-tile" data-i18n="exportVttTitle">VTT</button>
+              <p class="export-desc" data-i18n="exportVttDesc">For websites and HTML5 video players on the web.</p>
+            </article>
+            <article class="export-card">
+              <button type="button" id="btn-export-txt" class="btn btn-ghost export-tile" data-i18n="exportTxtTitle">TXT</button>
+              <p class="export-desc" data-i18n="exportTxtDesc">Plain lyrics only, no timings.</p>
+            </article>
+            <article class="export-card">
+              <button type="button" id="btn-export-json" class="btn btn-ghost export-tile" data-i18n="exportJsonTitle">Project JSON</button>
+              <p class="export-desc" data-i18n="exportJsonDesc">Your full project to reopen later (.eclipse.json).</p>
+            </article>
+            <article class="export-card">
+              <button type="button" id="btn-export-releases" class="btn btn-ghost export-tile" data-i18n="exportReleasesTitle">laousmail.com JSON</button>
+              <p class="export-desc" data-i18n="exportReleasesDesc">Release-shaped JSON matching releases.js, with timed lyrics.</p>
+            </article>
+          </div>
+          <button type="button" id="btn-export-tr-files" class="btn btn-ghost" hidden data-i18n="onePerLang">One file per language</button>
+        </details>
+
+        <div class="btn-stack">
+          <button type="button" id="btn-export-zip" class="btn btn-ghost" data-i18n="downloadZip">Download all as ZIP</button>
+        </div>
+
+        <details class="export-preview" open>
+          <summary data-i18n="exportPreview">Preview (first 10 cues)</summary>
+          <pre id="export-preview-code" class="export-preview-code" aria-live="polite"></pre>
+        </details>
       </section>
 
       <!-- VIDEO -->
@@ -446,7 +541,11 @@
     </div>
 
     <nav class="app-tabbar" aria-label="Main">
-      <button type="button" class="tab is-active" data-goto="audio" aria-current="page">
+      <button type="button" class="tab is-active" data-goto="projects" aria-current="page">
+        <span class="tab-icon" data-icon="list" aria-hidden="true"></span>
+        <span data-i18n="tabProjects">Projects</span>
+      </button>
+      <button type="button" class="tab" data-goto="audio">
         <span class="tab-icon" data-icon="music" aria-hidden="true"></span>
         <span data-i18n="tabAudio">Audio</span>
       </button>
