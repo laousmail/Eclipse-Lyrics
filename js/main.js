@@ -7,7 +7,7 @@ import * as db from "./db.js";
 import * as store from "./store.js";
 import * as history from "./history.js";
 import * as exp from "./export.js";
-import { initWaveform, computePeaks } from "./waveform.js";
+import { initWaveform, computePeaks, computePeaksAsync } from "./waveform.js";
 import * as video from "./video.js";
 import * as i18n from "./i18n.js";
 import * as docs from "./docs.js";
@@ -17,6 +17,12 @@ import { openDialog, closeDialog, isDialogOpen as dialogIsOpen } from "./ui/dial
 import { applyIcons, iconHtml } from "./ui/icons.js";
 import { renderLineListInPlace } from "./lineList.js";
 import {
+  renderLyricsGrid,
+  rowsFromProject,
+  ensureRows,
+  countOverLimit,
+} from "./ui/lyricsGrid.js";
+import {
   migrateProject,
   setDurationSec,
   durationSec,
@@ -24,7 +30,17 @@ import {
   lineFr,
   lineEn,
   audioId,
+  isLyric,
 } from "./core/project.js";
+import {
+  DEFAULT_TAP_OFFSET_MS,
+  computeAverageDelayMs,
+  offsetFromAverageDelay,
+  createCalibrationPlan,
+  CALIBRATION_CLICKS,
+  CALIBRATION_INTERVAL_MS,
+} from "./core/timing.js";
+import { MAX_SUBTITLE_CHARS } from "./core/lyrics.js";
 
 const state = {
   project: sync.createEmptyProject(),
@@ -37,6 +53,14 @@ const state = {
   audioReady: false,
   lastActiveLine: -1,
   userScrollPauseUntil: 0,
+  tapMode: "simple", // simple | hold
+  reviewMode: false,
+  holdArmed: false,
+  holdLineIndex: -1,
+  menuLineIndex: -1,
+  lyricsRows: [{ main: "", fr: "", en: "" }],
+  gridFocusEl: null,
+  calibrate: null,
 };
 
 store.reset({
@@ -64,7 +88,11 @@ const SCRUB_MAX = 1000;
 
 function showScreen(name, { pushHash = true, persistScreen = true } = {}) {
   if (!SCREENS.includes(name)) return;
-  const changed = state.screen !== name;
+  const prev = state.screen;
+  const changed = prev !== name;
+  if (changed && prev === "lyrics" && name !== "lyrics") {
+    applyLyricsFromGrid({ silent: true, stay: true });
+  }
   state.screen = name;
   if (persistScreen) {
     state.project.lastScreen = name;
@@ -87,13 +115,20 @@ function showScreen(name, { pushHash = true, persistScreen = true } = {}) {
     if (active) tab.setAttribute("aria-current", "page");
     else tab.removeAttribute("aria-current");
   });
+  document.querySelectorAll(".step-seg-btn").forEach((btn) => {
+    btn.classList.toggle("is-active", btn.dataset.goto === name);
+  });
   updateDockVisibility();
+  if (name === "lyrics") {
+    refreshLyricsGrid();
+  }
   if (name === "sync") {
     requestAnimationFrame(() => {
       state.waveform?.resize?.();
       state.waveform?.draw?.();
       updateScrubber();
-      scrollTapLineIntoView(true);
+      updateProgressChip();
+      updateOffsetChip();
     });
   }
   if (name === "video") video.renderFrame(state.project);
@@ -101,7 +136,7 @@ function showScreen(name, { pushHash = true, persistScreen = true } = {}) {
   if (main) main.scrollTop = 0;
   if (pushHash) {
     const hash = `#${name}`;
-    if (location.hash !== hash) history.replaceState(null, "", hash);
+    if (location.hash !== hash) window.history.replaceState(null, "", hash);
   }
   if (changed) haptics.tick();
 }
@@ -203,7 +238,7 @@ function updatePlayButton() {
 }
 
 function updateTapButtons() {
-  const hasLines = state.project.lines.length > 0;
+  const hasLines = state.project.lines.some(sync.isLyric);
   const done = sync.isSyncComplete(state.project.lines);
   const tap = $("btn-tap");
   const undo = $("btn-undo");
@@ -211,12 +246,14 @@ function updateTapButtons() {
   const mark = $("tap-mark-label");
   const fileName = state.project.audio?.fileName || state.project.audioFileName;
   if (tap) {
-    tap.disabled = !hasLines || !fileName || done;
+    tap.disabled = !hasLines || !fileName || (done && state.tapMode === "simple");
     tap.classList.toggle("is-done", done);
+    tap.classList.toggle("hold-mode", state.tapMode === "hold");
   }
   if (mark) {
     const lyrics = state.project.lines.filter(sync.isLyric);
     if (done) mark.textContent = i18n.t("allLinesTimed");
+    else if (state.tapMode === "hold") mark.textContent = i18n.t("holdToSingHint");
     else if (lyrics.length && lyrics.every((l) => l.startMs != null) && !lyrics.at(-1)?.endManual) {
       mark.textContent = i18n.t("markEnd");
     } else {
@@ -225,11 +262,47 @@ function updateTapButtons() {
   }
   if (undo) undo.disabled = !history.canUndo();
   if (redo) redo.disabled = !history.canRedo();
+  const modeBtn = $("btn-tap-mode");
+  if (modeBtn) {
+    modeBtn.dataset.mode = state.tapMode;
+    modeBtn.textContent =
+      state.tapMode === "hold" ? i18n.t("tapModeHold") : i18n.t("tapModeSimple");
+  }
+  const reviewBtn = $("btn-review");
+  if (reviewBtn) {
+    reviewBtn.setAttribute("aria-pressed", state.reviewMode ? "true" : "false");
+    reviewBtn.classList.toggle("is-active", state.reviewMode);
+  }
+  document.body.classList.toggle("review-on", state.reviewMode);
+  updateProgressChip();
+  updateOffsetChip();
+}
+
+function updateProgressChip() {
+  const { timed, total } = sync.progressTimed(state.project.lines);
+  const label = $("progress-chip-label");
+  if (label) label.textContent = i18n.t("progressTimed").replace("{timed}", String(timed)).replace("{total}", String(total));
+  const ring = $("progress-ring-fg");
+  if (ring) {
+    const circ = 94.2;
+    const pct = total ? timed / total : 0;
+    ring.style.strokeDashoffset = String(circ * (1 - pct));
+  }
+}
+
+function updateOffsetChip() {
+  const ms = state.project.settings?.tapOffsetMs ?? DEFAULT_TAP_OFFSET_MS;
+  const el = $("offset-chip");
+  if (el) {
+    const sign = ms > 0 ? "+" : "−";
+    el.textContent = i18n.t("offsetChip").replace("{ms}", `${sign}${Math.abs(ms)}`);
+  }
 }
 
 function scrollTapLineIntoView(force = false) {
   const list = $("line-list");
   if (!list) return;
+  if (!force && Date.now() < state.userScrollPauseUntil) return;
   const idx = state.selectedIndex;
   const el = list.querySelector(`.line-item[data-index="${idx}"]`);
   if (!el) return;
@@ -242,21 +315,25 @@ function renderLineList() {
     lines: state.project.lines,
     selectedIndex: state.selectedIndex,
     tapIndex: state.tapIndex,
+    reviewMode: state.reviewMode,
     onSelect: (i, seek) => selectLine(i, seek),
+    onMenu: (i) => openLineMenu(i),
+    onNudge: (i, deltaMs) => nudgeLineWithHistory(i, deltaMs),
+    onReplay: (i) => replayLine(i),
   });
-  // Waveform uses seconds for markers
+  // Waveform uses seconds for markers/regions
   state.waveform?.setLines(
     state.project.lines.map((l) => ({
       ...l,
       start: sync.msToSec(l.startMs),
       end: sync.msToSec(l.endMs),
+      text: l.type === "section" ? l.label : lineMainText(l),
     }))
   );
   state.waveform?.setSelected(state.selectedIndex);
   updateTapButtons();
   updateExportButtons();
   publishStore();
-  scrollTapLineIntoView();
 }
 
 function selectLine(i, seekTo = false) {
@@ -293,26 +370,34 @@ function updateActiveLine(tSec) {
 function updatePreview(tSec) {
   const lines = state.project.lines;
   const idx = sync.lineAtTime(lines, Math.round(tSec * 1000));
-  const prev = $("preview-prev");
   const cur = $("preview-current");
   const next = $("preview-next");
   const tr = $("preview-tr");
   if (!cur) return;
 
-  if (idx < 0) {
-    prev.textContent = "";
-    cur.textContent = lineMainText(lines[0]) || "—";
-    next.textContent = lineMainText(lines[1]) || "";
-    tr.textContent = "";
+  const showIdx = idx >= 0 ? idx : Math.max(0, state.tapIndex);
+  const curLine = lines[showIdx];
+  const nextLyric = lines.slice(showIdx + 1).find(isLyric);
+  if (!curLine) {
+    cur.textContent = "—";
+    if (next) next.textContent = "";
+    if (tr) tr.textContent = "";
     return;
   }
-
-  prev.textContent = lineMainText(lines[idx - 1]) || "";
-  cur.textContent = lineMainText(lines[idx]) || "—";
-  next.textContent = lineMainText(lines[idx + 1]) || "";
+  if (curLine.type === "section") {
+    cur.textContent = curLine.label || "";
+  } else {
+    cur.textContent = lineMainText(curLine) || "—";
+  }
+  if (next) next.textContent = nextLyric ? lineMainText(nextLyric) : "";
   const lang = state.project.settings.translationLang || "fr";
-  const translation = lang === "en" ? lineEn(lines[idx]) : lineFr(lines[idx]);
-  tr.textContent = translation || "";
+  const translation =
+    curLine.type === "section"
+      ? ""
+      : lang === "en"
+        ? lineEn(curLine)
+        : lineFr(curLine);
+  if (tr) tr.textContent = translation || "";
 }
 
 function flashTapConfirm() {
@@ -325,66 +410,168 @@ function flashTapConfirm() {
   dock?.classList.add("tap-flash");
 }
 
-function applyLyricsFromFields() {
+function mirrorFieldsFromRows() {
+  const lyrics = state.lyricsRows.filter((r) => {
+    const m = String(r.main || "").trim();
+    return m && !/^\[.*\]\s*$/.test(m);
+  });
+  const sectionsAsMain = state.lyricsRows.map((r) => String(r.main || "").trim()).filter(Boolean);
+  if ($("field-lyrics")) $("field-lyrics").value = sectionsAsMain.join("\n");
+  if ($("field-fr")) {
+    $("field-fr").value = state.lyricsRows
+      .filter((r) => String(r.main || "").trim() && !/^\[.*\]\s*$/.test(String(r.main || "").trim()))
+      .map((r) => r.fr || "")
+      .join("\n");
+  }
+  if ($("field-en")) {
+    $("field-en").value = state.lyricsRows
+      .filter((r) => String(r.main || "").trim() && !/^\[.*\]\s*$/.test(String(r.main || "").trim()))
+      .map((r) => r.en || "")
+      .join("\n");
+  }
+  void lyrics;
+}
+
+function refreshLyricsGrid() {
+  const root = $("lyrics-grid");
+  if (!root) return;
+  state.lyricsRows = ensureRows(state.lyricsRows);
+  renderLyricsGrid(root, {
+    rows: state.lyricsRows,
+    onChange: (row, { reason, index } = {}) => {
+      if (typeof index === "number") {
+        state.lyricsRows = state.lyricsRows.map((r, idx) => (idx === index ? { ...row } : r));
+      }
+      mirrorFieldsFromRows();
+      updateCharWarn();
+      // Auto-apply on blur (and paste settles); not on every keystroke
+      if (reason === "blur" || reason === "paste") {
+        applyLyricsFromGrid({ silent: true, stay: true });
+      }
+    },
+    onFocusField: (el) => {
+      state.gridFocusEl = el;
+    },
+  });
+  updateCharWarn();
+}
+
+function updateCharWarn() {
+  const n = countOverLimit(state.lyricsRows);
+  const el = $("char-warn");
+  if (!el) return;
+  if (n > 0) {
+    el.hidden = false;
+    el.textContent = i18n.t("charWarn").replace("{n}", String(n)).replace("{max}", String(MAX_SUBTITLE_CHARS));
+  } else {
+    el.hidden = true;
+    el.textContent = "";
+  }
+}
+
+function applyLyricsFromGrid({ silent = false, stay = false } = {}) {
   const before = structuredClone
     ? structuredClone(state.project.lines)
     : JSON.parse(JSON.stringify(state.project.lines));
-  const result = sync.applyLyrics(
-    state.project,
-    $("field-lyrics").value,
-    $("field-fr").value,
-    $("field-en").value
-  );
+  const result = sync.applyLyricsFromRows(state.project, state.lyricsRows);
   const after = result.lines;
   const warn = $("translation-warn");
-  if (result.warnings.length) {
-    warn.hidden = false;
-    warn.textContent = result.warnings
-      .map((w) =>
-        i18n
-          .t(w.key)
-          .replace("{fr}", String(w.fr ?? ""))
-          .replace("{en}", String(w.en ?? ""))
-          .replace("{main}", String(w.main ?? ""))
-      )
-      .join(" ");
-  } else {
-    warn.hidden = true;
-    warn.textContent = "";
+  if (warn) {
+    if (result.warnings.length) {
+      warn.hidden = false;
+      warn.textContent = result.warnings
+        .map((w) =>
+          i18n
+            .t(w.key)
+            .replace("{fr}", String(w.fr ?? ""))
+            .replace("{en}", String(w.en ?? ""))
+            .replace("{main}", String(w.main ?? ""))
+        )
+        .join(" ");
+    } else {
+      warn.hidden = true;
+      warn.textContent = "";
+    }
   }
+
+  const same =
+    JSON.stringify(before.map(lineStamp)) === JSON.stringify(after.map(lineStamp));
+  if (same) return;
+
+  const rowsSnapshot = state.lyricsRows.map((r) => ({ ...r }));
 
   history.push({
     label: "lyrics",
     do: () => {
       state.project.lines = after;
-      state.selectedIndex = 0;
+      // Keep editor rows as typed while staying on Lyrics; refresh only when navigating away/back
+      if (!stay) {
+        state.lyricsRows = rowsFromProject(state.project);
+        if (state.screen === "lyrics") refreshLyricsGrid();
+      } else {
+        state.lyricsRows = rowsSnapshot;
+      }
+      state.selectedIndex = Math.min(state.selectedIndex, Math.max(0, after.length - 1));
       state.tapIndex = sync.firstUntimedIndex(state.project.lines);
       renderLineList();
       persist();
     },
     undo: () => {
       state.project.lines = before;
-      state.selectedIndex = 0;
+      state.lyricsRows = rowsFromProject(state.project);
+      if (state.screen === "lyrics") refreshLyricsGrid();
       state.tapIndex = sync.nextTapIndex(state.project.lines);
       renderLineList();
       persist();
     },
   });
 
-  if (result.changed || result.added) {
+  if (!silent && (result.changed || result.added)) {
     showToast(
       i18n
         .t("lyricsRematch")
         .replace("{changed}", String(result.changed))
         .replace("{added}", String(result.added))
     );
-  } else if (state.project.lines.length) {
-    showToast(i18n.t("lyricsRematchNone"));
   }
-  if (state.project.lines.length) {
+  if (!stay && state.project.lines.length) {
     haptics.success();
     showScreen("sync");
   }
+}
+
+function lineStamp(l) {
+  if (l?.type === "section") return { t: "s", id: l.id, label: l.label };
+  return {
+    t: "l",
+    id: l.id,
+    kab: lineMainText(l),
+    fr: lineFr(l),
+    en: lineEn(l),
+    startMs: l.startMs,
+    endMs: l.endMs,
+    endManual: l.endManual,
+  };
+}
+
+/** @deprecated Apply button removed — kept for gdocs path compatibility */
+function applyLyricsFromFields() {
+  const main = $("field-lyrics")?.value || "";
+  const fr = $("field-fr")?.value || "";
+  const en = $("field-en")?.value || "";
+  const mains = sync.parseLyricText(main);
+  const frs = sync.parseLyricText(fr);
+  const ens = sync.parseLyricText(en);
+  let fi = 0;
+  state.lyricsRows = mains.map((m) => {
+    if (/^\[.*\]\s*$/.test(m)) return { main: m, fr: "", en: "" };
+    const row = { main: m, fr: frs[fi] || "", en: ens[fi] || "" };
+    fi += 1;
+    return row;
+  });
+  if (!state.lyricsRows.length) state.lyricsRows = [{ main: "", fr: "", en: "" }];
+  refreshLyricsGrid();
+  applyLyricsFromGrid({ silent: false, stay: false });
 }
 
 async function handleAudioFile(file, { stayOnScreen = false } = {}) {
@@ -400,7 +587,13 @@ async function handleAudioFile(file, { stayOnScreen = false } = {}) {
     // legacy mirrors
     state.project.audioFileName = result.fileName;
     state.project.duration = result.duration;
-    const peaks = computePeaks(result.buffer);
+    setStatus(i18n.t("readingAudio"));
+    let peaks;
+    try {
+      peaks = await computePeaksAsync(result.buffer);
+    } catch {
+      peaks = computePeaks(result.buffer);
+    }
     state.waveform?.setPeaks(peaks, result.duration);
     state.waveform?.setDuration(result.duration);
     setStatus(`${result.fileName} · ${formatClock(result.duration)}`);
@@ -450,7 +643,12 @@ async function handleAudioUrl() {
     setDurationSec(state.project, result.duration);
     state.project.audioFileName = result.fileName;
     state.project.duration = result.duration;
-    const peaks = computePeaks(result.buffer);
+    let peaks;
+    try {
+      peaks = await computePeaksAsync(result.buffer);
+    } catch {
+      peaks = computePeaks(result.buffer);
+    }
     state.waveform?.setPeaks(peaks, result.duration);
     state.waveform?.setDuration(result.duration);
     setStatus(`${result.fileName} · ${formatClock(result.duration)}`);
@@ -501,8 +699,11 @@ async function handleGoogleDocs() {
     setStatus(i18n.t("loadingDocs"));
     const text = await docs.fetchGoogleDocText(raw);
     $("field-lyrics").value = text;
-    // switch to main pane
-    document.querySelector('[data-lyric-tab="main"]')?.click();
+    const mains = sync.parseLyricText(text);
+    state.lyricsRows = mains.map((m) => ({ main: m, fr: "", en: "" }));
+    if (!state.lyricsRows.length) state.lyricsRows = [{ main: "", fr: "", en: "" }];
+    refreshLyricsGrid();
+    applyLyricsFromGrid({ silent: true, stay: true });
     haptics.success();
   } catch (err) {
     console.error(err);
@@ -519,23 +720,20 @@ async function handleGoogleDocs() {
   }
 }
 
-function doTap() {
-  if (!state.project.lines.length) return;
-  if (sync.isSyncComplete(state.project.lines)) return;
-  const tMs = Math.round(audio.getCurrentTime() * 1000);
-  const idx = Math.min(state.tapIndex, state.project.lines.length - 1);
-  const before = sync.snapshotTimings(state.project.lines);
-  const beforeTap = state.tapIndex;
-  const beforeSel = state.selectedIndex;
-  const result = sync.tapLine(state.project, idx, tMs);
-  if (!result || result.noop) return;
-  const after = sync.snapshotTimings(state.project.lines);
-  const afterTap = result.nextIndex;
-  const afterSel = Math.min(afterTap, state.project.lines.length - 1);
-  // Revert then push as command so redo works
+function nextLyricTapIndex() {
+  let idx = state.tapIndex;
+  while (idx < state.project.lines.length && !sync.isLyric(state.project.lines[idx])) idx += 1;
+  if (idx >= state.project.lines.length) {
+    const untimed = sync.firstUntimedIndex(state.project.lines);
+    return untimed;
+  }
+  return idx;
+}
+
+function pushTimingCommand(label, before, after, beforeTap, beforeSel, afterTap, afterSel) {
   sync.undoTimings(state.project.lines, before);
   history.push({
-    label: "tap",
+    label,
     do: () => {
       sync.undoTimings(state.project.lines, after);
       state.tapIndex = afterTap;
@@ -551,10 +749,198 @@ function doTap() {
       persist();
     },
   });
+}
+
+function doTap() {
+  if (state.tapMode === "hold") return; // hold uses press/release
+  if (!state.project.lines.length) return;
+  if (sync.isSyncComplete(state.project.lines)) return;
+  const tMs = Math.round(audio.getCurrentTime() * 1000);
+  const idx = nextLyricTapIndex();
+  const before = sync.snapshotTimings(state.project.lines);
+  const beforeTap = state.tapIndex;
+  const beforeSel = state.selectedIndex;
+  const result = sync.tapLine(state.project, idx, tMs);
+  if (!result || result.noop) return;
+  const after = sync.snapshotTimings(state.project.lines);
+  const afterTap = result.nextIndex;
+  const afterSel = Math.min(afterTap, state.project.lines.length - 1);
+  pushTimingCommand("tap", before, after, beforeTap, beforeSel, afterTap, afterSel);
   haptics.tap();
   flashTapConfirm();
   if (result.done) showToast(i18n.t("allLinesTimed"));
-  scrollTapLineIntoView();
+  scrollTapLineIntoView(true);
+}
+
+function doHoldPress() {
+  if (state.tapMode !== "hold") return;
+  if (!state.project.lines.length || sync.isSyncComplete(state.project.lines)) return;
+  if (state.holdArmed) return;
+  const tMs = Math.round(audio.getCurrentTime() * 1000);
+  const idx = nextLyricTapIndex();
+  const before = sync.snapshotTimings(state.project.lines);
+  const beforeTap = state.tapIndex;
+  const beforeSel = state.selectedIndex;
+  const result = sync.holdPress(state.project, idx, tMs);
+  if (!result || result.noop) return;
+  const after = sync.snapshotTimings(state.project.lines);
+  // Keep pointer on this line until release
+  const afterTap = idx;
+  const afterSel = idx;
+  pushTimingCommand("holdStart", before, after, beforeTap, beforeSel, afterTap, afterSel);
+  state.holdArmed = true;
+  state.holdLineIndex = idx;
+  haptics.tap();
+  flashTapConfirm();
+}
+
+function doHoldRelease() {
+  if (state.tapMode !== "hold" || !state.holdArmed) return;
+  const tMs = Math.round(audio.getCurrentTime() * 1000);
+  const idx = state.holdLineIndex >= 0 ? state.holdLineIndex : nextLyricTapIndex();
+  const before = sync.snapshotTimings(state.project.lines);
+  const beforeTap = state.tapIndex;
+  const beforeSel = state.selectedIndex;
+  const result = sync.holdRelease(state.project, idx, tMs);
+  state.holdArmed = false;
+  state.holdLineIndex = -1;
+  if (!result) return;
+  const after = sync.snapshotTimings(state.project.lines);
+  const afterTap = result.nextIndex;
+  const afterSel = Math.min(afterTap, Math.max(0, state.project.lines.length - 1));
+  pushTimingCommand("holdEnd", before, after, beforeTap, beforeSel, afterTap, afterSel);
+  haptics.soft();
+  if (result.done) showToast(i18n.t("allLinesTimed"));
+  scrollTapLineIntoView(true);
+}
+
+function doGap() {
+  if (state.screen !== "sync") return;
+  const lines = state.project.lines;
+  if (!lines.length) return;
+  // Prefer selected timed lyric, else last started without manual end
+  let idx = state.selectedIndex;
+  if (!sync.isLyric(lines[idx]) || lines[idx].startMs == null) {
+    for (let i = lines.length - 1; i >= 0; i--) {
+      if (sync.isLyric(lines[i]) && lines[i].startMs != null && !lines[i].endManual) {
+        idx = i;
+        break;
+      }
+    }
+  }
+  const tMs = Math.round(audio.getCurrentTime() * 1000);
+  const before = sync.snapshotTimings(lines);
+  const beforeTap = state.tapIndex;
+  const beforeSel = state.selectedIndex;
+  const result = sync.gapEndCurrent(state.project, idx, tMs);
+  if (!result) return;
+  const after = sync.snapshotTimings(lines);
+  // Stay on same line; next tap starts the following untimed
+  const afterTap = sync.firstUntimedIndex(lines);
+  pushTimingCommand("gap", before, after, beforeTap, beforeSel, afterTap, idx);
+  haptics.soft();
+  showToast(i18n.t("gapDone"));
+}
+
+function nudgeLineWithHistory(index, deltaMs) {
+  const before = sync.snapshotTimings(state.project.lines);
+  sync.nudgeLine(state.project, index, deltaMs);
+  const after = sync.snapshotTimings(state.project.lines);
+  pushTimingCommand(
+    "nudge",
+    before,
+    after,
+    state.tapIndex,
+    state.selectedIndex,
+    state.tapIndex,
+    index
+  );
+}
+
+function replayLine(index) {
+  const line = state.project.lines[index];
+  if (!line || !sync.isLyric(line) || line.startMs == null) return;
+  const startSec = Math.max(0, sync.msToSec(line.startMs) - 1);
+  audio.seek(startSec);
+  audio.play().then(updatePlayButton);
+  selectLine(index, false);
+  updateTimeDisplay();
+}
+
+function openLineMenu(index) {
+  state.menuLineIndex = index;
+  openSheet("line-menu-sheet");
+}
+
+function runLineMenuAction(action) {
+  const i = state.menuLineIndex;
+  closeSheet("line-menu-sheet");
+  if (i < 0 || i >= state.project.lines.length) return;
+  const beforeLines = structuredClone
+    ? structuredClone(state.project.lines)
+    : JSON.parse(JSON.stringify(state.project.lines));
+  const beforeTap = state.tapIndex;
+  const beforeSel = state.selectedIndex;
+
+  if (action === "edit") {
+    const line = state.project.lines[i];
+    $("field-line-edit").value =
+      line.type === "section" ? line.label || "" : lineMainText(line);
+    openSheet("line-edit-dialog");
+    return;
+  }
+
+  let ok = false;
+  if (action === "split") ok = sync.splitLyricAt(state.project, i);
+  else if (action === "merge") ok = sync.mergeWithNext(state.project, i);
+  else if (action === "insert") ok = sync.insertLineBelow(state.project, i);
+  else if (action === "delete") ok = sync.deleteLineAt(state.project, i);
+  else if (action === "clear") ok = sync.clearLineTime(state.project, i);
+  else if (action === "startFrom") {
+    // Seek to previous lyric start −2s and set tap pointer
+    let seekMs = 0;
+    for (let j = i - 1; j >= 0; j--) {
+      if (sync.isLyric(state.project.lines[j]) && state.project.lines[j].startMs != null) {
+        seekMs = Math.max(0, state.project.lines[j].startMs - 2000);
+        break;
+      }
+    }
+    audio.seek(sync.msToSec(seekMs) || 0);
+    state.tapIndex = i;
+    state.selectedIndex = i;
+    renderLineList();
+    updateTimeDisplay();
+    showToast(i18n.t("startFromHere"));
+    return;
+  }
+  if (!ok && action !== "insert") {
+    showToast(i18n.t("lineActionFailed"));
+    return;
+  }
+  const afterLines = structuredClone
+    ? structuredClone(state.project.lines)
+    : JSON.parse(JSON.stringify(state.project.lines));
+  // revert then command
+  state.project.lines = beforeLines;
+  history.push({
+    label: action,
+    do: () => {
+      state.project.lines = structuredClone ? structuredClone(afterLines) : JSON.parse(JSON.stringify(afterLines));
+      state.lyricsRows = rowsFromProject(state.project);
+      state.selectedIndex = Math.min(i, state.project.lines.length - 1);
+      state.tapIndex = sync.nextTapIndex(state.project.lines);
+      renderLineList();
+      persist();
+    },
+    undo: () => {
+      state.project.lines = structuredClone ? structuredClone(beforeLines) : JSON.parse(JSON.stringify(beforeLines));
+      state.lyricsRows = rowsFromProject(state.project);
+      state.tapIndex = beforeTap;
+      state.selectedIndex = beforeSel;
+      renderLineList();
+      persist();
+    },
+  });
 }
 
 function doUndo() {
@@ -567,6 +953,102 @@ function doRedo() {
   if (!history.canRedo()) return;
   history.redo();
   haptics.soft();
+}
+
+function stopCalibration() {
+  if (state.calibrate?.timers) {
+    state.calibrate.timers.forEach((id) => clearTimeout(id));
+  }
+  state.calibrate = null;
+  const pulse = $("calibrate-pulse");
+  pulse?.classList.remove("is-beat");
+  const tap = $("btn-calibrate-tap");
+  if (tap) tap.disabled = true;
+  const save = $("btn-calibrate-save");
+  if (save) save.hidden = true;
+  const start = $("btn-calibrate-start");
+  if (start) start.hidden = false;
+}
+
+function startCalibration() {
+  stopCalibration();
+  const expected = createCalibrationPlan(performance.now(), CALIBRATION_CLICKS, CALIBRATION_INTERVAL_MS);
+  state.calibrate = {
+    expected,
+    actual: [],
+    timers: [],
+    startedAt: performance.now(),
+  };
+  const status = $("calibrate-status");
+  if (status) status.textContent = i18n.t("calibrateReady");
+  $("btn-calibrate-start").hidden = true;
+  $("btn-calibrate-save").hidden = true;
+  const tap = $("btn-calibrate-tap");
+  if (tap) tap.disabled = false;
+  const pulse = $("calibrate-pulse");
+  expected.forEach((t, i) => {
+    const delay = Math.max(0, t - performance.now());
+    const id = setTimeout(() => {
+      pulse?.classList.remove("is-beat");
+      void pulse?.offsetWidth;
+      pulse?.classList.add("is-beat");
+      if (status) status.textContent = i18n.t("calibrateClick").replace("{n}", String(i + 1)).replace("{total}", String(CALIBRATION_CLICKS));
+      if (i === expected.length - 1) {
+        setTimeout(() => finishCalibrationIfReady(), 600);
+      }
+    }, delay);
+    state.calibrate.timers.push(id);
+  });
+}
+
+function calibrationTap() {
+  if (!state.calibrate) return;
+  state.calibrate.actual.push(performance.now());
+  haptics.tap();
+  if (state.calibrate.actual.length >= CALIBRATION_CLICKS) finishCalibrationIfReady();
+}
+
+function finishCalibrationIfReady() {
+  const cal = state.calibrate;
+  if (!cal || cal.done) return;
+  if (cal.actual.length < CALIBRATION_CLICKS) {
+    const status = $("calibrate-status");
+    if (status) {
+      status.textContent = i18n
+        .t("calibratePartial")
+        .replace("{n}", String(cal.actual.length))
+        .replace("{total}", String(CALIBRATION_CLICKS));
+    }
+    return;
+  }
+  cal.done = true;
+  const n = Math.min(cal.expected.length, cal.actual.length);
+  const avg = computeAverageDelayMs(cal.expected.slice(0, n), cal.actual.slice(0, n));
+  const offset = offsetFromAverageDelay(avg);
+  cal.resultOffset = offset;
+  cal.avg = avg;
+  const status = $("calibrate-status");
+  if (status) {
+    status.textContent = i18n
+      .t("calibrateResult")
+      .replace("{delay}", String(avg))
+      .replace("{offset}", String(offset));
+  }
+  $("btn-calibrate-tap").disabled = true;
+  $("btn-calibrate-save").hidden = false;
+  $("btn-calibrate-start").hidden = false;
+}
+
+function saveCalibration() {
+  const offset = state.calibrate?.resultOffset;
+  if (offset == null) return;
+  state.project.settings.tapOffsetMs = offset;
+  persist();
+  updateOffsetChip();
+  showToast(i18n.t("offsetSaved").replace("{ms}", String(offset)));
+  stopCalibration();
+  closeSheet("calibrate-dialog");
+  haptics.success();
 }
 
 function countUntimed() {
@@ -637,17 +1119,17 @@ function exportOpts() {
 function syncFieldsFromProject() {
   $("field-title").value = state.project.title || "";
   $("field-artist").value = state.project.artist || "";
-  $("field-lyrics").value = state.project.lines
-    .filter(sync.isLyric)
-    .map((l) => lineMainText(l))
-    .join("\n");
-  $("field-fr").value = state.project.lines.filter(sync.isLyric).map((l) => lineFr(l)).join("\n");
-  $("field-en").value = state.project.lines.filter(sync.isLyric).map((l) => lineEn(l)).join("\n");
+  state.lyricsRows = rowsFromProject(state.project);
+  if (!state.lyricsRows.length) state.lyricsRows = [{ main: "", fr: "", en: "" }];
+  mirrorFieldsFromRows();
+  if (state.screen === "lyrics") refreshLyricsGrid();
   const s = state.project.settings || {};
+  if (s.tapOffsetMs == null) s.tapOffsetMs = DEFAULT_TAP_OFFSET_MS;
   if (s.playbackRate) {
     $("select-speed").value = String(s.playbackRate);
     audio.setPlaybackRate(s.playbackRate);
   }
+  updateOffsetChip();
   const v = s.video || {};
   if (v.aspect) $("select-aspect").value = v.aspect;
   if (v.style) $("select-anim").value = v.style;
@@ -692,6 +1174,14 @@ function isDialogOpen() {
 }
 
 function setupKeyboard() {
+  window.addEventListener("keyup", (e) => {
+    if (isTypingTarget(e.target) || isDialogOpen()) return;
+    if (state.screen !== "sync") return;
+    if ((e.key === " " || e.key === "Spacebar") && state.tapMode === "hold") {
+      e.preventDefault();
+      doHoldRelease();
+    }
+  });
   window.addEventListener("keydown", (e) => {
     if (isTypingTarget(e.target)) return;
     if (isDialogOpen()) return;
@@ -709,7 +1199,14 @@ function setupKeyboard() {
 
     if (key === " " || key === "Spacebar") {
       e.preventDefault();
-      doTap();
+      if (e.repeat) return;
+      if (state.tapMode === "hold") doHoldPress();
+      else doTap();
+      return;
+    }
+    if (key === "g" || key === "G") {
+      e.preventDefault();
+      doGap();
       return;
     }
     if (key === "Backspace") {
@@ -1100,24 +1597,51 @@ function setupUI() {
 
   state.waveform = initWaveform($("waveform"), {
     onMarkerDrag: (index, tSec) => {
-      const before = sync.snapshotTimings(state.project.lines);
+      beginWaveDrag(index);
       sync.setLineStart(state.project, index, Math.round(tSec * 1000));
-      const after = sync.snapshotTimings(state.project.lines);
-      // Live preview while dragging (not every move as history — commit on pointerup via separate path)
+      state._dragAfter = sync.snapshotTimings(state.project.lines);
       state.selectedIndex = index;
       renderLineList();
-      // Store last drag as single command when timings change
-      if (!state._dragCmd) {
-        state._dragCmd = { index, before };
+      persist();
+    },
+    onRegionEdge: (index, edge, tSec) => {
+      beginWaveDrag(index);
+      if (edge === "start") sync.setLineStart(state.project, index, Math.round(tSec * 1000));
+      else sync.setLineEnd(state.project, index, Math.round(tSec * 1000));
+      state._dragAfter = sync.snapshotTimings(state.project.lines);
+      state.selectedIndex = index;
+      renderLineList();
+      persist();
+    },
+    onRegionMove: (index, deltaSec) => {
+      beginWaveDrag(index);
+      // Reset to drag start then apply absolute delta from original
+      if (state._dragCmd?.origin) {
+        sync.undoTimings(state.project.lines, state._dragCmd.origin);
+        sync.moveLineTiming(state.project, index, Math.round(deltaSec * 1000));
+      } else {
+        sync.moveLineTiming(state.project, index, Math.round(deltaSec * 1000));
       }
-      state._dragAfter = after;
+      state._dragAfter = sync.snapshotTimings(state.project.lines);
+      state.selectedIndex = index;
+      renderLineList();
       persist();
     },
     onSelect: (index) => selectLine(index, false),
+    onSeek: (tSec) => {
+      audio.seek(tSec);
+      updateTimeDisplay();
+    },
   });
   state.waveform?.setEmptyLabel?.(i18n.t("loadWaveform"));
 
-  $("btn-apply-lyrics").addEventListener("click", applyLyricsFromFields);
+  function beginWaveDrag(index) {
+    if (!state._dragCmd) {
+      const snap = sync.snapshotTimings(state.project.lines);
+      state._dragCmd = { index, before: snap, origin: snap };
+    }
+  }
+
   $("btn-gdocs")?.addEventListener("click", handleGoogleDocs);
   $("field-gdocs")?.addEventListener("keydown", (e) => {
     if (e.key === "Enter") {
@@ -1125,14 +1649,141 @@ function setupUI() {
       handleGoogleDocs();
     }
   });
+  $("btn-add-row")?.addEventListener("click", () => {
+    state.lyricsRows = [...state.lyricsRows, { main: "", fr: "", en: "" }];
+    refreshLyricsGrid();
+  });
+  $("btn-remove-empty")?.addEventListener("click", () => {
+    state.lyricsRows = state.lyricsRows.filter((r) => String(r.main || "").trim() || String(r.fr || "").trim() || String(r.en || "").trim());
+    if (!state.lyricsRows.length) state.lyricsRows = [{ main: "", fr: "", en: "" }];
+    refreshLyricsGrid();
+    applyLyricsFromGrid({ silent: true, stay: true });
+  });
+  document.querySelectorAll(".kabyle-key").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const ch = btn.dataset.char;
+      const el = state.gridFocusEl;
+      if (!el || el.tagName !== "INPUT") return;
+      const start = el.selectionStart ?? el.value.length;
+      const end = el.selectionEnd ?? el.value.length;
+      el.value = `${el.value.slice(0, start)}${ch}${el.value.slice(end)}`;
+      el.focus();
+      const caret = start + ch.length;
+      el.setSelectionRange(caret, caret);
+      el.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+  });
 
   $("btn-play").addEventListener("click", () => {
     audio.togglePlay().then(updatePlayButton);
     haptics.tick();
   });
-  $("btn-tap").addEventListener("click", doTap);
+
+  const tapBtn = $("btn-tap");
+  tapBtn?.addEventListener("click", (e) => {
+    if (state.tapMode === "hold") {
+      e.preventDefault();
+      return;
+    }
+    doTap();
+  });
+  tapBtn?.addEventListener("pointerdown", (e) => {
+    if (state.tapMode !== "hold") return;
+    e.preventDefault();
+    tapBtn.setPointerCapture?.(e.pointerId);
+    doHoldPress();
+  });
+  tapBtn?.addEventListener("pointerup", (e) => {
+    if (state.tapMode !== "hold") return;
+    doHoldRelease();
+  });
+  tapBtn?.addEventListener("pointercancel", () => {
+    if (state.tapMode === "hold") doHoldRelease();
+  });
+
   $("btn-undo").addEventListener("click", doUndo);
   $("btn-redo")?.addEventListener("click", doRedo);
+  $("btn-gap")?.addEventListener("click", doGap);
+  $("btn-dock-gap")?.addEventListener("click", doGap);
+  $("btn-tap-mode")?.addEventListener("click", () => {
+    state.tapMode = state.tapMode === "hold" ? "simple" : "hold";
+    state.holdArmed = false;
+    updateTapButtons();
+    haptics.tick();
+  });
+  $("btn-review")?.addEventListener("click", () => {
+    state.reviewMode = !state.reviewMode;
+    document.body.classList.toggle("review-on", state.reviewMode);
+    renderLineList();
+    updateTapButtons();
+    if (state.reviewMode) {
+      audio.play().then(updatePlayButton);
+      showToast(i18n.t("reviewOn"));
+    }
+  });
+  $("btn-calibrate")?.addEventListener("click", () => openSheet("calibrate-dialog"));
+  $("btn-calibrate-close")?.addEventListener("click", () => {
+    stopCalibration();
+    closeSheet("calibrate-dialog");
+  });
+  $("calibrate-dialog")?.addEventListener("click", (e) => {
+    if (e.target === $("calibrate-dialog")) {
+      stopCalibration();
+      closeSheet("calibrate-dialog");
+    }
+  });
+  $("btn-calibrate-start")?.addEventListener("click", startCalibration);
+  $("btn-calibrate-tap")?.addEventListener("click", calibrationTap);
+  $("btn-calibrate-save")?.addEventListener("click", saveCalibration);
+
+  $("btn-line-menu-close")?.addEventListener("click", () => closeSheet("line-menu-sheet"));
+  $("line-menu-sheet")?.addEventListener("click", (e) => {
+    if (e.target === $("line-menu-sheet")) closeSheet("line-menu-sheet");
+    const action = e.target?.closest?.("[data-line-action]")?.dataset?.lineAction;
+    if (action) runLineMenuAction(action);
+  });
+  $("btn-line-edit-cancel")?.addEventListener("click", () => closeSheet("line-edit-dialog"));
+  $("btn-line-edit-save")?.addEventListener("click", () => {
+    const i = state.menuLineIndex;
+    const text = $("field-line-edit")?.value || "";
+    closeSheet("line-edit-dialog");
+    if (i < 0) return;
+    const before = structuredClone
+      ? structuredClone(state.project.lines)
+      : JSON.parse(JSON.stringify(state.project.lines));
+    const line = state.project.lines[i];
+    if (line.type === "section") line.label = text.replace(/^\[|\]$/g, "");
+    else line.text.kab = text;
+    const after = structuredClone
+      ? structuredClone(state.project.lines)
+      : JSON.parse(JSON.stringify(state.project.lines));
+    state.project.lines = before;
+    history.push({
+      label: "edit",
+      do: () => {
+        state.project.lines = structuredClone ? structuredClone(after) : JSON.parse(JSON.stringify(after));
+        state.lyricsRows = rowsFromProject(state.project);
+        renderLineList();
+        persist();
+      },
+      undo: () => {
+        state.project.lines = structuredClone ? structuredClone(before) : JSON.parse(JSON.stringify(before));
+        state.lyricsRows = rowsFromProject(state.project);
+        renderLineList();
+        persist();
+      },
+    });
+  });
+
+  $("btn-wave-zoom-in")?.addEventListener("click", () => state.waveform?.zoomIn?.());
+  $("btn-wave-zoom-out")?.addEventListener("click", () => state.waveform?.zoomOut?.());
+  $("btn-wave-follow")?.addEventListener("click", () => {
+    const on = !state.waveform?.getFollow?.();
+    state.waveform?.setFollow?.(on);
+    $("btn-wave-follow")?.classList.toggle("is-active", on);
+    $("btn-wave-follow")?.setAttribute("aria-pressed", on ? "true" : "false");
+  });
+
   history.subscribe(() => updateTapButtons());
 
   $("waveform")?.addEventListener("pointerup", () => {

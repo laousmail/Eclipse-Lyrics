@@ -1,6 +1,7 @@
-/** Detailed waveform drawing, zoom, and draggable markers (no seek-on-tap). */
+/** Detailed waveform: cached peaks, regions, zoom/pan/follow (no accidental seek on mobile). */
 
 import { formatTime } from "./sync.js";
+import { lineMainText, isLyric } from "./core/project.js";
 
 const STATE = {
   peaks: null,
@@ -12,14 +13,39 @@ const STATE = {
   selectedIndex: -1,
   dragging: null,
   onMarkerDrag: null,
+  onRegionEdge: null,
+  onRegionMove: null,
   onSelect: null,
+  onSeek: null,
   emptyLabel: "Load audio to see waveform",
-  peaksCache: null, // { canvas, viewStart, viewEnd, width, height, dpr }
+  peaksCache: null,
+  follow: true,
+  userPanned: false,
+  canvas: null,
+  pinch: null,
+  pan: null,
 };
 
+let peaksWorker = null;
+let peaksReqId = 0;
+
+function getWorker() {
+  if (peaksWorker) return peaksWorker;
+  try {
+    peaksWorker = new Worker(new URL("./peaks.worker.js", import.meta.url), { type: "module" });
+  } catch {
+    peaksWorker = null;
+  }
+  return peaksWorker;
+}
+
 export function initWaveform(canvas, handlers = {}) {
+  STATE.canvas = canvas;
   STATE.onMarkerDrag = handlers.onMarkerDrag || null;
+  STATE.onRegionEdge = handlers.onRegionEdge || null;
+  STATE.onRegionMove = handlers.onRegionMove || null;
   STATE.onSelect = handlers.onSelect || null;
+  STATE.onSeek = handlers.onSeek || null;
 
   const ctx = canvas.getContext("2d");
 
@@ -40,50 +66,128 @@ export function initWaveform(canvas, handlers = {}) {
     "wheel",
     (e) => {
       e.preventDefault();
-      const rect = canvas.getBoundingClientRect();
-      const x = (e.clientX - rect.left) / rect.width;
-      const focus = STATE.viewStart + x * (STATE.viewEnd - STATE.viewStart);
-      const span = STATE.viewEnd - STATE.viewStart;
-      const factor = e.deltaY > 0 ? 1.15 : 1 / 1.15;
-      let newSpan = Math.min(1, Math.max(0.015, span * factor));
-      let start = focus - x * newSpan;
-      let end = start + newSpan;
-      if (start < 0) {
-        start = 0;
-        end = newSpan;
+      if (e.shiftKey) {
+        panBy(e.deltaY !== 0 ? e.deltaY : e.deltaX);
+      } else {
+        zoomAt(e.clientX, e.deltaY > 0 ? 1.15 : 1 / 1.15);
       }
-      if (end > 1) {
-        end = 1;
-        start = 1 - newSpan;
-      }
-      STATE.viewStart = start;
-      STATE.viewEnd = end;
-      STATE.peaksCache = null;
-      draw();
     },
     { passive: false }
   );
 
-  // Markers only — seeking is via the scrubber control
   canvas.addEventListener("pointerdown", (e) => {
     const rect = canvas.getBoundingClientRect();
     const x = e.clientX - rect.left;
-    const hit = hitMarker(x, rect.width);
-    if (hit >= 0) {
-      STATE.dragging = { index: hit, pointerId: e.pointerId };
+    const hit = hitTest(x, rect.width);
+
+    if (e.pointerType === "touch") {
+      // Track for pinch
+      if (!STATE.pinch) STATE.pinch = new Map();
+      STATE.pinch.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (STATE.pinch.size === 2) {
+        const pts = [...STATE.pinch.values()];
+        STATE.pinchMeta = {
+          dist: Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y),
+          mid: (pts[0].x + pts[1].x) / 2,
+          viewStart: STATE.viewStart,
+          viewEnd: STATE.viewEnd,
+        };
+        STATE.dragging = null;
+        STATE.pan = null;
+        return;
+      }
+    }
+
+    if (hit) {
+      STATE.dragging = {
+        kind: hit.kind,
+        index: hit.index,
+        pointerId: e.pointerId,
+        startX: x,
+        startTime: hit.kind === "move" ? lineStartSec(STATE.lines[hit.index]) : null,
+        grabOffset: hit.kind === "move" ? x - timeToX(lineStartSec(STATE.lines[hit.index]), rect.width) : 0,
+      };
       canvas.setPointerCapture(e.pointerId);
-      STATE.onSelect?.(hit);
+      STATE.onSelect?.(hit.index);
+      return;
+    }
+
+    // Desktop: click empty to seek
+    if (e.pointerType === "mouse" && STATE.onSeek) {
+      const t = xToTime(x, rect.width);
+      STATE.onSeek(t);
+      return;
+    }
+
+    // One-finger pan when zoomed
+    if (viewSpan() < 0.999) {
+      STATE.pan = { pointerId: e.pointerId, lastX: x, width: rect.width };
+      canvas.setPointerCapture(e.pointerId);
     }
   });
 
   canvas.addEventListener("pointermove", (e) => {
+    if (STATE.pinch?.has(e.pointerId)) {
+      STATE.pinch.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (STATE.pinch.size === 2 && STATE.pinchMeta) {
+        const pts = [...STATE.pinch.values()];
+        const dist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+        const mid = (pts[0].x + pts[1].x) / 2;
+        const scale = STATE.pinchMeta.dist / Math.max(1, dist);
+        const rect = canvas.getBoundingClientRect();
+        const focusX = (mid - rect.left) / rect.width;
+        const oldSpan = STATE.pinchMeta.viewEnd - STATE.pinchMeta.viewStart;
+        let newSpan = Math.min(1, Math.max(0.015, oldSpan * scale));
+        const focus = STATE.pinchMeta.viewStart + focusX * oldSpan;
+        let start = focus - focusX * newSpan;
+        let end = start + newSpan;
+        if (start < 0) {
+          start = 0;
+          end = newSpan;
+        }
+        if (end > 1) {
+          end = 1;
+          start = 1 - newSpan;
+        }
+        STATE.viewStart = start;
+        STATE.viewEnd = end;
+        STATE.peaksCache = null;
+        disableFollow();
+        draw();
+        return;
+      }
+    }
+
+    if (STATE.pan && STATE.pan.pointerId === e.pointerId) {
+      const rect = canvas.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const dx = x - STATE.pan.lastX;
+      STATE.pan.lastX = x;
+      panByPx(-dx, rect.width);
+      return;
+    }
+
     if (!STATE.dragging || STATE.dragging.pointerId !== e.pointerId) return;
     const rect = canvas.getBoundingClientRect();
-    const t = xToTime(e.clientX - rect.left, rect.width);
-    STATE.onMarkerDrag?.(STATE.dragging.index, t);
+    const x = e.clientX - rect.left;
+    const t = xToTime(x, rect.width);
+    const { kind, index } = STATE.dragging;
+    if (kind === "start" || kind === "marker") {
+      STATE.onMarkerDrag?.(index, t);
+      STATE.onRegionEdge?.(index, "start", t);
+    } else if (kind === "end") {
+      STATE.onRegionEdge?.(index, "end", t);
+    } else if (kind === "move") {
+      const startT = xToTime(x - STATE.dragging.grabOffset, rect.width);
+      const delta = startT - (STATE.dragging.startTime || 0);
+      STATE.onRegionMove?.(index, delta);
+    }
   });
 
   const endDrag = (e) => {
+    STATE.pinch?.delete(e.pointerId);
+    if (STATE.pinch && STATE.pinch.size < 2) STATE.pinchMeta = null;
+    if (STATE.pan && STATE.pan.pointerId === e.pointerId) STATE.pan = null;
     if (STATE.dragging && STATE.dragging.pointerId === e.pointerId) {
       STATE.dragging = null;
     }
@@ -91,21 +195,151 @@ export function initWaveform(canvas, handlers = {}) {
   canvas.addEventListener("pointerup", endDrag);
   canvas.addEventListener("pointercancel", endDrag);
 
-  return { draw, resize, setPeaks, setPlayhead, setLines, setSelected, setDuration, setEmptyLabel };
+  return {
+    draw,
+    resize,
+    setPeaks,
+    setPlayhead,
+    setLines,
+    setSelected,
+    setDuration,
+    setEmptyLabel,
+    setFollow,
+    getFollow: () => STATE.follow,
+    zoomIn: () => zoomAt(null, 1 / 1.2),
+    zoomOut: () => zoomAt(null, 1.2),
+    resetView: () => {
+      STATE.viewStart = 0;
+      STATE.viewEnd = 1;
+      STATE.peaksCache = null;
+      draw();
+    },
+  };
+}
+
+function lineStartSec(line) {
+  if (!line) return 0;
+  if (line.start != null) return line.start;
+  return 0;
+}
+
+function viewSpan() {
+  return STATE.viewEnd - STATE.viewStart;
+}
+
+function disableFollow() {
+  STATE.follow = false;
+  STATE.userPanned = true;
+}
+
+function panBy(delta) {
+  const span = viewSpan();
+  const shift = (delta / 400) * span;
+  let start = STATE.viewStart + shift;
+  let end = STATE.viewEnd + shift;
+  if (start < 0) {
+    end -= start;
+    start = 0;
+  }
+  if (end > 1) {
+    start -= end - 1;
+    end = 1;
+  }
+  STATE.viewStart = Math.max(0, start);
+  STATE.viewEnd = Math.min(1, end);
+  STATE.peaksCache = null;
+  disableFollow();
+  draw();
+}
+
+function panByPx(dx, width) {
+  const span = viewSpan();
+  const shift = (dx / width) * span;
+  let start = STATE.viewStart + shift;
+  let end = start + span;
+  if (start < 0) {
+    start = 0;
+    end = span;
+  }
+  if (end > 1) {
+    end = 1;
+    start = 1 - span;
+  }
+  STATE.viewStart = start;
+  STATE.viewEnd = end;
+  STATE.peaksCache = null;
+  disableFollow();
+  draw();
+}
+
+function zoomAt(clientX, factor) {
+  const canvas = STATE.canvas;
+  if (!canvas) return;
+  const rect = canvas.getBoundingClientRect();
+  const x = clientX == null ? 0.5 : (clientX - rect.left) / rect.width;
+  const focus = STATE.viewStart + x * (STATE.viewEnd - STATE.viewStart);
+  const span = STATE.viewEnd - STATE.viewStart;
+  let newSpan = Math.min(1, Math.max(0.015, span * factor));
+  let start = focus - x * newSpan;
+  let end = start + newSpan;
+  if (start < 0) {
+    start = 0;
+    end = newSpan;
+  }
+  if (end > 1) {
+    end = 1;
+    start = 1 - newSpan;
+  }
+  STATE.viewStart = start;
+  STATE.viewEnd = end;
+  STATE.peaksCache = null;
+  draw();
+}
+
+function setFollow(on) {
+  STATE.follow = Boolean(on);
+  if (STATE.follow) STATE.userPanned = false;
+  draw();
 }
 
 /**
  * Build high-resolution min/max peaks (and RMS envelope) from the buffer.
- * Target ~2–4 peaks per screen CSS pixel at full zoom-out for detail.
+ * Prefer Web Worker when available.
  */
 export function computePeaks(audioBuffer, targetPeaks = 4000) {
   const ch0 = audioBuffer.getChannelData(0);
   const ch1 = audioBuffer.numberOfChannels > 1 ? audioBuffer.getChannelData(1) : null;
+  return computePeaksSync(ch0, ch1, targetPeaks);
+}
+
+export function computePeaksAsync(audioBuffer, targetPeaks = 4000) {
+  const worker = getWorker();
+  if (!worker) {
+    return Promise.resolve(computePeaks(audioBuffer, targetPeaks));
+  }
+  const id = ++peaksReqId;
+  const ch0 = audioBuffer.getChannelData(0);
+  const ch1 = audioBuffer.numberOfChannels > 1 ? audioBuffer.getChannelData(1) : null;
+  const copy0 = ch0.slice().buffer;
+  const copy1 = ch1 ? ch1.slice().buffer : null;
+  return new Promise((resolve, reject) => {
+    const onMsg = (e) => {
+      if (e.data?.id !== id) return;
+      worker.removeEventListener("message", onMsg);
+      if (e.data.error) reject(new Error(e.data.error));
+      else resolve(e.data.peaks);
+    };
+    worker.addEventListener("message", onMsg);
+    const transfer = copy1 ? [copy0, copy1] : [copy0];
+    worker.postMessage({ id, ch0: copy0, ch1: copy1, targetPeaks }, transfer);
+  });
+}
+
+function computePeaksSync(ch0, ch1, targetPeaks = 4000) {
   const length = ch0.length;
   const peaksCount = Math.min(targetPeaks, Math.max(256, Math.floor(length / 64)));
   const block = Math.max(1, Math.floor(length / peaksCount));
-  const peaks = new Float32Array(peaksCount * 3); // min, max, rms
-
+  const peaks = new Float32Array(peaksCount * 3);
   for (let i = 0; i < peaksCount; i++) {
     const start = i * block;
     const end = Math.min(start + block, length);
@@ -145,6 +379,28 @@ function setDuration(d) {
 
 function setPlayhead(t) {
   STATE.playhead = t;
+  if (STATE.follow && STATE.duration && viewSpan() < 0.999) {
+    const frac = t / STATE.duration;
+    const span = viewSpan();
+    const margin = span * 0.2;
+    if (frac < STATE.viewStart + margin || frac > STATE.viewEnd - margin) {
+      let start = frac - span * 0.4;
+      let end = start + span;
+      if (start < 0) {
+        start = 0;
+        end = span;
+      }
+      if (end > 1) {
+        end = 1;
+        start = 1 - span;
+      }
+      if (start !== STATE.viewStart || end !== STATE.viewEnd) {
+        STATE.viewStart = start;
+        STATE.viewEnd = end;
+        STATE.peaksCache = null;
+      }
+    }
+  }
   draw();
 }
 
@@ -176,17 +432,30 @@ function timeToX(t, width) {
   return ((frac - STATE.viewStart) / span) * width;
 }
 
-function hitMarker(x, width) {
-  const threshold = 14;
-  let best = -1;
-  let bestDist = threshold;
+function hitTest(x, width) {
+  const edge = 8;
+  let best = null;
+  let bestDist = 16;
   STATE.lines.forEach((line, i) => {
-    if (line.start == null) return;
-    const mx = timeToX(line.start, width);
-    const d = Math.abs(mx - x);
-    if (d < bestDist) {
-      bestDist = d;
-      best = i;
+    if (!isLyric(line) && line.type === "section") return;
+    const start = line.start;
+    if (start == null) return;
+    const end = line.end != null ? line.end : start + 1;
+    const x0 = timeToX(start, width);
+    const x1 = timeToX(end, width);
+    const dStart = Math.abs(x - x0);
+    const dEnd = Math.abs(x - x1);
+    if (dStart < bestDist) {
+      bestDist = dStart;
+      best = { kind: "start", index: i };
+    }
+    if (dEnd < bestDist) {
+      bestDist = dEnd;
+      best = { kind: "end", index: i };
+    }
+    if (x > x0 + edge && x < x1 - edge) {
+      best = { kind: "move", index: i };
+      bestDist = 0;
     }
   });
   return best;
@@ -224,7 +493,7 @@ function rebuildPeaksCache(width, height, dpr) {
 }
 
 function draw() {
-  const canvas = document.getElementById("waveform");
+  const canvas = STATE.canvas || document.getElementById("waveform");
   if (!canvas) return;
   const ctx = canvas.getContext("2d");
   const dpr = window.devicePixelRatio || 1;
@@ -245,30 +514,39 @@ function draw() {
     ctx.fillText(STATE.emptyLabel, width / 2, height / 2 + 4);
   }
 
+  // Regions
+  const showText = viewSpan() < 0.35;
   STATE.lines.forEach((line, i) => {
+    if (line.type === "section") {
+      // section label tick — no timed region
+      return;
+    }
     if (line.start == null) return;
-    const x = timeToX(line.start, width);
-    if (x < -20 || x > width + 20) return;
+    const x0 = timeToX(line.start, width);
+    const x1 = timeToX(line.end != null ? line.end : line.start + 0.5, width);
+    if (x1 < -20 || x0 > width + 20) return;
     const selected = i === STATE.selectedIndex;
+    const left = Math.max(0, x0);
+    const right = Math.min(width, x1);
+    ctx.fillStyle = selected ? "rgba(255,106,19,0.28)" : "rgba(255,179,71,0.16)";
+    ctx.fillRect(left, height * 0.18, Math.max(2, right - left), height * 0.64);
     ctx.strokeStyle = selected ? "#ff6a13" : "rgba(255,179,71,0.55)";
     ctx.lineWidth = selected ? 2 : 1;
     ctx.beginPath();
-    ctx.moveTo(x, 0);
-    ctx.lineTo(x, height);
+    ctx.moveTo(x0, height * 0.12);
+    ctx.lineTo(x0, height * 0.88);
+    ctx.moveTo(x1, height * 0.12);
+    ctx.lineTo(x1, height * 0.88);
     ctx.stroke();
 
-    ctx.fillStyle = selected ? "#ff6a13" : "#ffb347";
-    ctx.beginPath();
-    ctx.arc(x, 10, selected ? 5 : 4, 0, Math.PI * 2);
-    ctx.fill();
-
-    const label = String(i + 1);
-    ctx.font = "10px ui-monospace, monospace";
-    ctx.fillStyle = "rgba(7,6,5,0.8)";
-    ctx.fillRect(x + 4, 2, ctx.measureText(label).width + 6, 14);
-    ctx.fillStyle = "#f2e9dd";
-    ctx.textAlign = "left";
-    ctx.fillText(label, x + 7, 12);
+    if (showText && right - left > 36) {
+      const label = lineMainText(line) || String(i + 1);
+      ctx.font = "11px Outfit, Noto Sans, sans-serif";
+      ctx.fillStyle = "rgba(242,233,221,0.9)";
+      ctx.textAlign = "left";
+      const clipped = label.length > 28 ? `${label.slice(0, 27)}…` : label;
+      ctx.fillText(clipped, left + 6, height * 0.42);
+    }
   });
 
   if (STATE.duration) {

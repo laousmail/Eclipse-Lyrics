@@ -162,7 +162,11 @@ export function isPlaying() {
 }
 
 export function setPlaybackRate(rate) {
-  getAudioElement().playbackRate = rate;
+  const a = getAudioElement();
+  a.preservesPitch = true;
+  if ("mozPreservesPitch" in a) a.mozPreservesPitch = true;
+  if ("webkitPreservesPitch" in a) a.webkitPreservesPitch = true;
+  a.playbackRate = rate;
 }
 
 export function getPlaybackRate() {
