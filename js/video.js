@@ -222,6 +222,7 @@ export async function startRecording(project, { onProgress, onDone, onError, onH
   canvas.width = w;
   canvas.height = h;
 
+  await ensureVideoFonts();
   await resumeContext();
   const fps = 30;
   const canvasStream = canvas.captureStream(fps);
