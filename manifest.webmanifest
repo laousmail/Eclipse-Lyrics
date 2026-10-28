@@ -5,9 +5,11 @@
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
   "orientation": "any",
   "background_color": "#070605",
   "theme_color": "#070605",
+  "prefer_related_applications": false,
   "lang": "en",
   "categories": ["music", "utilities", "productivity"],
   "icons": [

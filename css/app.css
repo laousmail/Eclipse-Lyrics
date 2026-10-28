@@ -120,8 +120,11 @@
 
 html {
   height: 100%;
+  height: 100dvh;
+  height: -webkit-fill-available;
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
+  background-color: var(--bg);
   background: var(--bg);
   /* Allow intentional pinch (B20 a11y). Buttons/controls opt into manipulation. */
   overscroll-behavior: none;
@@ -131,10 +134,12 @@ body {
   margin: 0;
   min-height: 100%;
   min-height: 100dvh;
+  min-height: -webkit-fill-available;
   font: 400 1rem/1.5 var(--sans);
   color: var(--ink);
+  background-color: var(--bg);
   background:
-    radial-gradient(ellipse 90% 40% at 50% -5%, color-mix(in srgb, var(--hot) 18%, transparent), transparent 55%),
+    radial-gradient(ellipse 90% 40% at 50% -5%, color-mix(in srgb, var(--feat, var(--hot)) 16%, transparent), transparent 55%),
     var(--bg);
   -webkit-font-smoothing: antialiased;
   overflow-x: clip;
@@ -145,6 +150,49 @@ body {
   width: 100%;
   height: 100%;
   height: 100dvh;
+  height: -webkit-fill-available;
+  /* Edge-to-edge under notch / home indicator when viewport-fit=cover */
+  padding: 0;
+  box-sizing: border-box;
+}
+
+/* Installed PWA: fill the display with no letterbox / status-bar holes */
+@media (display-mode: standalone), (display-mode: fullscreen), (display-mode: minimal-ui) {
+  html,
+  body {
+    background-color: var(--bg);
+    background: var(--bg);
+    min-height: 100%;
+    min-height: 100dvh;
+    min-height: 100svh;
+    min-height: -webkit-fill-available;
+    height: 100%;
+    height: 100dvh;
+    height: 100svh;
+    height: -webkit-fill-available;
+    max-height: 100%;
+    max-height: 100dvh;
+  }
+  body {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    overflow: hidden;
+  }
+  .app {
+    height: 100%;
+    min-height: 100%;
+    max-height: 100%;
+    background-color: var(--bg);
+  }
+}
+
+/* iOS home-screen launch (navigator.standalone) — same edge-to-edge fill */
+html.standalone-ios,
+html.standalone-ios body {
+  background-color: var(--bg);
+  min-height: -webkit-fill-available;
+  height: -webkit-fill-available;
 }
 
 .visually-hidden {
@@ -198,6 +246,10 @@ a:hover {
   font-size: 0.92rem;
 }
 
+.danger-text {
+  color: var(--danger);
+}
+
 /* ——— App shell ——— */
 .app {
   display: flex;
@@ -208,6 +260,10 @@ a:hover {
   position: relative;
   background: transparent;
   overflow: hidden;
+  /* Landscape notches: keep chrome clear of safe edges */
+  padding-left: var(--safe-l);
+  padding-right: var(--safe-r);
+  box-sizing: border-box;
 }
 
 .app-topbar {
@@ -226,7 +282,7 @@ a:hover {
   background: var(--glass);
   -webkit-backdrop-filter: blur(14px);
   backdrop-filter: blur(14px);
-  border-bottom: 1px solid var(--line);
+  border-bottom: 1px solid color-mix(in srgb, var(--feat, var(--line)) 22%, var(--line));
 }
 
 .brand {
@@ -370,12 +426,19 @@ body.keyboard-open.dock-on .app-screens {
 
 .eyebrow {
   margin: 0 0 0.35rem;
-  color: var(--gold);
+  color: var(--feat, var(--gold));
   font-size: 0.72rem;
   font-weight: 600;
   letter-spacing: 0.16em;
   text-transform: uppercase;
 }
+
+/* Per-screen eyebrow accents (fallback if body[data-screen] not set yet) */
+.screen[data-screen="projects"] .eyebrow { color: var(--feat-projects); }
+.screen[data-screen="prepare"] .eyebrow { color: var(--feat-song); }
+.screen[data-screen="sync"] .eyebrow { color: var(--feat-sync); }
+.screen[data-screen="video"] .eyebrow { color: var(--feat-film); }
+.screen[data-screen="export"] .eyebrow { color: var(--feat-export); }
 
 .screen-lead {
   margin: 0.55rem 0 0;
@@ -428,6 +491,25 @@ body.keyboard-open.dock-on .app-screens {
   box-shadow: 0 10px 28px -12px color-mix(in srgb, var(--hot) 70%, transparent);
 }
 
+/* Screen-primary fill follows active feature accent (calm, not rainbow) */
+body[data-screen="sync"] .btn-fill,
+body[data-screen="sync"] .screen-next {
+  background: var(--grad-sync);
+  box-shadow: 0 10px 28px -12px color-mix(in srgb, var(--feat-sync) 70%, transparent);
+}
+body[data-screen="video"] .btn-fill {
+  background: var(--grad-film);
+  box-shadow: 0 10px 28px -12px color-mix(in srgb, var(--feat-film) 65%, transparent);
+}
+body[data-screen="export"] .btn-fill {
+  background: linear-gradient(110deg, var(--feat-export), #ffe0a0);
+  box-shadow: 0 10px 28px -12px color-mix(in srgb, var(--feat-export) 65%, transparent);
+}
+body[data-screen="projects"] .btn-fill {
+  background: linear-gradient(110deg, #e08a28, var(--feat-projects));
+  box-shadow: 0 10px 28px -12px color-mix(in srgb, var(--feat-projects) 60%, transparent);
+}
+
 .btn-ghost {
   background: none;
   color: var(--ink);
@@ -436,7 +518,17 @@ body.keyboard-open.dock-on .app-screens {
 
 .btn-ghost:hover:not(:disabled),
 .btn-ghost:active:not(:disabled) {
-  box-shadow: inset 0 0 0 1.5px var(--gold);
+  box-shadow: inset 0 0 0 1.5px var(--feat, var(--gold));
+}
+
+.btn-ok {
+  background: color-mix(in srgb, var(--ok) 22%, var(--bg3));
+  color: var(--ok-strong);
+  box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--ok) 55%, var(--line));
+}
+
+.ok-text {
+  color: var(--ok-strong);
 }
 
 .btn-sm {
@@ -1021,12 +1113,13 @@ kbd {
   grid-template-columns: var(--touch-lg) 1fr var(--touch) var(--touch) var(--touch);
   gap: 0.55rem;
   align-items: center;
-  padding: 0.7rem var(--gutter) 0.65rem;
+  padding: 0.7rem max(var(--gutter), var(--safe-r)) 0.65rem max(var(--gutter), var(--safe-l));
   background: var(--glass);
   -webkit-backdrop-filter: blur(16px);
   backdrop-filter: blur(16px);
-  border-top: 1px solid var(--line);
+  border-top: 1px solid color-mix(in srgb, var(--feat-sync) 25%, var(--line));
   box-shadow: 0 -12px 40px -20px rgba(0, 0, 0, 0.65);
+  box-sizing: border-box;
 }
 
 .player-dock[hidden] {
@@ -1038,18 +1131,20 @@ kbd {
   height: var(--touch-lg);
   border-radius: 50%;
   border: 0;
+  /* Secondary to Tap — quiet surface, not competing with primary ember */
   background: var(--bg3);
   color: var(--ink);
   font-size: 1.05rem;
   cursor: pointer;
   box-shadow: inset 0 0 0 1.5px var(--line);
   -webkit-tap-highlight-color: transparent;
-  transition: transform 0.15s var(--ease), background 0.15s;
+  transition: transform 0.15s var(--ease), background 0.15s, box-shadow 0.15s;
 }
 
 .dock-play:active {
   transform: scale(0.94);
   background: var(--bg2);
+  box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--feat-sync) 40%, var(--line));
 }
 
 .dock-tap {
@@ -1061,12 +1156,13 @@ kbd {
   min-height: var(--touch-lg);
   border: 0;
   border-radius: 99px;
-  background: var(--grad);
+  /* Primary sync action — hotter ember than secondary Play */
+  background: var(--grad-sync);
   color: var(--on);
   font: inherit;
   font-weight: 600;
   cursor: pointer;
-  box-shadow: 0 8px 24px -10px color-mix(in srgb, var(--hot) 70%, transparent);
+  box-shadow: 0 8px 24px -10px color-mix(in srgb, var(--feat-sync) 70%, transparent);
   -webkit-tap-highlight-color: transparent;
   touch-action: manipulation;
   transition: transform 0.15s var(--ease), box-shadow 0.2s var(--ease);
@@ -1128,12 +1224,27 @@ kbd {
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 0;
   min-height: calc(var(--tabbar-h) + var(--safe-b));
-  padding: 0.35rem 0.15rem calc(0.35rem + var(--safe-b));
+  padding: 0.35rem max(0.15rem, var(--safe-r)) calc(0.35rem + var(--safe-b)) max(0.15rem, var(--safe-l));
   background: var(--glass);
   -webkit-backdrop-filter: blur(16px);
   backdrop-filter: blur(16px);
   border-top: 1px solid var(--line);
   touch-action: manipulation;
+  box-sizing: border-box;
+}
+
+/* Subtle top edge tint matches active tab feature (no pills / no rainbow strip) */
+.app-tabbar:has(.tab[data-goto="projects"].is-active) {
+  border-top-color: color-mix(in srgb, var(--feat-projects) 40%, var(--line));
+}
+.app-tabbar:has(.tab[data-goto="prepare"].is-active) {
+  border-top-color: color-mix(in srgb, var(--feat-song) 40%, var(--line));
+}
+.app-tabbar:has(.tab[data-goto="sync"].is-active) {
+  border-top-color: color-mix(in srgb, var(--feat-sync) 45%, var(--line));
+}
+.app-tabbar:has(.tab[data-goto="video"].is-active) {
+  border-top-color: color-mix(in srgb, var(--feat-film) 45%, var(--line));
 }
 
 .tab {
@@ -1168,7 +1279,7 @@ kbd {
 
 .tab:active {
   transform: scale(0.96);
-  background: color-mix(in srgb, var(--hot) 10%, transparent);
+  background: color-mix(in srgb, var(--feat, var(--hot)) 10%, transparent);
 }
 
 .tab-icon {
@@ -1177,11 +1288,28 @@ kbd {
 }
 
 .tab.is-active {
-  color: var(--gold);
+  color: var(--feat, var(--gold));
 }
 
 .tab.is-active .tab-icon {
-  color: var(--hot);
+  color: var(--feat, var(--hot));
+}
+
+.tab[data-goto="projects"].is-active,
+.tab[data-goto="projects"].is-active .tab-icon {
+  color: var(--feat-projects);
+}
+.tab[data-goto="prepare"].is-active,
+.tab[data-goto="prepare"].is-active .tab-icon {
+  color: var(--feat-song);
+}
+.tab[data-goto="sync"].is-active,
+.tab[data-goto="sync"].is-active .tab-icon {
+  color: var(--feat-sync);
+}
+.tab[data-goto="video"].is-active,
+.tab[data-goto="video"].is-active .tab-icon {
+  color: var(--feat-film);
 }
 
 /* ——— Sheets ——— */
@@ -1833,11 +1961,19 @@ details.export-preview:not([open]) > *:not(summary) {
 }
 
 .progress-ring-fg {
-  stroke: var(--hot);
+  stroke: var(--feat-sync);
   stroke-linecap: round;
   stroke-dasharray: 94.2;
   stroke-dashoffset: 94.2;
-  transition: stroke-dashoffset 0.2s var(--ease);
+  transition: stroke-dashoffset 0.2s var(--ease), stroke 0.2s var(--ease);
+}
+
+.progress-chip.is-complete {
+  border-color: color-mix(in srgb, var(--ok) 50%, var(--line));
+  color: var(--ok-strong);
+}
+.progress-chip.is-complete .progress-ring-fg {
+  stroke: var(--ok-strong);
 }
 
 .offset-chip {
@@ -2626,7 +2762,12 @@ body.dock-on .install-soft-tip {
 
 .sheet-row-install {
   font-weight: 600;
-  color: var(--hot, var(--ink));
+  color: var(--feat-song);
+}
+
+#btn-sheet-export {
+  color: var(--feat-export);
+  font-weight: 600;
 }
 
 .install-steps {
