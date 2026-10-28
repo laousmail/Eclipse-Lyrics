@@ -1391,39 +1391,91 @@ kbd {
   min-width: 0;
 }
 
-/* Phones: Install text btn → More sheet. Single-row header (Help removed) so
-   brand + lang + ⋮ fit ~390px without wrapping over screen titles. */
-@media (max-width: 1023px) {
-  #btn-install {
-    display: none !important;
-  }
+/* Install never lives in the header — More sheet only */
+#btn-install {
+  display: none !important;
+}
 
-  .app-topbar {
-    flex-wrap: nowrap;
-    gap: 0.45rem;
-  }
+.app-topbar .topbar-tools {
+  flex: 0 0 auto;
+  gap: 0.25rem;
+}
 
-  .brand {
-    flex: 1 1 auto;
-    min-width: 0;
-  }
+/* Progressive disclosure for secondary chrome.
+   Explicit hide: our .btn/.field display rules otherwise beat the UA
+   details:not([open]) > *:not(summary) { display:none }. */
+details.simple-more:not([open]) > *:not(summary),
+details.export-more:not([open]) > *:not(summary),
+details.export-preview:not([open]) > *:not(summary) {
+  display: none !important;
+}
 
-  .topbar-tools {
-    flex: 0 0 auto;
-    justify-content: flex-end;
-    gap: 0.3rem;
-  }
+.simple-more {
+  margin: 0.35rem 0 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--bg2);
+  padding: 0.15rem 0.75rem 0.55rem;
+}
 
-  .lang-btn {
-    min-width: 2.05rem;
-    min-height: 2.2rem;
-    font-size: 0.72rem;
-  }
+.simple-more > summary {
+  cursor: pointer;
+  list-style: none;
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--mute);
+  padding: 0.55rem 0.15rem;
+  -webkit-tap-highlight-color: transparent;
+}
 
-  .icon-btn {
-    width: 2.5rem;
-    height: 2.5rem;
-  }
+.simple-more > summary::-webkit-details-marker {
+  display: none;
+}
+
+.simple-more > summary::after {
+  content: "▸";
+  float: right;
+  opacity: 0.7;
+}
+
+.simple-more[open] > summary::after {
+  content: "▾";
+}
+
+.simple-more .gdocs-block,
+.simple-more .export-options,
+.simple-more .export-cards {
+  margin-top: 0.35rem;
+}
+
+.lang-pill-sheet {
+  margin: 0 0 0.85rem;
+  width: fit-content;
+}
+
+.sheet-lang-label {
+  margin: 0 0 0.35rem;
+}
+
+.sync-toolbar-simple {
+  flex-wrap: wrap;
+  gap: 0.45rem 0.65rem;
+}
+
+.sync-toolbar-extra {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  padding-bottom: 0.25rem;
+}
+
+.wave-more {
+  margin: 0 0 0.35rem;
+  padding-bottom: 0.35rem;
+}
+
+.film-customize {
+  margin-top: 0.75rem;
 }
 
 .lang-pill,

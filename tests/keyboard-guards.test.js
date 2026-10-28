@@ -33,10 +33,24 @@ describe("keyboard / zoom UX guards", () => {
     const topbar = html.slice(html.indexOf('class="app-topbar"'), html.indexOf("</header>", html.indexOf('class="app-topbar"')));
     assert.ok(!topbar.includes('id="btn-help"'));
     assert.ok(!topbar.includes('data-goto="help"'));
-    const more = html.slice(html.indexOf('id="more-sheet"'), html.indexOf("</div>", html.indexOf('id="more-sheet"') + 200));
-    assert.ok(html.includes('id="more-sheet"') && html.includes('data-goto="help"'));
-    // Help row lives in the More sheet list
+    assert.ok(!topbar.includes("lang-pill"));
+    assert.ok(topbar.includes('id="btn-more"'));
     assert.match(html, /id="more-sheet"[\s\S]*?data-goto="help"[\s\S]*?data-i18n="help"/);
+    assert.match(html, /id="more-sheet"[\s\S]*?lang-pill/);
+  });
+
+  it("keeps secondary chrome behind progressive disclosure", () => {
+    const html = readFileSync(new URL("../index.html", import.meta.url), "utf8");
+    const css = readFileSync(new URL("../css/app.css", import.meta.url), "utf8");
+    assert.match(html, /data-i18n="syncMore"/);
+    assert.match(html, /data-i18n="exportMore"/);
+    assert.match(html, /data-i18n="lyricsMore"/);
+    assert.match(html, /data-i18n="filmCustomize"/);
+    assert.match(css, /details\.simple-more:not\(\[open\]\)/);
+    // Primary actions still present
+    assert.match(html, /id="btn-export-srt"/);
+    assert.match(html, /id="btn-tap"/);
+    assert.match(html, /id="btn-new-project"/);
   });
 
   it("hides desktop step-seg on mobile (no brand overlap)", () => {

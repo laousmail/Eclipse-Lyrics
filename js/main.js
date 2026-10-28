@@ -1581,6 +1581,8 @@ function setupNavigation() {
         const b = $("btn-continue-lyrics");
         if (b) b.textContent = i18n.t("loadedContinue");
       }
+      // Language lives in More — close after pick for a calmer flow
+      if (btn.closest("#more-sheet")) closeSheet("more-sheet");
     });
   });
 }
@@ -2692,10 +2694,8 @@ function setupPhase5() {
 
   pwa.onBeforeInstall(() => {
     if (pwa.isStandalone()) return;
-    const btn = $("btn-install");
+    // Install lives in More sheet only (header stays brand + ⋮)
     const sheet = $("btn-sheet-install");
-    // Topbar Install stays desktop-only (CSS); More sheet covers phones
-    if (btn) btn.hidden = false;
     if (sheet) sheet.hidden = false;
   });
 
