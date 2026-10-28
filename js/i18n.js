@@ -117,6 +117,9 @@ const STRINGS = {
     lyricsRematchNone: "Lyrics updated",
     markEnd: "mark end",
     allLinesTimed: "All lines timed ✓",
+    errProjectJson: "That project file isn’t valid JSON.",
+    errProjectShape: "Project file is missing a valid lines list.",
+    errImport: "Import failed",
   },
   fr: {
     metaDescription:

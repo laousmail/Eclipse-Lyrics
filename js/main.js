@@ -957,8 +957,19 @@ function setupUI() {
   $("input-project").addEventListener("change", async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const text = await file.text();
-    mergeImported(JSON.parse(text));
+    try {
+      const text = await file.text();
+      let data;
+      try {
+        data = JSON.parse(text);
+      } catch {
+        throw new Error(i18n.t("errProjectJson"));
+      }
+      if (!isValidProjectShape(data)) throw new Error(i18n.t("errProjectShape"));
+      mergeImported(data);
+    } catch (err) {
+      showToast(err.message || i18n.t("errImport"));
+    }
     e.target.value = "";
   });
 
@@ -969,7 +980,7 @@ function setupUI() {
     try {
       mergeImported(exp.parseImportedProject(text, file.name));
     } catch (err) {
-      alert(err.message || "Import failed");
+      showToast(err.message || i18n.t("errImport"));
     }
     e.target.value = "";
   });
