@@ -95,6 +95,22 @@ function setStatus(msg) {
   if (el) el.textContent = msg;
 }
 
+let toastTimer = 0;
+function showToast(message) {
+  const el = $("toast");
+  if (!el || !message) return;
+  el.hidden = false;
+  el.textContent = message;
+  el.classList.add("is-on");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => {
+    el.classList.remove("is-on");
+    setTimeout(() => {
+      el.hidden = true;
+    }, 180);
+  }, 2800);
+}
+
 function formatClock(t) {
   return sync.formatTime(t);
 }
@@ -292,6 +308,16 @@ function applyLyricsFromFields() {
   state.undoStack = [];
   renderLineList();
   persist();
+  if (result.changed || result.added) {
+    showToast(
+      i18n
+        .t("lyricsRematch")
+        .replace("{changed}", String(result.changed))
+        .replace("{added}", String(result.added))
+    );
+  } else if (state.project.lines.length) {
+    showToast(i18n.t("lyricsRematchNone"));
+  }
   if (state.project.lines.length) {
     haptics.success();
     showScreen("sync");

@@ -113,6 +113,8 @@ const STRINGS = {
     errGdocsBad: "That doesn’t look like a Google Docs link.",
     loadingAudio: "Loading…",
     loadingDocs: "Fetching document…",
+    lyricsRematch: "{changed} lines changed, {added} added",
+    lyricsRematchNone: "Lyrics updated",
   },
   fr: {
     metaDescription:
@@ -228,6 +230,8 @@ const STRINGS = {
     errGdocsBad: "Ça ne ressemble pas à un lien Google Docs.",
     loadingAudio: "Chargement…",
     loadingDocs: "Récupération du document…",
+    lyricsRematch: "{changed} lignes modifiées, {added} ajoutée(s)",
+    lyricsRematchNone: "Paroles mises à jour",
   },
 };
 

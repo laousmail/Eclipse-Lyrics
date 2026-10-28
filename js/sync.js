@@ -39,6 +39,31 @@ export function parseLyricText(text) {
     .filter((l) => l.length > 0);
 }
 
+/** Longest common subsequence indices: equal strings only. */
+export function lcsIndexMap(oldTexts, newTexts) {
+  const n = oldTexts.length;
+  const m = newTexts.length;
+  const dp = Array.from({ length: n + 1 }, () => new Uint16Array(m + 1));
+  for (let i = 1; i <= n; i++) {
+    for (let j = 1; j <= m; j++) {
+      if (oldTexts[i - 1] === newTexts[j - 1]) dp[i][j] = dp[i - 1][j - 1] + 1;
+      else dp[i][j] = Math.max(dp[i - 1][j], dp[i][j - 1]);
+    }
+  }
+  const newToOld = Array(m).fill(-1);
+  let i = n;
+  let j = m;
+  while (i > 0 && j > 0) {
+    if (oldTexts[i - 1] === newTexts[j - 1]) {
+      newToOld[j - 1] = i - 1;
+      i -= 1;
+      j -= 1;
+    } else if (dp[i - 1][j] >= dp[i][j - 1]) i -= 1;
+    else j -= 1;
+  }
+  return newToOld;
+}
+
 export function applyLyrics(project, mainText, frText, enText) {
   const main = parseLyricText(mainText);
   const fr = parseLyricText(frText);
@@ -52,24 +77,49 @@ export function applyLyrics(project, mainText, frText, enText) {
     warnings.push(`English has ${en.length} lines, main has ${main.length}.`);
   }
 
-  // Preserve timings when line count matches and texts align by index where possible
   const prev = project.lines || [];
+  const map = lcsIndexMap(
+    prev.map((l) => l.text),
+    main
+  );
+  const usedOld = new Set(map.filter((idx) => idx >= 0));
+
+  let changed = 0;
+  let added = 0;
+
   const lines = main.map((text, i) => {
-    const old = prev[i];
+    let oldIdx = map[i];
+    let kind = "match";
+    if (oldIdx < 0) {
+      // Edited line staying in the same slot (old index unused by LCS)
+      if (prev[i] && !usedOld.has(i)) {
+        oldIdx = i;
+        usedOld.add(i);
+        kind = "edit";
+      } else {
+        kind = "add";
+      }
+    }
+
+    const old = oldIdx >= 0 ? prev[oldIdx] : null;
+    if (kind === "edit") changed += 1;
+    if (kind === "add") added += 1;
+    if (kind === "match" && old && old.text !== text) changed += 1;
+
     return {
       id: old?.id || uid(),
-      start: old && old.text === text ? old.start : old?.start ?? null,
-      end: old && old.text === text ? old.end : old?.end ?? null,
+      // Exact LCS match or same-slot edit keeps timing; pure inserts are untimed
+      start: kind === "add" ? null : (old?.start ?? null),
+      end: kind === "add" ? null : (old?.end ?? null),
       text,
       fr: fr[i] || "",
       en: en[i] || "",
     };
   });
 
-  // Recompute ends from next starts
   recomputeEnds(lines, project.duration);
 
-  return { lines, warnings, main, fr, en };
+  return { lines, warnings, main, fr, en, changed, added };
 }
 
 export function recomputeEnds(lines, duration = 0) {
