@@ -8,7 +8,8 @@
   --surface: #1a1412;
   --ink: #f2e9dd;
   --text: var(--ink);
-  --mute: #b0a699;
+  /* ≥4.5:1 on --bg #070605 for muted body text (a11y) */
+  --mute: #c4b8a8;
   --line: #2b241e;
   --hot: #ff6a13;
   --gold: #ffb347;
