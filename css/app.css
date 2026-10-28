@@ -895,6 +895,7 @@ kbd {
   cursor: pointer;
   box-shadow: 0 8px 24px -10px color-mix(in srgb, var(--hot) 70%, transparent);
   -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
   transition: transform 0.15s var(--ease), box-shadow 0.2s var(--ease);
 }
 
