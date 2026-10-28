@@ -322,7 +322,8 @@ body.dock-on.has-tabbar .app-screens {
 body.keyboard-open .app-tabbar,
 body.keyboard-open .player-dock,
 body.keyboard-open .screen-tip,
-body.keyboard-open .ios-install-hint {
+body.keyboard-open .ios-install-hint,
+body.keyboard-open .install-soft-tip {
   visibility: hidden;
   pointer-events: none;
 }
@@ -2587,6 +2588,55 @@ details.export-preview:not([open]) > *:not(summary) {
 }
 .ios-install-hint[hidden] { display: none !important; }
 .ios-install-hint p { margin: 0; flex: 1; font-size: var(--fs-sm); }
+
+/* One-time soft tip above the tab bar — does not cover header or primary content */
+.install-soft-tip {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: calc(var(--tabbar-h) + var(--safe-b) + 0.55rem);
+  z-index: 42;
+  width: min(100% - 1.5rem, 22rem);
+  display: flex;
+  gap: 0.45rem;
+  align-items: center;
+  padding: 0.45rem 0.65rem;
+  background: color-mix(in srgb, var(--bg3) 92%, transparent);
+  border: 1px solid color-mix(in srgb, var(--line) 80%, transparent);
+  border-radius: var(--radius);
+  box-shadow: 0 8px 24px -16px rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+.install-soft-tip[hidden] { display: none !important; }
+.install-soft-tip p {
+  margin: 0;
+  flex: 1;
+  font-size: var(--fs-sm);
+  color: var(--mute);
+  line-height: 1.25;
+}
+body.dock-on .install-soft-tip {
+  /* Stay clear of the player dock when sync/playback chrome is up */
+  bottom: calc(var(--dock-h) + var(--tabbar-h) + var(--safe-b) + 0.55rem);
+}
+@media (min-width: 900px) {
+  .install-soft-tip { display: none !important; }
+}
+
+.sheet-row-install {
+  font-weight: 600;
+  color: var(--hot, var(--ink));
+}
+
+.install-steps {
+  margin: 0.5rem 0 0.75rem;
+  padding-left: 1.2rem;
+  color: var(--ink);
+  font-size: var(--fs-md);
+  line-height: 1.45;
+}
+.install-steps li { margin: 0.4rem 0; }
 
 .help-block {
   margin: 0 0 1.25rem;

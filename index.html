@@ -69,8 +69,15 @@
     </div>
   </div>
 
+  <!-- Soft, one-time tip → ⋮ Install (does not cover primary chrome) -->
+  <div id="install-soft-tip" class="install-soft-tip" hidden role="status">
+    <p id="install-soft-tip-text" data-i18n="installTip">Install as an app: tap ⋮ → Install app</p>
+    <button type="button" id="btn-install-tip-dismiss" class="btn btn-ghost btn-sm" data-i18n="gotIt">Got it</button>
+  </div>
+
+  <!-- Legacy id kept for older CSS / SW; hidden permanently in favor of soft tip + More -->
   <div id="ios-install-hint" class="ios-install-hint" hidden role="status">
-    <p data-i18n="iosInstallHint">Install: Share → Add to Home Screen</p>
+    <p data-i18n="iosInstallHint">Add to Home Screen: Share → Add to Home Screen</p>
     <button type="button" id="btn-ios-hint-dismiss" class="btn btn-ghost btn-sm" data-i18n="gotIt">Got it</button>
   </div>
 
@@ -84,12 +91,12 @@
         <button type="button" class="lang-btn" data-lang="kab" aria-pressed="false">KAB</button>
       </div>
       <div class="sheet-list">
+        <button type="button" id="btn-sheet-install" class="sheet-row sheet-row-install" hidden data-i18n="installApp">Install app</button>
         <button type="button" id="btn-goto-projects" class="sheet-row" data-goto="projects" data-i18n="tabProjects">Projects</button>
         <button type="button" id="btn-sheet-export" class="sheet-row" data-goto="export" data-i18n="export">Export</button>
         <button type="button" id="btn-save-project" class="sheet-row" data-i18n="saveProject">Save project file</button>
         <button type="button" id="btn-export-bundle" class="sheet-row" data-i18n="exportBundle">Export with audio (.eclipselyrics)</button>
         <button type="button" id="btn-sheet-demo" class="sheet-row" data-i18n="tryDemo">Try with a demo song</button>
-        <button type="button" id="btn-sheet-install" class="sheet-row" hidden data-i18n="installApp">Install app</button>
         <button type="button" class="sheet-row" data-goto="help" data-i18n="help">Help</button>
         <label class="sheet-row file-row">
           <span data-i18n="openProject">Open project file</span>
@@ -139,6 +146,19 @@
         <button type="button" id="btn-import-join" class="btn btn-fill" data-i18n="importJoinLines">Join into one lyric line</button>
         <button type="button" id="btn-import-tr" class="btn btn-ghost" data-i18n="importSecondIsTr">Second line is translation</button>
       </div>
+    </div>
+  </div>
+
+  <div id="ios-install-sheet" class="sheet-overlay" hidden role="dialog" aria-modal="true" aria-labelledby="ios-install-title">
+    <div class="sheet">
+      <p id="ios-install-title" class="sheet-title" data-i18n="iosInstallTitle">Add to Home Screen</p>
+      <ol class="install-steps">
+        <li data-i18n="iosInstallStep1">Tap the Share button in Safari</li>
+        <li data-i18n="iosInstallStep2">Scroll and tap Add to Home Screen</li>
+        <li data-i18n="iosInstallStep3">Tap Add — Eclipse opens like a real app</li>
+      </ol>
+      <p class="muted tip" data-i18n="iosInstallNote">Works best in Safari. The icon appears on your Home Screen.</p>
+      <button type="button" id="btn-ios-install-close" class="btn btn-fill sheet-dismiss" data-i18n="gotIt">Got it</button>
     </div>
   </div>
 

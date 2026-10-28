@@ -2581,6 +2581,11 @@ function dismissScreenTip() {
   const tip = $("screen-tip");
   if (tip) tip.hidden = true;
   if (state.screen) onboarding.markTipSeen(state.screen);
+  try {
+    document.dispatchEvent(new CustomEvent("eclipse:screen-tip-hidden"));
+  } catch {
+    /* ignore */
+  }
 }
 
 let introIndex = 0;
@@ -2596,6 +2601,12 @@ function hideIntro() {
   const overlay = $("intro-overlay");
   if (overlay) overlay.hidden = true;
   onboarding.markIntroSeen();
+  // Soft install tip waits until intro is gone
+  try {
+    document.dispatchEvent(new CustomEvent("eclipse:intro-hidden"));
+  } catch {
+    /* ignore */
+  }
 }
 
 function renderIntroCard() {
@@ -2659,14 +2670,80 @@ function setupPhase5() {
     loadDemoProject();
   });
 
+  const INSTALL_TIP_KEY = "eclipse-install-tip";
+
+  function dismissInstallSoftTip() {
+    const tip = $("install-soft-tip");
+    if (tip) tip.hidden = true;
+    try {
+      localStorage.setItem(INSTALL_TIP_KEY, "1");
+    } catch {
+      /* ignore */
+    }
+  }
+
+  function installTipSeen() {
+    try {
+      return localStorage.getItem(INSTALL_TIP_KEY) === "1";
+    } catch {
+      return false;
+    }
+  }
+
+  function refreshInstallOffer() {
+    const sheet = $("btn-sheet-install");
+    const top = $("btn-install");
+    if (top) {
+      top.hidden = true;
+      top.setAttribute("aria-hidden", "true");
+      top.tabIndex = -1;
+    }
+    const mode = pwa.installOfferMode();
+    if (!sheet) return mode;
+    if (!mode) {
+      sheet.hidden = true;
+      const tip = $("install-soft-tip");
+      if (tip) tip.hidden = true;
+      return mode;
+    }
+    sheet.hidden = false;
+    const key = mode === "ios" ? "addToHomeScreen" : "installApp";
+    sheet.setAttribute("data-i18n", key);
+    sheet.textContent = i18n.t(key);
+    maybeShowInstallSoftTip(mode);
+    return mode;
+  }
+
+  function maybeShowInstallSoftTip(mode) {
+    const tip = $("install-soft-tip");
+    const text = $("install-soft-tip-text");
+    if (!tip || !mode || pwa.isStandalone() || !pwa.isMobileUa() || installTipSeen()) {
+      if (tip) tip.hidden = true;
+      return;
+    }
+    const intro = $("intro-overlay");
+    if (intro && !intro.hidden) {
+      tip.hidden = true;
+      return;
+    }
+    // Don't stack over the per-screen tip
+    const screenTip = $("screen-tip");
+    if (screenTip && !screenTip.hidden) {
+      tip.hidden = true;
+      return;
+    }
+    if (text) {
+      const tipKey = mode === "ios" ? "installTipIos" : "installTip";
+      text.setAttribute("data-i18n", tipKey);
+      text.textContent = i18n.t(tipKey);
+    }
+    tip.hidden = false;
+  }
+
   async function runInstallPrompt() {
     const ok = await pwa.promptInstall();
-    if (ok) {
-      const top = $("btn-install");
-      const sheet = $("btn-sheet-install");
-      if (top) top.hidden = true;
-      if (sheet) sheet.hidden = true;
-    }
+    refreshInstallOffer();
+    if (ok) dismissInstallSoftTip();
     return ok;
   }
 
@@ -2675,8 +2752,15 @@ function setupPhase5() {
   });
   $("btn-sheet-install")?.addEventListener("click", async () => {
     closeSheet("more-sheet");
+    dismissInstallSoftTip();
+    const mode = pwa.installOfferMode();
+    if (mode === "ios") {
+      openSheet("ios-install-sheet");
+      return;
+    }
     await runInstallPrompt();
   });
+  $("btn-install-tip-dismiss")?.addEventListener("click", dismissInstallSoftTip);
   $("btn-ios-hint-dismiss")?.addEventListener("click", () => {
     const el = $("ios-install-hint");
     if (el) el.hidden = true;
@@ -2686,12 +2770,12 @@ function setupPhase5() {
       /* ignore */
     }
   });
+  $("btn-ios-install-close")?.addEventListener("click", () => {
+    closeSheet("ios-install-sheet");
+  });
 
   pwa.onBeforeInstall(() => {
-    if (pwa.isStandalone()) return;
-    // Install lives in More sheet only (header stays brand + ⋮)
-    const sheet = $("btn-sheet-install");
-    if (sheet) sheet.hidden = false;
+    refreshInstallOffer();
   });
 
   pwa.registerServiceWorker({
@@ -2704,16 +2788,15 @@ function setupPhase5() {
     },
   });
 
-  if (pwa.isIos() && !pwa.isStandalone()) {
-    try {
-      if (localStorage.getItem("eclipse-ios-hint") !== "1") {
-        const el = $("ios-install-hint");
-        if (el) el.hidden = false;
-      }
-    } catch {
-      /* ignore */
-    }
-  }
+  // Legacy banner stays permanently hidden — soft tip + More replace it
+  const legacyHint = $("ios-install-hint");
+  if (legacyHint) legacyHint.hidden = true;
+
+  refreshInstallOffer();
+  document.addEventListener("eclipse:intro-hidden", () => refreshInstallOffer());
+  document.addEventListener("eclipse:screen-tip-hidden", () => refreshInstallOffer());
+  // BIP can arrive after first paint
+  window.setTimeout(() => refreshInstallOffer(), 2500);
 
   pwa.consumeLaunchQueue(async (file) => {
     const name = (file.name || "").toLowerCase();
