@@ -218,6 +218,7 @@ function importLRC(text) {
   const lines = [];
   let title = "";
   let artist = "";
+  let offsetMs = 0;
   for (const raw of text.split(/\r?\n/)) {
     const ti = raw.match(/^\[ti:(.*)\]$/i);
     if (ti) {
@@ -229,20 +230,37 @@ function importLRC(text) {
       artist = ar[1].trim();
       continue;
     }
-    const m = raw.match(/^\[(\d{2}):(\d{2})\.(\d{2,3})\](.*)$/);
-    if (!m) continue;
-    const min = Number(m[1]);
-    const sec = Number(m[2]);
-    const frac = m[3].length === 3 ? Number(m[3]) / 1000 : Number(m[3]) / 100;
-    lines.push({
-      id: uid(),
-      start: min * 60 + sec + frac,
-      end: null,
-      text: m[4].trim(),
-      fr: "",
-      en: "",
-    });
+    const off = raw.match(/^\[offset:\s*([+-]?\d+)\s*\]$/i);
+    if (off) {
+      offsetMs = Number(off[1]) || 0;
+      continue;
+    }
+    // One or more leading timestamps, then lyric text
+    const tsRe = /\[(\d{1,3}):(\d{2})\.(\d{2,3})\]/g;
+    const stamps = [];
+    let match;
+    let lastIndex = 0;
+    while ((match = tsRe.exec(raw)) && match.index === lastIndex) {
+      const min = Number(match[1]);
+      const sec = Number(match[2]);
+      const frac = match[3].length === 3 ? Number(match[3]) / 1000 : Number(match[3]) / 100;
+      stamps.push(min * 60 + sec + frac);
+      lastIndex = match.index + match[0].length;
+    }
+    if (!stamps.length) continue;
+    const lyric = raw.slice(lastIndex).trim();
+    for (const start of stamps) {
+      lines.push({
+        id: uid(),
+        start: start + offsetMs / 1000,
+        end: null,
+        text: lyric,
+        fr: "",
+        en: "",
+      });
+    }
   }
+  lines.sort((a, b) => a.start - b.start);
   recomputeEnds(lines);
   return { title, artist, audioFileName: "", duration: 0, lines, settings: {} };
 }
