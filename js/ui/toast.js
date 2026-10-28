@@ -18,17 +18,37 @@ function ensureRoot() {
   return root;
 }
 
-export function showToast(message, { duration = 2800 } = {}) {
+/**
+ * @param {string} message
+ * @param {{ duration?: number, actionLabel?: string, onAction?: Function }} [opts]
+ */
+export function showToast(message, { duration = 2800, actionLabel = "", onAction = null } = {}) {
   const el = ensureRoot();
   if (!message) return;
   el.hidden = false;
-  el.textContent = message;
   el.classList.add("is-on");
+  el.replaceChildren();
+  const text = document.createElement("span");
+  text.className = "toast-text";
+  text.textContent = message;
+  el.appendChild(text);
+  if (actionLabel && typeof onAction === "function") {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "toast-action";
+    btn.textContent = actionLabel;
+    btn.addEventListener("click", () => {
+      onAction();
+      hideToast();
+    });
+    el.appendChild(btn);
+  }
   clearTimeout(hideTimer);
   hideTimer = setTimeout(() => {
     el.classList.remove("is-on");
     setTimeout(() => {
       el.hidden = true;
+      el.replaceChildren();
     }, 180);
   }, duration);
 }
