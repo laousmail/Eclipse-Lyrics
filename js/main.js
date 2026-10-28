@@ -45,6 +45,7 @@ import * as pwa from "./pwa.js";
 import * as onboarding from "./onboarding.js";
 import * as demo from "./demo.js";
 import * as analytics from "./analytics.js";
+import { initKeyboardGuards, ensureFieldVisible } from "./keyboard.js";
 import {
   DEFAULT_TAP_OFFSET_MS,
   computeAverageDelayMs,
@@ -479,6 +480,7 @@ function refreshLyricsGrid() {
     },
     onFocusField: (el) => {
       state.gridFocusEl = el;
+      ensureFieldVisible(el);
     },
   });
   updateCharWarn();
@@ -1579,6 +1581,8 @@ function setupNavigation() {
         const b = $("btn-continue-lyrics");
         if (b) b.textContent = i18n.t("loadedContinue");
       }
+      // Language lives in More — close after pick for a calmer flow
+      if (btn.closest("#more-sheet")) closeSheet("more-sheet");
     });
   });
 }
@@ -2660,9 +2664,23 @@ function setupPhase5() {
     loadDemoProject();
   });
 
-  $("btn-install")?.addEventListener("click", async () => {
+  async function runInstallPrompt() {
     const ok = await pwa.promptInstall();
-    if (ok) $("btn-install").hidden = true;
+    if (ok) {
+      const top = $("btn-install");
+      const sheet = $("btn-sheet-install");
+      if (top) top.hidden = true;
+      if (sheet) sheet.hidden = true;
+    }
+    return ok;
+  }
+
+  $("btn-install")?.addEventListener("click", () => {
+    runInstallPrompt();
+  });
+  $("btn-sheet-install")?.addEventListener("click", async () => {
+    closeSheet("more-sheet");
+    await runInstallPrompt();
   });
   $("btn-ios-hint-dismiss")?.addEventListener("click", () => {
     const el = $("ios-install-hint");
@@ -2675,8 +2693,10 @@ function setupPhase5() {
   });
 
   pwa.onBeforeInstall(() => {
-    const btn = $("btn-install");
-    if (btn && !pwa.isStandalone()) btn.hidden = false;
+    if (pwa.isStandalone()) return;
+    // Install lives in More sheet only (header stays brand + ⋮)
+    const sheet = $("btn-sheet-install");
+    if (sheet) sheet.hidden = false;
   });
 
   pwa.registerServiceWorker({
@@ -2774,9 +2794,11 @@ function focusLineOption(index) {
 }
 
 async function boot() {
-  // Pinch-zoom allowed (B20). Double-tap zoom on Tap is blocked via CSS
-  // touch-action: manipulation on #btn-tap / .dock-tap.
+  // Pinch-zoom: document allows intentional pinch (B20). Controls use
+  // touch-action: manipulation to block accidental double-tap zoom; waveform
+  // uses touch-action: none + its own pinch. Inputs are ≥16px to stop iOS focus-zoom.
   applyIcons(document);
+  initKeyboardGuards();
   await db.requestPersistentStorage();
   setupUI();
   setupPhase5();

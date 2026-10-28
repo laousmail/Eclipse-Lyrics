@@ -76,12 +76,19 @@
 
   <div id="more-sheet" class="sheet-overlay" hidden role="dialog" aria-modal="true" aria-labelledby="more-title">
     <div class="sheet">
-      <p id="more-title" class="sheet-title" data-i18n="moreTitle">Project</p>
+      <p id="more-title" class="sheet-title" data-i18n="moreTitle">More</p>
+      <p class="muted tip sheet-lang-label" data-i18n="language">Language</p>
+      <div class="lang-pill lang-pill-sheet" role="group" aria-label="Language">
+        <button type="button" class="lang-btn" data-lang="en" aria-pressed="true">EN</button>
+        <button type="button" class="lang-btn" data-lang="fr" aria-pressed="false">FR</button>
+        <button type="button" class="lang-btn" data-lang="kab" aria-pressed="false">KAB</button>
+      </div>
       <div class="sheet-list">
         <button type="button" id="btn-goto-projects" class="sheet-row" data-goto="projects" data-i18n="tabProjects">Projects</button>
         <button type="button" id="btn-save-project" class="sheet-row" data-i18n="saveProject">Save project file</button>
         <button type="button" id="btn-export-bundle" class="sheet-row" data-i18n="exportBundle">Export with audio (.eclipselyrics)</button>
         <button type="button" id="btn-sheet-demo" class="sheet-row" data-i18n="tryDemo">Try with a demo song</button>
+        <button type="button" id="btn-sheet-install" class="sheet-row" hidden data-i18n="installApp">Install app</button>
         <button type="button" class="sheet-row" data-goto="help" data-i18n="help">Help</button>
         <label class="sheet-row file-row">
           <span data-i18n="openProject">Open project file</span>
@@ -208,15 +215,9 @@
         <button type="button" class="step-seg-btn" data-goto="video" data-i18n="tabFilm">Film</button>
       </nav>
       <div class="topbar-tools">
-        <button type="button" class="btn btn-fill btn-sm desktop-workspace-only" data-goto="export" data-i18n="export">Export</button>
-        <button type="button" id="btn-install" class="btn btn-ghost btn-sm" hidden data-i18n="installApp">Install app</button>
-        <div class="lang-pill" role="group" aria-label="Language">
-          <button type="button" class="lang-btn" data-lang="en" aria-pressed="true">EN</button>
-          <button type="button" class="lang-btn" data-lang="fr" aria-pressed="false">FR</button>
-          <button type="button" class="lang-btn" data-lang="kab" aria-pressed="false">KAB</button>
-        </div>
-        <button type="button" id="btn-help" class="icon-btn" data-goto="help" data-i18n-aria="help" aria-label="Help" title="Help">?</button>
-        <button type="button" id="btn-more" class="icon-btn" data-i18n-aria="moreAria" aria-label="More project actions" aria-haspopup="dialog" aria-controls="more-sheet">
+        <!-- Install stays available via More when beforeinstallprompt fires -->
+        <button type="button" id="btn-install" class="btn btn-ghost btn-sm" hidden tabindex="-1" aria-hidden="true" data-i18n="installApp">Install app</button>
+        <button type="button" id="btn-more" class="icon-btn" data-i18n-aria="moreAria" aria-label="More" aria-haspopup="dialog" aria-controls="more-sheet">
           <span class="icon-dots" aria-hidden="true"></span>
         </button>
       </div>
@@ -232,12 +233,10 @@
         </header>
         <div class="projects-toolbar">
           <button type="button" id="btn-new-project" class="btn btn-fill" data-i18n="newProject">New project</button>
-          <button type="button" id="btn-try-demo" class="btn btn-ghost" data-i18n="tryDemo">Try with a demo song</button>
-          <label class="btn btn-ghost file-btn">
-            <span data-i18n="openProject">Open project file</span>
-            <input type="file" id="input-project-home" accept=".json,.eclipse.json,.eclipselyrics,.zip,application/json,application/zip" hidden />
-          </label>
         </div>
+        <!-- Demo + open file live in More (⋮); keep ids for existing wiring -->
+        <button type="button" id="btn-try-demo" hidden tabindex="-1" aria-hidden="true" data-i18n="tryDemo">Try with a demo song</button>
+        <input type="file" id="input-project-home" accept=".json,.eclipse.json,.eclipselyrics,.zip,application/json,application/zip" hidden />
         <p id="projects-storage" class="muted tip"></p>
         <ul id="projects-list" class="projects-list" role="list"></ul>
         <p id="projects-empty" class="empty-state muted" hidden data-i18n="projectsEmpty">No projects yet. Create one to start.</p>
@@ -259,14 +258,16 @@
           </button>
           <input type="file" id="input-audio" accept="audio/mpeg,audio/wav,audio/mp4,audio/x-m4a,audio/ogg,.mp3,.wav,.m4a,.ogg" hidden />
 
-          <div class="url-block">
-            <p class="subhead" data-i18n="orFromLink">Direct .mp3 link (must allow downloads)</p>
-            <div class="url-row">
-              <input type="url" id="field-audio-url" inputmode="url" autocomplete="off" data-i18n-placeholder="audioUrlPlaceholder" placeholder="https://…/song.mp3" />
-              <button type="button" id="btn-load-url" class="btn btn-ghost" data-i18n="loadUrl">Load link</button>
+          <details class="simple-more">
+            <summary data-i18n="orFromLink">Direct .mp3 link (must allow downloads)</summary>
+            <div class="url-block">
+              <div class="url-row">
+                <input type="url" id="field-audio-url" inputmode="url" autocomplete="off" data-i18n-placeholder="audioUrlPlaceholder" placeholder="https://…/song.mp3" />
+                <button type="button" id="btn-load-url" class="btn btn-ghost" data-i18n="loadUrl">Load link</button>
+              </div>
+              <p id="audio-url-error" class="warn" hidden role="alert"></p>
             </div>
-            <p id="audio-url-error" class="warn" hidden role="alert"></p>
-          </div>
+          </details>
         </div>
 
         <div id="audio-loaded" class="audio-loaded" hidden>
@@ -307,20 +308,23 @@
           <p class="screen-lead" data-i18n="lyricsLead">One row per line. Main, French and English side by side. Lines like [Chorus] become section markers.</p>
         </header>
 
-        <div class="gdocs-block">
-          <p class="subhead" data-i18n="gdocsLabel">Import from Google Docs</p>
-          <div class="url-row">
-            <input type="url" id="field-gdocs" inputmode="url" autocomplete="off" data-i18n-placeholder="gdocsPlaceholder" placeholder="Public Google Docs link" />
-            <button type="button" id="btn-gdocs" class="btn btn-ghost" data-i18n="gdocsFetch">Fetch lyrics</button>
-          </div>
-          <p class="tip muted" data-i18n="gdocsHint">The document must be public (Anyone with the link → Viewer). Private docs can’t be read in the browser.</p>
-          <p id="gdocs-error" class="warn" hidden role="alert"></p>
-        </div>
-
         <div class="lyrics-tools">
           <button type="button" id="btn-add-row" class="btn btn-ghost btn-sm" data-i18n="addRow">Add row</button>
-          <button type="button" id="btn-remove-empty" class="btn btn-ghost btn-sm" data-i18n="removeEmpty">Remove empty</button>
         </div>
+
+        <details class="simple-more">
+          <summary data-i18n="lyricsMore">Import &amp; clean up</summary>
+          <div class="gdocs-block">
+            <p class="subhead" data-i18n="gdocsLabel">Import from Google Docs</p>
+            <div class="url-row">
+              <input type="url" id="field-gdocs" inputmode="url" autocomplete="off" data-i18n-placeholder="gdocsPlaceholder" placeholder="Public Google Docs link" />
+              <button type="button" id="btn-gdocs" class="btn btn-ghost" data-i18n="gdocsFetch">Fetch lyrics</button>
+            </div>
+            <p class="tip muted" data-i18n="gdocsHint">The document must be public (Anyone with the link → Viewer). Private docs can’t be read in the browser.</p>
+            <p id="gdocs-error" class="warn" hidden role="alert"></p>
+          </div>
+          <button type="button" id="btn-remove-empty" class="btn btn-ghost btn-sm" data-i18n="removeEmpty">Remove empty</button>
+        </details>
 
         <div id="lyrics-grid" class="lyrics-grid" role="table" aria-label="Lyric grid"></div>
         <!-- Hidden mirrors for import / gdocs paste compatibility -->
@@ -364,7 +368,7 @@
               <span id="progress-chip-label">0 / 0</span>
             </div>
           </div>
-          <div class="sync-toolbar">
+          <div class="sync-toolbar sync-toolbar-simple">
             <label class="speed-chip">
               <span data-i18n="speed">Speed</span>
               <select id="select-speed" aria-label="Playback speed">
@@ -375,15 +379,20 @@
                 <option value="1.5">1.5×</option>
               </select>
             </label>
-            <button type="button" id="btn-undo" class="btn btn-ghost btn-sm" data-i18n="undo" data-i18n-aria="undo" aria-label="Undo" disabled>Undo</button>
-            <button type="button" id="btn-redo" class="btn btn-ghost btn-sm" data-i18n="redo" data-i18n-aria="redo" aria-label="Redo" disabled>Redo</button>
-            <button type="button" id="btn-gap" class="btn btn-ghost btn-sm" data-i18n="gap" title="G">Gap</button>
-            <button type="button" id="btn-tap-mode" class="btn btn-ghost btn-sm" data-mode="simple" data-i18n="tapModeSimple">Simple tap</button>
-            <button type="button" id="btn-review" class="btn btn-ghost btn-sm" aria-pressed="false" data-i18n="reviewMode">Review</button>
-            <button type="button" id="btn-calibrate" class="btn btn-ghost btn-sm" data-i18n="calibrate">Calibrate</button>
-            <span id="offset-chip" class="offset-chip">Offset −150 ms</span>
             <span id="time-display" class="time-display" aria-live="off">0:00.00 / 0:00.00</span>
+            <span id="offset-chip" class="offset-chip">Offset −150 ms</span>
           </div>
+          <details class="simple-more sync-more">
+            <summary data-i18n="syncMore">Sync tools</summary>
+            <div class="sync-toolbar sync-toolbar-extra">
+              <button type="button" id="btn-undo" class="btn btn-ghost btn-sm" data-i18n="undo" data-i18n-aria="undo" aria-label="Undo" disabled>Undo</button>
+              <button type="button" id="btn-redo" class="btn btn-ghost btn-sm" data-i18n="redo" data-i18n-aria="redo" aria-label="Redo" disabled>Redo</button>
+              <button type="button" id="btn-gap" class="btn btn-ghost btn-sm" data-i18n="gap" title="G">Gap</button>
+              <button type="button" id="btn-tap-mode" class="btn btn-ghost btn-sm" data-mode="simple" data-i18n="tapModeSimple">Simple tap</button>
+              <button type="button" id="btn-review" class="btn btn-ghost btn-sm" aria-pressed="false" data-i18n="reviewMode">Review</button>
+              <button type="button" id="btn-calibrate" class="btn btn-ghost btn-sm" data-i18n="calibrate">Calibrate</button>
+            </div>
+          </details>
         </header>
 
         <div class="sync-workspace">
@@ -402,12 +411,15 @@
 
           <div class="sync-wave-col">
             <div class="waveform-wrap waveform-strip">
-              <div class="wave-tools">
-                <button type="button" id="btn-wave-zoom-out" class="btn btn-ghost btn-sm" aria-label="Zoom out">−</button>
-                <button type="button" id="btn-wave-zoom-in" class="btn btn-ghost btn-sm" aria-label="Zoom in">+</button>
-                <button type="button" id="btn-wave-follow" class="btn btn-ghost btn-sm is-active" aria-pressed="true" data-i18n="follow">Follow</button>
-                <button type="button" id="btn-go-start" class="btn btn-ghost btn-sm" data-i18n="goStart">Start</button>
-              </div>
+              <details class="simple-more wave-more">
+                <summary data-i18n="waveMore">Waveform</summary>
+                <div class="wave-tools">
+                  <button type="button" id="btn-wave-zoom-out" class="btn btn-ghost btn-sm" aria-label="Zoom out">−</button>
+                  <button type="button" id="btn-wave-zoom-in" class="btn btn-ghost btn-sm" aria-label="Zoom in">+</button>
+                  <button type="button" id="btn-wave-follow" class="btn btn-ghost btn-sm is-active" aria-pressed="true" data-i18n="follow">Follow</button>
+                  <button type="button" id="btn-go-start" class="btn btn-ghost btn-sm" data-i18n="goStart">Start</button>
+                </div>
+              </details>
               <canvas id="waveform" width="1200" height="160" data-i18n-aria="waveformTip" aria-label="Audio waveform. Drag regions to adjust times."></canvas>
               <input type="range" id="scrubber" class="scrubber scrubber-in-wave" min="0" max="1000" value="0" step="1" data-i18n-aria="scrubLabel" aria-label="Scrub timeline" />
             </div>
@@ -441,38 +453,6 @@
           </div>
         </article>
 
-        <label class="field">
-          <span data-i18n="exportLanguages">Languages in the file</span>
-          <select id="select-export-lang" aria-label="Languages in the file">
-            <option value="main" data-i18n="langMainOnly">Main only</option>
-            <option value="main+fr" data-i18n="langMainFr">Main + FR (2 lines)</option>
-            <option value="main+en" data-i18n="langMainEn">Main + EN</option>
-            <option value="separate" data-i18n="langSeparate">One file per language</option>
-          </select>
-        </label>
-
-        <div class="export-options">
-          <label class="field">
-            <span data-i18n="globalOffset">Global offset (ms)</span>
-            <input type="number" id="field-global-offset" step="10" value="0" />
-          </label>
-          <label class="field">
-            <span data-i18n="minLineMs">Minimum line duration (ms)</span>
-            <input type="number" id="field-min-line" step="50" min="0" value="700" />
-          </label>
-          <label class="field">
-            <span data-i18n="maxGapMs">Max gap before clearing (ms)</span>
-            <input type="number" id="field-max-gap" step="100" min="0" value="8000" />
-          </label>
-        </div>
-
-        <!-- Hidden legacy mirrors for older wiring -->
-        <input type="checkbox" id="opt-include-tr" hidden tabindex="-1" aria-hidden="true" />
-        <select id="select-tr-lang" hidden tabindex="-1" aria-hidden="true">
-          <option value="fr">fr</option>
-          <option value="en">en</option>
-        </select>
-
         <article class="export-card export-card-primary">
           <h3 class="export-primary-title" data-i18n="youtubeSrtTitle">YouTube subtitles (.srt)</h3>
           <p class="export-desc" data-i18n="youtubeSrtHow">YouTube Studio → Subtitles → Upload file → With timing</p>
@@ -485,8 +465,32 @@
           </div>
         </article>
 
-        <details class="export-more">
-          <summary data-i18n="moreFormats">More formats</summary>
+        <details class="simple-more export-more">
+          <summary data-i18n="exportMore">More export options</summary>
+          <label class="field">
+            <span data-i18n="exportLanguages">Languages in the file</span>
+            <select id="select-export-lang" aria-label="Languages in the file">
+              <option value="main" data-i18n="langMainOnly">Main only</option>
+              <option value="main+fr" data-i18n="langMainFr">Main + FR (2 lines)</option>
+              <option value="main+en" data-i18n="langMainEn">Main + EN</option>
+              <option value="separate" data-i18n="langSeparate">One file per language</option>
+            </select>
+          </label>
+          <div class="export-options">
+            <label class="field">
+              <span data-i18n="globalOffset">Global offset (ms)</span>
+              <input type="number" id="field-global-offset" step="10" value="0" />
+            </label>
+            <label class="field">
+              <span data-i18n="minLineMs">Minimum line duration (ms)</span>
+              <input type="number" id="field-min-line" step="50" min="0" value="700" />
+            </label>
+            <label class="field">
+              <span data-i18n="maxGapMs">Max gap before clearing (ms)</span>
+              <input type="number" id="field-max-gap" step="100" min="0" value="8000" />
+            </label>
+          </div>
+          <p class="subhead" data-i18n="moreFormats">More formats</p>
           <div class="export-cards">
             <article class="export-card">
               <button type="button" id="btn-export-lrc" class="btn btn-ghost export-tile" data-i18n="exportLrcTitle">LRC</button>
@@ -510,16 +514,19 @@
             </article>
           </div>
           <button type="button" id="btn-export-tr-files" class="btn btn-ghost" hidden data-i18n="onePerLang">One file per language</button>
-        </details>
-
-        <div class="btn-stack">
           <button type="button" id="btn-export-zip" class="btn btn-ghost" data-i18n="downloadZip">Download all as ZIP</button>
-        </div>
-
-        <details class="export-preview" open>
-          <summary data-i18n="exportPreview">Preview (first 10 cues)</summary>
-          <pre id="export-preview-code" class="export-preview-code" aria-live="polite"></pre>
+          <details class="export-preview">
+            <summary data-i18n="exportPreview">Preview (first 10 cues)</summary>
+            <pre id="export-preview-code" class="export-preview-code" aria-live="polite"></pre>
+          </details>
         </details>
+
+        <!-- Hidden legacy mirrors for older wiring -->
+        <input type="checkbox" id="opt-include-tr" hidden tabindex="-1" aria-hidden="true" />
+        <select id="select-tr-lang" hidden tabindex="-1" aria-hidden="true">
+          <option value="fr">fr</option>
+          <option value="en">en</option>
+        </select>
       </section>
 
       <!-- VIDEO / FILM -->
@@ -549,6 +556,8 @@
           </div>
         </div>
 
+        <details class="simple-more film-customize">
+          <summary data-i18n="filmCustomize">Customize</summary>
         <div class="film-tabs" role="tablist" aria-label="Film settings">
           <button type="button" class="film-tab is-active" role="tab" aria-selected="true" data-film-tab="style" data-i18n="filmTabStyle">Style</button>
           <button type="button" class="film-tab" role="tab" aria-selected="false" data-film-tab="text" data-i18n="filmTabText">Text</button>
@@ -737,9 +746,10 @@
             <p id="export-path-hint" class="tip muted"></p>
           </div>
         </div>
+          <button type="button" id="btn-preview-video" class="btn btn-ghost" data-i18n="livePreview">Live preview</button>
+        </details>
 
         <div class="btn-stack">
-          <button type="button" id="btn-preview-video" class="btn btn-ghost" data-i18n="livePreview">Live preview</button>
           <button type="button" id="btn-record" class="btn btn-fill" data-i18n="recordVideo">Export MP4</button>
           <button type="button" id="btn-stop-record" class="btn btn-ghost" hidden data-i18n="stopRecording">Cancel</button>
         </div>
@@ -824,10 +834,7 @@
         <span class="tab-icon" data-icon="film" aria-hidden="true"></span>
         <span data-i18n="tabFilm">Film</span>
       </button>
-      <button type="button" class="tab" data-goto="help">
-        <span class="tab-icon" aria-hidden="true">?</span>
-        <span data-i18n="help">Help</span>
-      </button>
+      <!-- Help is More-sheet only — keeps tabbar at 6 and header clear -->
     </nav>
   </div>
 
