@@ -244,6 +244,7 @@ function renderLineList() {
   state.waveform?.setLines(state.project.lines);
   state.waveform?.setSelected(state.selectedIndex);
   updateTapButtons();
+  updateExportButtons();
   scrollTapLineIntoView();
 }
 
@@ -1017,15 +1018,17 @@ function setupUI() {
     persist();
   });
 
-  const withSuccess = (fn) => () => {
-    fn();
+  $("btn-export-lrc").addEventListener("click", () => runExport(() => exp.downloadLRC(state.project)));
+  $("btn-export-srt").addEventListener("click", () => runExport(() => exp.downloadSRT(state.project, exportOpts())));
+  $("btn-export-vtt").addEventListener("click", () => runExport(() => exp.downloadVTT(state.project, exportOpts())));
+  $("btn-export-json").addEventListener("click", () => {
+    exp.downloadJSON(state.project);
     haptics.success();
-  };
-  $("btn-export-lrc").addEventListener("click", withSuccess(() => exp.downloadLRC(state.project)));
-  $("btn-export-srt").addEventListener("click", withSuccess(() => exp.downloadSRT(state.project, exportOpts())));
-  $("btn-export-vtt").addEventListener("click", withSuccess(() => exp.downloadVTT(state.project, exportOpts())));
-  $("btn-export-json").addEventListener("click", withSuccess(() => exp.downloadJSON(state.project)));
-  $("btn-export-tr-files").addEventListener("click", withSuccess(() => exp.downloadPerLanguage(state.project, "srt")));
+  });
+  $("btn-export-tr-files").addEventListener("click", () =>
+    runExport(() => exp.downloadPerLanguage(state.project, "srt"))
+  );
+  updateExportButtons();
 
   $("opt-include-tr").addEventListener("change", () => {
     state.project.settings.includeTranslationInExport = $("opt-include-tr").checked;
@@ -1123,11 +1126,21 @@ function setupUI() {
     }
   });
 
+  let recordPausedByHide = false;
   $("btn-record").addEventListener("click", async () => {
+    const status = $("record-status");
+    if (recordPausedByHide) {
+      if (video.resumeRecordingIfPaused()) {
+        recordPausedByHide = false;
+        $("btn-record").disabled = true;
+        $("btn-record").textContent = i18n.t("recordVideo");
+        if (status) status.textContent = i18n.t("recordingKeep");
+      }
+      return;
+    }
     readVideoSettings();
     const prog = $("record-progress");
     const bar = $("record-bar");
-    const status = $("record-status");
     prog.hidden = false;
     $("btn-stop-record").hidden = false;
     $("btn-record").disabled = true;
@@ -1138,25 +1151,37 @@ function setupUI() {
         status.textContent = `${i18n.t("recordingKeep")} ${Math.round(p * 100)}%`;
       },
       onDone: () => {
+        recordPausedByHide = false;
         bar.style.width = "100%";
         status.textContent = "✓";
         $("btn-stop-record").hidden = true;
         $("btn-record").disabled = false;
+        $("btn-record").textContent = i18n.t("recordVideo");
         $("btn-preview-video").textContent = i18n.t("livePreview");
         haptics.success();
       },
       onError: (err) => {
-        status.textContent = err?.message || "Recording failed";
+        recordPausedByHide = false;
+        status.textContent = err?.message || i18n.t("recordingFailed");
         $("btn-stop-record").hidden = true;
         $("btn-record").disabled = false;
+      },
+      onHidden: () => {
+        recordPausedByHide = true;
+        status.textContent = i18n.t("recordTabHidden");
+        showToast(i18n.t("recordTabHidden"));
+        $("btn-record").disabled = false;
+        $("btn-record").textContent = i18n.t("resumeRecording");
       },
     });
   });
 
   $("btn-stop-record").addEventListener("click", () => {
+    recordPausedByHide = false;
     video.stopRecording();
     $("btn-stop-record").hidden = true;
     $("btn-record").disabled = false;
+    $("btn-record").textContent = i18n.t("recordVideo");
   });
 
   audio.onTimeUpdate(updateTimeDisplay);

@@ -129,6 +129,9 @@ const STRINGS = {
     exportAnyway: "Export anyway",
     exportGoFix: "Go fix",
     exportNoneTimed: "Time at least one line before exporting.",
+    recordTabHidden: "Recording paused — keep this tab visible, then resume.",
+    resumeRecording: "Resume recording",
+    recordingFailed: "Recording failed",
   },
   fr: {
     metaDescription:
@@ -255,6 +258,13 @@ const STRINGS = {
     importDialogLead: "Certains cues ont plusieurs lignes de texte. Comment les importer ?",
     importJoinLines: "Fusionner en une seule ligne",
     importSecondIsTr: "La 2ᵉ ligne est la traduction",
+    exportGuardTitle: "Lignes sans temps",
+    exportGuardDetail: "{n} lignes n’ont pas de temps. Exporter quand même ?",
+    exportAnyway: "Exporter quand même",
+    exportGoFix: "Corriger",
+    exportNoneTimed: "Cale au moins une ligne avant d’exporter.",
+    recordTabHidden: "Enregistrement en pause — garde cet onglet visible, puis reprends.",
+    resumeRecording: "Reprendre l’enregistrement",
   },
 };
 
