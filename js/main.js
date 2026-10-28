@@ -20,6 +20,8 @@ const state = {
   screen: "audio",
   scrubbing: false,
   audioReady: false,
+  lastActiveLine: -1,
+  userScrollPauseUntil: 0,
 };
 
 video.bindProject(() => state.project);
@@ -265,13 +267,21 @@ function selectLine(i, seekTo = false) {
 
 function updateActiveLine(t) {
   const idx = sync.lineAtTime(state.project.lines, t);
+  const changed = idx !== state.lastActiveLine;
   document.querySelectorAll(".line-item").forEach((el) => {
     const on = Number(el.dataset.index) === idx;
     el.classList.toggle("active-play", on);
-    if (on && audio.isPlaying()) {
-      el.scrollIntoView({ block: "nearest", behavior: "smooth" });
-    }
   });
+  if (
+    changed &&
+    idx >= 0 &&
+    audio.isPlaying() &&
+    Date.now() >= state.userScrollPauseUntil
+  ) {
+    const el = document.querySelector(`.line-item[data-index="${idx}"]`);
+    el?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }
+  state.lastActiveLine = idx;
 }
 
 function updatePreview(t) {
@@ -969,6 +979,14 @@ function setupUI() {
   showScreen(SCREENS.includes(initial) ? initial : "audio", {
     pushHash: !SCREENS.includes(initial),
   });
+
+  $("line-list")?.addEventListener(
+    "scroll",
+    () => {
+      state.userScrollPauseUntil = Date.now() + 3000;
+    },
+    { passive: true }
+  );
 
   state.waveform = initWaveform($("waveform"), {
     onMarkerDrag: (index, t) => {
