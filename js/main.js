@@ -22,6 +22,13 @@ import {
   ensureRows,
   countOverLimit,
 } from "./ui/lyricsGrid.js";
+import { renderProjectsList } from "./ui/projectsList.js";
+import {
+  downloadEclipseJson,
+  downloadEclipseBundle,
+  importProjectFile,
+  peaksToThumb,
+} from "./projectFile.js";
 import {
   migrateProject,
   setDurationSec,
@@ -31,6 +38,8 @@ import {
   lineEn,
   audioId,
   isLyric,
+  createEmptyProject,
+  projectId,
 } from "./core/project.js";
 import {
   DEFAULT_TAP_OFFSET_MS,
@@ -83,8 +92,10 @@ function publishStore(patch = {}) {
 }
 
 const $ = (id) => document.getElementById(id);
-const SCREENS = ["audio", "lyrics", "sync", "export", "video"];
+const SCREENS = ["projects", "audio", "lyrics", "sync", "export", "video"];
 const SCRUB_MAX = 1000;
+let pendingDeleteId = null;
+let renameTargetId = null;
 
 function showScreen(name, { pushHash = true, persistScreen = true } = {}) {
   if (!SCREENS.includes(name)) return;
@@ -119,8 +130,15 @@ function showScreen(name, { pushHash = true, persistScreen = true } = {}) {
     btn.classList.toggle("is-active", btn.dataset.goto === name);
   });
   updateDockVisibility();
+  if (name === "projects") {
+    refreshProjectsList();
+  }
   if (name === "lyrics") {
     refreshLyricsGrid();
+  }
+  if (name === "export") {
+    syncExportFieldsFromProject();
+    updateExportPreview();
   }
   if (name === "sync") {
     requestAnimationFrame(() => {
@@ -596,6 +614,12 @@ async function handleAudioFile(file, { stayOnScreen = false } = {}) {
     }
     state.waveform?.setPeaks(peaks, result.duration);
     state.waveform?.setDuration(result.duration);
+    state.project.audio.waveformThumb = peaksToThumb(peaks);
+    if (!state.project.title) {
+      state.project.title = titleFromFileName(result.fileName);
+      if ($("field-title")) $("field-title").value = state.project.title;
+      if ($("field-export-title")) $("field-export-title").value = state.project.title;
+    }
     setStatus(`${result.fileName} · ${formatClock(result.duration)}`);
     sync.recomputeEnds(state.project.lines, state.project.audio.durationMs);
     renderLineList();
@@ -651,6 +675,12 @@ async function handleAudioUrl() {
     }
     state.waveform?.setPeaks(peaks, result.duration);
     state.waveform?.setDuration(result.duration);
+    state.project.audio.waveformThumb = peaksToThumb(peaks);
+    if (!state.project.title) {
+      state.project.title = titleFromFileName(result.fileName);
+      if ($("field-title")) $("field-title").value = state.project.title;
+      if ($("field-export-title")) $("field-export-title").value = state.project.title;
+    }
     setStatus(`${result.fileName} · ${formatClock(result.duration)}`);
     sync.recomputeEnds(state.project.lines, state.project.audio.durationMs);
     renderLineList();
@@ -1066,11 +1096,20 @@ function updateExportButtons() {
     "btn-export-srt",
     "btn-export-vtt",
     "btn-export-json",
+    "btn-export-txt",
+    "btn-export-releases",
+    "btn-export-zip",
+    "btn-copy-srt",
+    "btn-share-srt",
     "btn-export-tr-files",
   ].forEach((id) => {
     const btn = $(id);
-    if (btn) btn.disabled = timed === 0 && id !== "btn-export-json";
+    if (!btn) return;
+    const always = id === "btn-export-json";
+    btn.disabled = timed === 0 && !always;
   });
+  const sep = $("btn-export-tr-files");
+  if (sep) sep.hidden = ($("select-export-lang")?.value || "main") !== "separate";
 }
 
 function askExportGuard(untimed) {
@@ -1095,6 +1134,7 @@ function askExportGuard(untimed) {
 }
 
 async function runExport(fn) {
+  readExportSettings({ save: true });
   const timed = countTimed();
   if (timed === 0) {
     showToast(i18n.t("exportNoneTimed"));
@@ -1105,30 +1145,89 @@ async function runExport(fn) {
     const ok = await askExportGuard(untimed);
     if (!ok) return;
   }
-  fn();
+  await fn();
   haptics.success();
 }
 
 function exportOpts() {
+  const mode = $("select-export-lang")?.value || state.project.settings?.export?.languages || "main";
+  const globalOffsetMs = Number($("field-global-offset")?.value ?? state.project.settings?.export?.globalOffsetMs ?? 0);
+  const minLineMs = Number($("field-min-line")?.value ?? state.project.settings?.export?.minLineMs ?? 700);
+  const maxGapMs = Number($("field-max-gap")?.value ?? state.project.settings?.export?.maxGapMs ?? 8000);
+  const includeTr = mode === "main+fr" || mode === "main+en";
+  const trLang = mode === "main+en" ? "en" : "fr";
+  if ($("opt-include-tr")) $("opt-include-tr").checked = includeTr;
+  if ($("select-tr-lang")) $("select-tr-lang").value = trLang;
   return {
-    includeTr: $("opt-include-tr").checked,
-    trLang: $("select-tr-lang").value,
+    languages: mode,
+    includeTr,
+    trLang,
+    globalOffsetMs,
+    minLineMs,
+    maxGapMs,
   };
 }
 
+function syncExportFieldsFromProject() {
+  const ex = state.project.settings?.export || {};
+  if ($("select-export-lang") && ex.languages) $("select-export-lang").value = ex.languages;
+  if ($("field-global-offset")) $("field-global-offset").value = String(ex.globalOffsetMs ?? 0);
+  if ($("field-min-line")) $("field-min-line").value = String(ex.minLineMs ?? 700);
+  if ($("field-max-gap")) $("field-max-gap").value = String(ex.maxGapMs ?? 8000);
+  if ($("field-export-title")) $("field-export-title").value = state.project.title || "";
+  if ($("field-export-artist")) $("field-export-artist").value = state.project.artist || "";
+}
+
+function readExportSettings({ save = true } = {}) {
+  if (!state.project.settings.export) {
+    state.project.settings.export = createEmptyProject().settings.export;
+  }
+  const ex = state.project.settings.export;
+  const opts = exportOpts();
+  ex.languages = opts.languages;
+  ex.globalOffsetMs = opts.globalOffsetMs;
+  ex.minLineMs = opts.minLineMs;
+  ex.maxGapMs = opts.maxGapMs;
+  state.project.settings.includeTranslationInExport = opts.includeTr;
+  if (opts.includeTr) state.project.settings.translationLang = opts.trLang;
+  if (save) persist();
+  updateExportPreview();
+}
+
+function updateExportPreview() {
+  const pre = $("export-preview-code");
+  if (!pre) return;
+  try {
+    pre.textContent = exp.previewCues(state.project, exportOpts(), 10) || "—";
+  } catch {
+    pre.textContent = "—";
+  }
+}
+
+function titleFromFileName(fileName) {
+  return String(fileName || "")
+    .replace(/\.[a-z0-9]{2,5}$/i, "")
+    .replace(/[_-]+/g, " ")
+    .trim();
+}
+
 function syncFieldsFromProject() {
-  $("field-title").value = state.project.title || "";
-  $("field-artist").value = state.project.artist || "";
+  if ($("field-title")) $("field-title").value = state.project.title || "";
+  if ($("field-artist")) $("field-artist").value = state.project.artist || "";
+  if ($("field-export-title")) $("field-export-title").value = state.project.title || "";
+  if ($("field-export-artist")) $("field-export-artist").value = state.project.artist || "";
   state.lyricsRows = rowsFromProject(state.project);
   if (!state.lyricsRows.length) state.lyricsRows = [{ main: "", fr: "", en: "" }];
   mirrorFieldsFromRows();
   if (state.screen === "lyrics") refreshLyricsGrid();
   const s = state.project.settings || {};
   if (s.tapOffsetMs == null) s.tapOffsetMs = DEFAULT_TAP_OFFSET_MS;
+  if (!s.export) s.export = createEmptyProject().settings.export;
   if (s.playbackRate) {
     $("select-speed").value = String(s.playbackRate);
     audio.setPlaybackRate(s.playbackRate);
   }
+  syncExportFieldsFromProject();
   updateOffsetChip();
   const v = s.video || {};
   if (v.aspect) $("select-aspect").value = v.aspect;
@@ -1328,8 +1427,6 @@ function setupNavigation() {
   $("more-sheet")?.addEventListener("click", (e) => {
     if (e.target === $("more-sheet")) closeSheet("more-sheet");
   });
-  $("btn-save-project")?.addEventListener("click", () => closeSheet("more-sheet"));
-  $("input-project")?.addEventListener("change", () => closeSheet("more-sheet"));
   $("input-import")?.addEventListener("change", () => closeSheet("more-sheet"));
 
   document.querySelectorAll(".lang-btn").forEach((btn) => {
@@ -1491,7 +1588,8 @@ async function restoreSession(meta) {
     setStatus(`${state.project.audio?.fileName || meta.audioFileName}`);
   }
   const last = state.project.lastScreen || meta.lastScreen;
-  showScreen(SCREENS.includes(last) ? last : "audio", { persistScreen: false });
+  const screen = SCREENS.includes(last) && last !== "projects" ? last : "audio";
+  showScreen(screen, { persistScreen: false });
 }
 
 function askImportMultiLine() {
@@ -1582,10 +1680,11 @@ function setupUI() {
   setupKeyboard();
   setupScrubber();
 
+  // Boot() chooses projects vs last project; avoid flashing audio here
   const initial = (location.hash || "").replace(/^#/, "");
-  showScreen(SCREENS.includes(initial) ? initial : "audio", {
-    pushHash: !SCREENS.includes(initial),
-  });
+  if (SCREENS.includes(initial)) {
+    showScreen(initial, { pushHash: false, persistScreen: false });
+  }
 
   $("line-list")?.addEventListener(
     "scroll",
@@ -1837,58 +1936,160 @@ function setupUI() {
     persist();
   });
 
-  $("field-title").addEventListener("input", () => {
-    state.project.title = $("field-title").value;
+  const syncTitle = (value) => {
+    state.project.title = value;
+    if ($("field-title") && $("field-title") !== document.activeElement) $("field-title").value = value;
+    if ($("field-export-title") && $("field-export-title") !== document.activeElement) {
+      $("field-export-title").value = value;
+    }
     persist();
-  });
-  $("field-artist").addEventListener("input", () => {
-    state.project.artist = $("field-artist").value;
+  };
+  const syncArtist = (value) => {
+    state.project.artist = value;
+    if ($("field-artist") && $("field-artist") !== document.activeElement) $("field-artist").value = value;
+    if ($("field-export-artist") && $("field-export-artist") !== document.activeElement) {
+      $("field-export-artist").value = value;
+    }
     persist();
-  });
+  };
+  $("field-title")?.addEventListener("input", () => syncTitle($("field-title").value));
+  $("field-artist")?.addEventListener("input", () => syncArtist($("field-artist").value));
+  $("field-export-title")?.addEventListener("input", () => syncTitle($("field-export-title").value));
+  $("field-export-artist")?.addEventListener("input", () => syncArtist($("field-export-artist").value));
 
-  $("btn-export-lrc").addEventListener("click", () => runExport(() => exp.downloadLRC(state.project)));
-  $("btn-export-srt").addEventListener("click", () => runExport(() => exp.downloadSRT(state.project, exportOpts())));
-  $("btn-export-vtt").addEventListener("click", () => runExport(() => exp.downloadVTT(state.project, exportOpts())));
-  $("btn-export-json").addEventListener("click", () => {
+  $("btn-export-lrc")?.addEventListener("click", () =>
+    runExport(() => exp.downloadLRC(state.project, exportOpts()))
+  );
+  $("btn-export-srt")?.addEventListener("click", () =>
+    runExport(() => {
+      const opts = exportOpts();
+      if (opts.languages === "separate") exp.downloadPerLanguage(state.project, "srt", opts);
+      else exp.downloadSRT(state.project, opts);
+    })
+  );
+  $("btn-export-vtt")?.addEventListener("click", () =>
+    runExport(() => exp.downloadVTT(state.project, exportOpts()))
+  );
+  $("btn-export-txt")?.addEventListener("click", () => runExport(() => exp.downloadTXT(state.project)));
+  $("btn-export-json")?.addEventListener("click", () => {
     exp.downloadJSON(state.project);
     haptics.success();
   });
-  $("btn-export-tr-files").addEventListener("click", () =>
-    runExport(() => exp.downloadPerLanguage(state.project, "srt"))
+  $("btn-export-releases")?.addEventListener("click", () => {
+    exp.downloadLaousmailJson(state.project);
+    haptics.success();
+  });
+  $("btn-export-zip")?.addEventListener("click", () =>
+    runExport(() => exp.downloadAllZip(state.project, exportOpts()))
+  );
+  $("btn-copy-srt")?.addEventListener("click", async () => {
+    const ok = await runExport(async () => {
+      const text = exp.toSRT(state.project, exportOpts());
+      const copied = await exp.copyText(text);
+      if (!copied) throw new Error(i18n.t("copyFailed"));
+      showToast(i18n.t("copied"));
+    });
+    void ok;
+  });
+  $("btn-share-srt")?.addEventListener("click", async () => {
+    await runExport(async () => {
+      const opts = exportOpts();
+      const blob = exp.srtBlob(state.project, opts);
+      const fileName = `${(state.project.title || "lyrics").replace(/\s+/g, "-")}.srt`;
+      const file = new File([blob], fileName, { type: blob.type });
+      try {
+        const shared = await exp.shareFiles([file], state.project.title || "Eclipse Lyrics");
+        if (!shared) {
+          exp.downloadSRT(state.project, opts);
+          showToast(i18n.t("shareUnavailable"));
+        }
+      } catch {
+        exp.downloadSRT(state.project, opts);
+        showToast(i18n.t("shareUnavailable"));
+      }
+    });
+  });
+  $("btn-export-tr-files")?.addEventListener("click", () =>
+    runExport(() => exp.downloadPerLanguage(state.project, "srt", exportOpts()))
   );
   updateExportButtons();
 
-  $("opt-include-tr").addEventListener("change", () => {
-    state.project.settings.includeTranslationInExport = $("opt-include-tr").checked;
-    persist();
-  });
-  $("select-tr-lang").addEventListener("change", () => {
-    state.project.settings.translationLang = $("select-tr-lang").value;
-    persist();
-    updatePreview(audio.getCurrentTime());
+  ["select-export-lang", "field-global-offset", "field-min-line", "field-max-gap"].forEach((id) => {
+    $(id)?.addEventListener("change", () => {
+      readExportSettings();
+      updateExportButtons();
+    });
+    $(id)?.addEventListener("input", () => {
+      readExportSettings({ save: false });
+    });
   });
 
-  $("btn-save-project").addEventListener("click", () => {
-    storage.downloadProjectFile(state.project);
+  $("btn-new-project")?.addEventListener("click", () => startNewProject());
+  $("btn-goto-projects")?.addEventListener("click", () => {
+    closeSheet("more-sheet");
+    showScreen("projects");
+  });
+  $("btn-rename-save")?.addEventListener("click", async () => {
+    const id = renameTargetId;
+    const title = $("field-rename")?.value?.trim() || "";
+    closeSheet("rename-dialog");
+    renameTargetId = null;
+    if (!id) return;
+    const p = await db.getProject(id);
+    if (!p) return;
+    p.title = title;
+    await db.saveProject(p);
+    if (state.project?.id === id) {
+      state.project.title = title;
+      syncFieldsFromProject();
+      persist();
+    }
+    refreshProjectsList();
+  });
+  $("btn-rename-cancel")?.addEventListener("click", () => closeSheet("rename-dialog"));
+  $("btn-delete-confirm")?.addEventListener("click", () => confirmDeleteProject());
+  $("btn-delete-cancel")?.addEventListener("click", () => {
+    pendingDeleteId = null;
+    closeSheet("delete-dialog");
+  });
+
+  $("btn-save-project")?.addEventListener("click", () => {
+    downloadEclipseJson(state.project);
+    closeSheet("more-sheet");
+    haptics.success();
+  });
+  $("btn-export-bundle")?.addEventListener("click", async () => {
+    closeSheet("more-sheet");
+    await downloadEclipseBundle(state.project, state.audioBlob);
     haptics.success();
   });
 
-  $("input-project").addEventListener("change", async (e) => {
-    const file = e.target.files?.[0];
+  async function handleProjectFileInput(file) {
     if (!file) return;
     try {
-      const text = await file.text();
-      let data;
-      try {
-        data = JSON.parse(text);
-      } catch {
-        throw new Error(i18n.t("errProjectJson"));
+      const { project, audioBlob, audioFileName } = await importProjectFile(file);
+      await db.saveProject(project);
+      if (audioBlob) {
+        await db.saveAudio(project.audio.storedAudioId, audioBlob, audioFileName || project.audio.fileName || "");
       }
-      if (!isValidProjectShape(data)) throw new Error(i18n.t("errProjectShape"));
-      mergeImported(data);
+      await restoreSession(project);
+      showToast(i18n.t("projectOpened"));
+      haptics.success();
     } catch (err) {
+      console.error(err);
       showToast(err.message || i18n.t("errImport"));
     }
+  }
+
+  $("input-project")?.addEventListener("change", async (e) => {
+    const file = e.target.files?.[0];
+    await handleProjectFileInput(file);
+    e.target.value = "";
+    closeSheet("more-sheet");
+  });
+  $("input-project-home")?.addEventListener("change", async (e) => {
+    const file = e.target.files?.[0];
+    await handleProjectFileInput(file);
     e.target.value = "";
   });
 
@@ -2026,6 +2227,100 @@ function setupUI() {
   video.renderFrame(state.project);
 }
 
+async function refreshProjectsList() {
+  const projects = await db.listProjects();
+  renderProjectsList($("projects-list"), $("projects-empty"), {
+    projects,
+    onOpen: (p) => openProjectById(p.id),
+    onDuplicate: async (p) => {
+      await db.duplicateProject(p);
+      showToast(i18n.t("projectDuplicated"));
+      refreshProjectsList();
+    },
+    onRename: (p) => {
+      renameTargetId = p.id;
+      if ($("field-rename")) $("field-rename").value = p.title || "";
+      openSheet("rename-dialog");
+    },
+    onExport: (p) => {
+      downloadEclipseJson(p);
+      haptics.success();
+    },
+    onDelete: (p) => {
+      pendingDeleteId = p.id;
+      if ($("delete-detail")) {
+        $("delete-detail").textContent = i18n
+          .t("deleteDetail")
+          .replace("{title}", p.title || p.audio?.fileName || "Untitled");
+      }
+      openSheet("delete-dialog");
+    },
+  });
+  const est = await db.estimateStorage();
+  const label = formatStorage(est);
+  if ($("projects-storage")) $("projects-storage").textContent = label;
+  if ($("storage-usage")) $("storage-usage").textContent = label;
+}
+
+function formatStorage(est) {
+  if (!est?.quota) return i18n.t("storageUnknown");
+  const usedMb = (est.usage / (1024 * 1024)).toFixed(1);
+  const quotaMb = (est.quota / (1024 * 1024)).toFixed(0);
+  return i18n.t("storageUsage").replace("{used}", usedMb).replace("{quota}", quotaMb);
+}
+
+async function openProjectById(id) {
+  const project = await db.getProject(id);
+  if (!project) {
+    showToast(i18n.t("errImport"));
+    return;
+  }
+  await restoreSession(project);
+  haptics.success();
+}
+
+async function startNewProject() {
+  const p = createEmptyProject();
+  p.id = projectId();
+  state.project = p;
+  state.audioBlob = null;
+  state.selectedIndex = 0;
+  state.tapIndex = 0;
+  state.lyricsRows = [{ main: "", fr: "", en: "" }];
+  history.clear();
+  audio.clearAudio();
+  resetAudioPickUI();
+  syncFieldsFromProject();
+  renderLineList();
+  await db.saveProject(p);
+  showScreen("audio");
+  haptics.tick();
+}
+
+async function confirmDeleteProject() {
+  const id = pendingDeleteId;
+  closeSheet("delete-dialog");
+  pendingDeleteId = null;
+  if (!id) return;
+  const project = await db.getProject(id);
+  if (!project) return;
+  const snap = await db.removeProjectWithAudio(project);
+  if (state.project?.id === id) {
+    await startNewProject();
+    showScreen("projects");
+  }
+  refreshProjectsList();
+  showToast(i18n.t("projectDeleted"), {
+    duration: 10000,
+    actionLabel: i18n.t("undo"),
+    onAction: async () => {
+      await db.restoreDeletedProject(snap);
+      refreshProjectsList();
+      showToast(i18n.t("projectRestored"));
+    },
+  });
+}
+
 async function boot() {
   // Pinch-zoom allowed (B20). Double-tap zoom on Tap is blocked via CSS
   // touch-action: manipulation on #btn-tap / .dock-tap.
@@ -2037,62 +2332,44 @@ async function boot() {
 
   // Migrate legacy v1 session into IndexedDB once
   const prefs = db.loadPrefs();
-  if (prefs.lastProjectId) {
-    const existing = await db.getProject(prefs.lastProjectId);
-    if (existing) {
-      await offerRestoreFromProject(existing);
-    } else {
-      await offerRestore();
+  const legacy = await db.readLegacySession();
+  if (legacy.meta) {
+    const migrated = migrateProject(legacy.meta);
+    if (legacy.audio?.blob) {
+      if (!migrated.audio.storedAudioId) migrated.audio.storedAudioId = audioId();
+      await db.saveAudio(migrated.audio.storedAudioId, legacy.audio.blob, legacy.audio.fileName || "");
     }
+    await db.saveProject(migrated);
+    await db.clearLegacySession();
+    if (!prefs.lastProjectId) db.savePrefs({ lastProjectId: migrated.id });
+  }
+
+  const hash = (location.hash || "").replace(/^#/, "");
+  if (SCREENS.includes(hash) && hash !== "projects") {
+    // Deep-link into a tool screen: reopen last project if needed
+    const lastId = db.loadPrefs().lastProjectId;
+    if (lastId) {
+      const existing = await db.getProject(lastId);
+      if (existing) await restoreSession(existing);
+    }
+    showScreen(hash, { pushHash: false, persistScreen: false });
   } else {
-    const legacy = await db.readLegacySession();
-    if (legacy.meta) {
-      const migrated = migrateProject(legacy.meta);
-      if (legacy.audio?.blob) {
-        if (!migrated.audio.storedAudioId) migrated.audio.storedAudioId = audioId();
-        await db.saveAudio(migrated.audio.storedAudioId, legacy.audio.blob, legacy.audio.fileName || "");
+    const lastId = db.loadPrefs().lastProjectId;
+    if (lastId) {
+      const existing = await db.getProject(lastId);
+      if (existing) {
+        await restoreSession(existing);
+      } else {
+        showScreen("projects", { pushHash: true, persistScreen: false });
       }
-      await db.saveProject(migrated);
-      await db.clearLegacySession();
-      await offerRestoreFromProject(migrated);
     } else {
-      await offerRestore();
+      showScreen("projects", { pushHash: true, persistScreen: false });
     }
   }
 
   window.addEventListener("hashchange", () => {
     const name = (location.hash || "").replace(/^#/, "");
     if (SCREENS.includes(name)) showScreen(name, { pushHash: false });
-  });
-}
-
-async function offerRestoreFromProject(project) {
-  if (!project) return;
-  const banner = $("restore-banner");
-  const detail = $("restore-detail");
-  if (!banner) {
-    await restoreSession(project);
-    return;
-  }
-  const when = project.updatedAt ? new Date(project.updatedAt).toLocaleString() : "—";
-  if (detail) {
-    detail.textContent = i18n
-      .t("restoreDetail")
-      .replace("{title}", project.title || "—")
-      .replace("{file}", project.audio?.fileName || "—")
-      .replace("{when}", when);
-  }
-  banner.hidden = false;
-  await new Promise((resolve) => {
-    $("btn-restore").onclick = async () => {
-      banner.hidden = true;
-      await restoreSession(project);
-      resolve();
-    };
-    $("btn-fresh").onclick = async () => {
-      banner.hidden = true;
-      resolve();
-    };
   });
 }
 
