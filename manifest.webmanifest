@@ -68,7 +68,7 @@
     {
       "name": "New project",
       "short_name": "New",
-      "url": "./index.html#audio",
+      "url": "./index.html#prepare",
       "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }]
     },
     {

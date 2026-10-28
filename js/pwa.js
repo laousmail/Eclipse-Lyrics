@@ -2,12 +2,18 @@
 
 let deferredPrompt = null;
 let onUpdateAvailable = null;
+let beforeInstallCb = null;
 
 export function onBeforeInstall(cb) {
+  beforeInstallCb = cb || null;
   window.addEventListener("beforeinstallprompt", (e) => {
     e.preventDefault();
     deferredPrompt = e;
-    cb?.(e);
+    beforeInstallCb?.(e);
+  });
+  window.addEventListener("appinstalled", () => {
+    deferredPrompt = null;
+    beforeInstallCb?.(null);
   });
 }
 
@@ -20,6 +26,25 @@ export function isStandalone() {
 
 export function isIos() {
   return /iphone|ipad|ipod/i.test(navigator.userAgent);
+}
+
+/** Rough mobile check — phones/tablets where A2HS / install matters most. */
+export function isMobileUa() {
+  return /android|iphone|ipad|ipod|mobile/i.test(navigator.userAgent || "");
+}
+
+/**
+ * How to offer install in the More sheet:
+ * - "chromium" → beforeinstallprompt available
+ * - "ios" → show Add to Home Screen how-to
+ * - null → hide (already installed / desktop without prompt)
+ */
+export function installOfferMode() {
+  if (typeof window === "undefined" || isStandalone()) return null;
+  // iOS (Safari/Chrome) never gets a real BIP — always show A2HS how-to
+  if (isIos()) return "ios";
+  if (canPromptInstall()) return "chromium";
+  return null;
 }
 
 export async function promptInstall() {
