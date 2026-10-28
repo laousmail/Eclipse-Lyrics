@@ -170,17 +170,39 @@ export function snapshotTimings(lines) {
   return lines.map((l) => ({ start: l.start, end: l.end }));
 }
 
+/** Neighbour clamp so markers never cross (±10 ms gap). */
+export function clampLineStart(lines, lineIndex, time, duration = 0) {
+  const GAP = 0.01; // 10 ms
+  let min = 0;
+  let max = duration > 0 ? duration : Number.POSITIVE_INFINITY;
+  for (let i = lineIndex - 1; i >= 0; i--) {
+    if (lines[i]?.start != null) {
+      min = lines[i].start + GAP;
+      break;
+    }
+  }
+  for (let i = lineIndex + 1; i < lines.length; i++) {
+    if (lines[i]?.start != null) {
+      max = lines[i].start - GAP;
+      break;
+    }
+  }
+  if (max < min) max = min;
+  const t = Math.max(min, Math.min(max, time));
+  return snapTime(Math.max(0, t));
+}
+
 export function nudgeLine(project, lineIndex, delta) {
   const line = project.lines[lineIndex];
   if (!line || line.start == null) return;
-  line.start = snapTime(Math.max(0, line.start + delta));
+  line.start = clampLineStart(project.lines, lineIndex, line.start + delta, project.duration);
   recomputeEnds(project.lines, project.duration);
 }
 
 export function setLineStart(project, lineIndex, time) {
   const line = project.lines[lineIndex];
   if (!line) return;
-  line.start = snapTime(Math.max(0, time));
+  line.start = clampLineStart(project.lines, lineIndex, time, project.duration);
   recomputeEnds(project.lines, project.duration);
 }
 
