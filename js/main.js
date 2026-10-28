@@ -453,7 +453,11 @@ async function handleGoogleDocs() {
     console.error(err);
     if (errEl) {
       errEl.hidden = false;
-      errEl.textContent = i18n.t("errGdocs");
+      const cors =
+        err?.message === "FETCH_FAILED" ||
+        err?.name === "TypeError" ||
+        /Failed to fetch|NetworkError|CORS/i.test(String(err?.message || err));
+      errEl.textContent = cors ? i18n.t("errGdocsCors") : i18n.t("errGdocs");
     }
   } finally {
     if (btn) btn.disabled = false;

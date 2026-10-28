@@ -109,6 +109,7 @@ const STRINGS = {
     errAudioUrl: "Couldn’t fetch that link. The file must allow cross-origin access (CORS), or try downloading it and choosing the file instead.",
     errAudioUrlEmpty: "Paste an audio link first.",
     errGdocs: "Couldn’t read that Google Doc. Make sure it’s public (Anyone with the link can view), or paste the lyrics manually.",
+    errGdocsCors: "Copy the lyrics from the doc and paste them here — the browser blocked the Google Docs download.",
     errGdocsEmpty: "Paste a Google Docs link first.",
     errGdocsBad: "That doesn’t look like a Google Docs link.",
     loadingAudio: "Loading…",
@@ -265,6 +266,7 @@ const STRINGS = {
     exportNoneTimed: "Cale au moins une ligne avant d’exporter.",
     recordTabHidden: "Enregistrement en pause — garde cet onglet visible, puis reprends.",
     resumeRecording: "Reprendre l’enregistrement",
+    recordingFailed: "Échec de l’enregistrement",
   },
 };
 
