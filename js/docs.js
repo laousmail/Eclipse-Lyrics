@@ -36,7 +36,8 @@ export async function fetchGoogleDocText(urlOrId) {
   }
   const text = await res.text();
   // Google sometimes returns an HTML login / permission page
-  if (/<!DOCTYPE html|/i.test(text.slice(0, 200)) && /accounts\.google|Sign in/i.test(text)) {
+  // (regex must not have an empty alternative — that always matched)
+  if (/<!DOCTYPE html>/i.test(text.slice(0, 200)) && /accounts\.google|Sign in/i.test(text)) {
     const err = new Error("NOT_PUBLIC");
     throw err;
   }

@@ -20,6 +20,8 @@ const state = {
   screen: "audio",
   scrubbing: false,
   audioReady: false,
+  lastActiveLine: -1,
+  userScrollPauseUntil: 0,
 };
 
 video.bindProject(() => state.project);
@@ -28,10 +30,14 @@ const $ = (id) => document.getElementById(id);
 const SCREENS = ["audio", "lyrics", "sync", "export", "video"];
 const SCRUB_MAX = 1000;
 
-function showScreen(name, { pushHash = true } = {}) {
+function showScreen(name, { pushHash = true, persistScreen = true } = {}) {
   if (!SCREENS.includes(name)) return;
   const changed = state.screen !== name;
   state.screen = name;
+  if (persistScreen) {
+    state.project.lastScreen = name;
+    if (changed) persist();
+  }
   document.querySelectorAll(".screen").forEach((el) => {
     const active = el.dataset.screen === name;
     el.classList.toggle("is-active", active);
@@ -93,6 +99,22 @@ function persist() {
 function setStatus(msg) {
   const el = $("audio-status");
   if (el) el.textContent = msg;
+}
+
+let toastTimer = 0;
+function showToast(message) {
+  const el = $("toast");
+  if (!el || !message) return;
+  el.hidden = false;
+  el.textContent = message;
+  el.classList.add("is-on");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => {
+    el.classList.remove("is-on");
+    setTimeout(() => {
+      el.hidden = true;
+    }, 180);
+  }, 2800);
 }
 
 function formatClock(t) {
@@ -165,9 +187,26 @@ function updatePlayButton() {
 
 function updateTapButtons() {
   const hasLines = state.project.lines.length > 0;
+  const done = sync.isSyncComplete(state.project.lines);
   const tap = $("btn-tap");
   const undo = $("btn-undo");
-  if (tap) tap.disabled = !hasLines || !state.project.audioFileName;
+  const mark = $("tap-mark-label");
+  if (tap) {
+    tap.disabled = !hasLines || !state.project.audioFileName || done;
+    tap.classList.toggle("is-done", done);
+  }
+  if (mark) {
+    if (done) mark.textContent = i18n.t("allLinesTimed");
+    else if (
+      state.project.lines.length &&
+      state.project.lines.every((l) => l.start != null) &&
+      !state.project.lines.at(-1)?.endManual
+    ) {
+      mark.textContent = i18n.t("markEnd");
+    } else {
+      mark.textContent = i18n.t("markStart");
+    }
+  }
   if (undo) undo.disabled = state.undoStack.length === 0;
 }
 
@@ -194,7 +233,7 @@ function renderLineList() {
       li.classList.add("selected");
       li.setAttribute("aria-selected", "true");
     }
-    if (i === state.tapIndex) li.classList.add("next-tap");
+    if (i === state.tapIndex && state.tapIndex < state.project.lines.length) li.classList.add("next-tap");
     const time = line.start != null ? formatClock(line.start) : "—:—";
     li.innerHTML = `
       <span class="time">${time}</span>
@@ -211,6 +250,7 @@ function renderLineList() {
   state.waveform?.setLines(state.project.lines);
   state.waveform?.setSelected(state.selectedIndex);
   updateTapButtons();
+  updateExportButtons();
   scrollTapLineIntoView();
 }
 
@@ -227,13 +267,21 @@ function selectLine(i, seekTo = false) {
 
 function updateActiveLine(t) {
   const idx = sync.lineAtTime(state.project.lines, t);
+  const changed = idx !== state.lastActiveLine;
   document.querySelectorAll(".line-item").forEach((el) => {
     const on = Number(el.dataset.index) === idx;
     el.classList.toggle("active-play", on);
-    if (on && audio.isPlaying()) {
-      el.scrollIntoView({ block: "nearest", behavior: "smooth" });
-    }
   });
+  if (
+    changed &&
+    idx >= 0 &&
+    audio.isPlaying() &&
+    Date.now() >= state.userScrollPauseUntil
+  ) {
+    const el = document.querySelector(`.line-item[data-index="${idx}"]`);
+    el?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }
+  state.lastActiveLine = idx;
 }
 
 function updatePreview(t) {
@@ -282,7 +330,15 @@ function applyLyricsFromFields() {
   const warn = $("translation-warn");
   if (result.warnings.length) {
     warn.hidden = false;
-    warn.textContent = result.warnings.join(" ");
+    warn.textContent = result.warnings
+      .map((w) =>
+        i18n
+          .t(w.key)
+          .replace("{fr}", String(w.fr ?? ""))
+          .replace("{en}", String(w.en ?? ""))
+          .replace("{main}", String(w.main ?? ""))
+      )
+      .join(" ");
   } else {
     warn.hidden = true;
     warn.textContent = "";
@@ -292,13 +348,23 @@ function applyLyricsFromFields() {
   state.undoStack = [];
   renderLineList();
   persist();
+  if (result.changed || result.added) {
+    showToast(
+      i18n
+        .t("lyricsRematch")
+        .replace("{changed}", String(result.changed))
+        .replace("{added}", String(result.added))
+    );
+  } else if (state.project.lines.length) {
+    showToast(i18n.t("lyricsRematchNone"));
+  }
   if (state.project.lines.length) {
     haptics.success();
     showScreen("sync");
   }
 }
 
-async function handleAudioFile(file) {
+async function handleAudioFile(file, { stayOnScreen = false } = {}) {
   if (!file) return;
   setStatus(i18n.t("loadingAudio"));
   try {
@@ -317,13 +383,15 @@ async function handleAudioFile(file) {
     updateTimeDisplay();
     updateAudioLoadedUI(result.fileName, result.duration);
     haptics.success();
-    // Prompt for title — stay on audio screen, focus title
-    showScreen("audio");
-    requestAnimationFrame(() => {
-      const title = $("field-title");
-      title?.focus();
-      title?.scrollIntoView({ block: "center", behavior: "smooth" });
-    });
+    if (!stayOnScreen) {
+      // Prompt for title — stay on audio screen, focus title
+      showScreen("audio");
+      requestAnimationFrame(() => {
+        const title = $("field-title");
+        title?.focus();
+        title?.scrollIntoView({ block: "center", behavior: "smooth" });
+      });
+    }
   } catch (err) {
     console.error(err);
     setStatus(i18n.t("errAudioLoad"));
@@ -409,7 +477,11 @@ async function handleGoogleDocs() {
     console.error(err);
     if (errEl) {
       errEl.hidden = false;
-      errEl.textContent = i18n.t("errGdocs");
+      const cors =
+        err?.message === "FETCH_FAILED" ||
+        err?.name === "TypeError" ||
+        /Failed to fetch|NetworkError|CORS/i.test(String(err?.message || err));
+      errEl.textContent = cors ? i18n.t("errGdocsCors") : i18n.t("errGdocs");
     }
   } finally {
     if (btn) btn.disabled = false;
@@ -418,18 +490,20 @@ async function handleGoogleDocs() {
 
 function doTap() {
   if (!state.project.lines.length) return;
+  if (sync.isSyncComplete(state.project.lines)) return;
   const t = audio.getCurrentTime();
-  const idx = state.tapIndex;
+  const idx = Math.min(state.tapIndex, state.project.lines.length - 1);
   const result = sync.tapLine(state.project, idx, t);
-  if (!result) return;
+  if (!result || result.noop) return;
   state.undoStack.push(result.prevState);
   if (state.undoStack.length > 50) state.undoStack.shift();
   state.tapIndex = result.nextIndex;
-  state.selectedIndex = state.tapIndex;
+  state.selectedIndex = Math.min(state.tapIndex, state.project.lines.length - 1);
   renderLineList();
   persist();
   haptics.tap();
   flashTapConfirm();
+  if (result.done) showToast(i18n.t("allLinesTimed"));
   scrollTapLineIntoView();
 }
 
@@ -437,11 +511,69 @@ function doUndo() {
   const prev = state.undoStack.pop();
   if (!prev) return;
   sync.undoTimings(state.project.lines, prev);
-  state.tapIndex = sync.firstUntimedIndex(state.project.lines);
-  state.selectedIndex = state.tapIndex;
+  state.tapIndex = sync.nextTapIndex(state.project.lines);
+  state.selectedIndex = Math.min(state.tapIndex, Math.max(0, state.project.lines.length - 1));
   renderLineList();
   persist();
   haptics.soft();
+}
+
+function countUntimed() {
+  return state.project.lines.filter((l) => l.start == null).length;
+}
+
+function countTimed() {
+  return state.project.lines.filter((l) => l.start != null).length;
+}
+
+function updateExportButtons() {
+  const timed = countTimed();
+  [
+    "btn-export-lrc",
+    "btn-export-srt",
+    "btn-export-vtt",
+    "btn-export-json",
+    "btn-export-tr-files",
+  ].forEach((id) => {
+    const btn = $(id);
+    if (btn) btn.disabled = timed === 0 && id !== "btn-export-json";
+  });
+}
+
+function askExportGuard(untimed) {
+  return new Promise((resolve) => {
+    const detail = $("export-guard-detail");
+    if (detail) {
+      detail.textContent = i18n.t("exportGuardDetail").replace("{n}", String(untimed));
+    }
+    openSheet("export-guard-dialog");
+    const finish = (ok) => {
+      closeSheet("export-guard-dialog");
+      $("btn-export-anyway").onclick = null;
+      $("btn-export-fix").onclick = null;
+      resolve(ok);
+    };
+    $("btn-export-anyway").onclick = () => finish(true);
+    $("btn-export-fix").onclick = () => {
+      finish(false);
+      showScreen("sync");
+    };
+  });
+}
+
+async function runExport(fn) {
+  const timed = countTimed();
+  if (timed === 0) {
+    showToast(i18n.t("exportNoneTimed"));
+    return;
+  }
+  const untimed = countUntimed();
+  if (untimed > 0) {
+    const ok = await askExportGuard(untimed);
+    if (!ok) return;
+  }
+  fn();
+  haptics.success();
 }
 
 function exportOpts() {
@@ -500,18 +632,29 @@ function isTypingTarget(el) {
   return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || el.isContentEditable;
 }
 
+function isDialogOpen() {
+  return Boolean(document.querySelector('.sheet-overlay:not([hidden]), [role="dialog"]:not([hidden])'));
+}
+
 function setupKeyboard() {
   window.addEventListener("keydown", (e) => {
     if (isTypingTarget(e.target)) return;
+    if (isDialogOpen()) return;
     const key = e.key;
-    if (key === " " || key === "Spacebar") {
-      e.preventDefault();
-      doTap();
-      return;
-    }
+
+    // Play/pause stays available on every screen
     if (key === "p" || key === "P" || key === "k" || key === "K") {
       e.preventDefault();
       audio.togglePlay().then(updatePlayButton);
+      return;
+    }
+
+    // Remaining shortcuts only on Sync (avoid re-timing on Export/Film)
+    if (state.screen !== "sync") return;
+
+    if (key === " " || key === "Spacebar") {
+      e.preventDefault();
+      doTap();
       return;
     }
     if (key === "Backspace") {
@@ -727,7 +870,11 @@ async function offerRestore() {
   const banner = $("restore-banner");
   const detail = $("restore-detail");
   const when = meta.savedAt ? new Date(meta.savedAt).toLocaleString() : "—";
-  detail.textContent = `${meta.title || "—"} · ${meta.audioFileName || "—"} · ${when}`;
+  detail.textContent = i18n
+    .t("restoreDetail")
+    .replace("{title}", meta.title || "—")
+    .replace("{file}", meta.audioFileName || "—")
+    .replace("{when}", when);
   banner.hidden = false;
   await new Promise((resolve) => {
     $("btn-restore").onclick = async () => {
@@ -758,16 +905,48 @@ async function restoreSession(meta) {
   };
   syncFieldsFromProject();
   renderLineList();
-  state.tapIndex = sync.firstUntimedIndex(state.project.lines);
+  state.tapIndex = sync.nextTapIndex(state.project.lines);
   const audioData = await storage.loadAudioBlob();
   if (audioData?.blob) {
     const file = new File([audioData.blob], audioData.fileName || meta.audioFileName || "audio", {
       type: audioData.blob.type || "audio/mpeg",
     });
-    await handleAudioFile(file);
+    await handleAudioFile(file, { stayOnScreen: true });
   } else if (meta.audioFileName) {
     setStatus(`${meta.audioFileName}`);
   }
+  const last = meta.lastScreen;
+  showScreen(SCREENS.includes(last) ? last : "audio", { persistScreen: false });
+}
+
+function askImportMultiLine() {
+  return new Promise((resolve) => {
+    const dialog = $("import-dialog");
+    if (!dialog) {
+      resolve({ secondLineIsTranslation: false });
+      return;
+    }
+    openSheet("import-dialog");
+    const finish = (secondLineIsTranslation) => {
+      closeSheet("import-dialog");
+      $("btn-import-join").onclick = null;
+      $("btn-import-tr").onclick = null;
+      resolve({ secondLineIsTranslation });
+    };
+    $("btn-import-join").onclick = () => finish(false);
+    $("btn-import-tr").onclick = () => finish(true);
+  });
+}
+
+function isValidProjectShape(data) {
+  if (!data || typeof data !== "object" || Array.isArray(data)) return false;
+  if (!Array.isArray(data.lines)) return false;
+  return data.lines.every((l) => {
+    if (!l || typeof l !== "object") return false;
+    const startOk = l.start == null || typeof l.start === "number";
+    const endOk = l.end == null || typeof l.end === "number";
+    return startOk && endOk;
+  });
 }
 
 function mergeImported(data) {
@@ -812,6 +991,14 @@ function setupUI() {
   showScreen(SCREENS.includes(initial) ? initial : "audio", {
     pushHash: !SCREENS.includes(initial),
   });
+
+  $("line-list")?.addEventListener(
+    "scroll",
+    () => {
+      state.userScrollPauseUntil = Date.now() + 3000;
+    },
+    { passive: true }
+  );
 
   state.waveform = initWaveform($("waveform"), {
     onMarkerDrag: (index, t) => {
@@ -873,15 +1060,17 @@ function setupUI() {
     persist();
   });
 
-  const withSuccess = (fn) => () => {
-    fn();
+  $("btn-export-lrc").addEventListener("click", () => runExport(() => exp.downloadLRC(state.project)));
+  $("btn-export-srt").addEventListener("click", () => runExport(() => exp.downloadSRT(state.project, exportOpts())));
+  $("btn-export-vtt").addEventListener("click", () => runExport(() => exp.downloadVTT(state.project, exportOpts())));
+  $("btn-export-json").addEventListener("click", () => {
+    exp.downloadJSON(state.project);
     haptics.success();
-  };
-  $("btn-export-lrc").addEventListener("click", withSuccess(() => exp.downloadLRC(state.project)));
-  $("btn-export-srt").addEventListener("click", withSuccess(() => exp.downloadSRT(state.project, exportOpts())));
-  $("btn-export-vtt").addEventListener("click", withSuccess(() => exp.downloadVTT(state.project, exportOpts())));
-  $("btn-export-json").addEventListener("click", withSuccess(() => exp.downloadJSON(state.project)));
-  $("btn-export-tr-files").addEventListener("click", withSuccess(() => exp.downloadPerLanguage(state.project, "srt")));
+  });
+  $("btn-export-tr-files").addEventListener("click", () =>
+    runExport(() => exp.downloadPerLanguage(state.project, "srt"))
+  );
+  updateExportButtons();
 
   $("opt-include-tr").addEventListener("change", () => {
     state.project.settings.includeTranslationInExport = $("opt-include-tr").checked;
@@ -901,8 +1090,19 @@ function setupUI() {
   $("input-project").addEventListener("change", async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const text = await file.text();
-    mergeImported(JSON.parse(text));
+    try {
+      const text = await file.text();
+      let data;
+      try {
+        data = JSON.parse(text);
+      } catch {
+        throw new Error(i18n.t("errProjectJson"));
+      }
+      if (!isValidProjectShape(data)) throw new Error(i18n.t("errProjectShape"));
+      mergeImported(data);
+    } catch (err) {
+      showToast(err.message || i18n.t("errImport"));
+    }
     e.target.value = "";
   });
 
@@ -911,9 +1111,19 @@ function setupUI() {
     if (!file) return;
     const text = await file.text();
     try {
-      mergeImported(exp.parseImportedProject(text, file.name));
+      const lower = file.name.toLowerCase();
+      const isCue =
+        lower.endsWith(".srt") ||
+        lower.endsWith(".vtt") ||
+        text.trim().startsWith("WEBVTT") ||
+        /\d{1,2}:\d{2}[,.]\d/.test(text);
+      let opts = {};
+      if (isCue && !lower.endsWith(".lrc") && exp.hasMultiLineCues(text, file.name)) {
+        opts = await askImportMultiLine();
+      }
+      mergeImported(exp.parseImportedProject(text, file.name, opts));
     } catch (err) {
-      alert(err.message || "Import failed");
+      showToast(err.message || i18n.t("errImport"));
     }
     e.target.value = "";
   });
@@ -947,22 +1157,33 @@ function setupUI() {
     video.renderFrame(state.project);
   });
 
-  $("btn-preview-video").addEventListener("click", () => {
+  $("btn-preview-video").addEventListener("click", async () => {
     readVideoSettings();
     if (video.isPreviewEnabled()) {
       video.disablePreview();
       $("btn-preview-video").textContent = i18n.t("livePreview");
     } else {
+      await video.ensureVideoFonts();
       video.enablePreview();
       $("btn-preview-video").textContent = i18n.t("stopPreview");
     }
   });
 
+  let recordPausedByHide = false;
   $("btn-record").addEventListener("click", async () => {
+    const status = $("record-status");
+    if (recordPausedByHide) {
+      if (video.resumeRecordingIfPaused()) {
+        recordPausedByHide = false;
+        $("btn-record").disabled = true;
+        $("btn-record").textContent = i18n.t("recordVideo");
+        if (status) status.textContent = i18n.t("recordingKeep");
+      }
+      return;
+    }
     readVideoSettings();
     const prog = $("record-progress");
     const bar = $("record-bar");
-    const status = $("record-status");
     prog.hidden = false;
     $("btn-stop-record").hidden = false;
     $("btn-record").disabled = true;
@@ -973,25 +1194,37 @@ function setupUI() {
         status.textContent = `${i18n.t("recordingKeep")} ${Math.round(p * 100)}%`;
       },
       onDone: () => {
+        recordPausedByHide = false;
         bar.style.width = "100%";
         status.textContent = "✓";
         $("btn-stop-record").hidden = true;
         $("btn-record").disabled = false;
+        $("btn-record").textContent = i18n.t("recordVideo");
         $("btn-preview-video").textContent = i18n.t("livePreview");
         haptics.success();
       },
       onError: (err) => {
-        status.textContent = err?.message || "Recording failed";
+        recordPausedByHide = false;
+        status.textContent = err?.message || i18n.t("recordingFailed");
         $("btn-stop-record").hidden = true;
         $("btn-record").disabled = false;
+      },
+      onHidden: () => {
+        recordPausedByHide = true;
+        status.textContent = i18n.t("recordTabHidden");
+        showToast(i18n.t("recordTabHidden"));
+        $("btn-record").disabled = false;
+        $("btn-record").textContent = i18n.t("resumeRecording");
       },
     });
   });
 
   $("btn-stop-record").addEventListener("click", () => {
+    recordPausedByHide = false;
     video.stopRecording();
     $("btn-stop-record").hidden = true;
     $("btn-record").disabled = false;
+    $("btn-record").textContent = i18n.t("recordVideo");
   });
 
   audio.onTimeUpdate(updateTimeDisplay);
@@ -1008,22 +1241,8 @@ function setupUI() {
 }
 
 async function boot() {
-  // Prevent browser pinch-zoom gestures where possible
-  document.addEventListener(
-    "gesturestart",
-    (e) => {
-      e.preventDefault();
-    },
-    { passive: false }
-  );
-  document.addEventListener(
-    "gesturechange",
-    (e) => {
-      e.preventDefault();
-    },
-    { passive: false }
-  );
-
+  // Pinch-zoom allowed (B20). Double-tap zoom on Tap is blocked via CSS
+  // touch-action: manipulation on #btn-tap / .dock-tap.
   setupUI();
   renderLineList();
   updateTapButtons();

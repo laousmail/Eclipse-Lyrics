@@ -7,30 +7,38 @@ function pad(n, w = 2) {
   return String(n).padStart(w, "0");
 }
 
-function toLrcTime(seconds) {
-  const m = Math.floor(seconds / 60);
-  const s = seconds % 60;
-  const whole = Math.floor(s);
-  const cs = Math.round((s - whole) * 100);
-  return `[${pad(m)}:${pad(whole)}.${pad(cs)}]`;
+/** Round seconds → integer ms, then split with integer math (no 1000 overflow). */
+export function secondsToParts(seconds) {
+  let total = Math.round(Number(seconds) * 1000);
+  if (!Number.isFinite(total) || total < 0) total = 0;
+  const ms = total % 1000;
+  const totalSec = Math.floor(total / 1000);
+  const s = totalSec % 60;
+  const totalMin = Math.floor(totalSec / 60);
+  const m = totalMin % 60;
+  const h = Math.floor(totalMin / 60);
+  return { h, m, s, ms, totalMs: total };
 }
 
-function toSrtTime(seconds) {
-  const h = Math.floor(seconds / 3600);
-  const m = Math.floor((seconds % 3600) / 60);
-  const s = seconds % 60;
-  const whole = Math.floor(s);
-  const ms = Math.round((s - whole) * 1000);
-  return `${pad(h)}:${pad(m)}:${pad(whole)},${pad(ms, 3)}`;
+export function toLrcTime(seconds) {
+  // Centiseconds via integer path: round(ms/10) from total ms
+  const { totalMs } = secondsToParts(seconds);
+  let totalCs = Math.round(totalMs / 10);
+  const cs = totalCs % 100;
+  const totalSec = Math.floor(totalCs / 100);
+  const s = totalSec % 60;
+  const m = Math.floor(totalSec / 60);
+  return `[${pad(m)}:${pad(s)}.${pad(cs)}]`;
 }
 
-function toVttTime(seconds) {
-  const h = Math.floor(seconds / 3600);
-  const m = Math.floor((seconds % 3600) / 60);
-  const s = seconds % 60;
-  const whole = Math.floor(s);
-  const ms = Math.round((s - whole) * 1000);
-  return `${pad(h)}:${pad(m)}:${pad(whole)}.${pad(ms, 3)}`;
+export function toSrtTime(seconds) {
+  const { h, m, s, ms } = secondsToParts(seconds);
+  return `${pad(h)}:${pad(m)}:${pad(s)},${pad(ms, 3)}`;
+}
+
+export function toVttTime(seconds) {
+  const { h, m, s, ms } = secondsToParts(seconds);
+  return `${pad(h)}:${pad(m)}:${pad(s)}.${pad(ms, 3)}`;
 }
 
 function ensureEnds(project) {
@@ -154,7 +162,24 @@ export function downloadPerLanguage(project, format = "srt") {
   }
 }
 
-export function parseImportedProject(text, filename = "") {
+/** True when any cue body has 2+ text lines (SRT/VTT). */
+export function hasMultiLineCues(text, filename = "") {
+  const lower = filename.toLowerCase();
+  if (lower.endsWith(".lrc") || lower.endsWith(".json")) return false;
+  const raw = text.replace(/^\uFEFF/, "").replace(/^WEBVTT[^\n]*\n/, "");
+  const blocks = raw.trim().split(/\n\s*\n/);
+  for (const block of blocks) {
+    const parts = block.split(/\r?\n/).filter((p) => p.trim().length);
+    if (parts.length < 2) continue;
+    let idx = 0;
+    if (/^\d+$/.test(parts[0].trim())) idx = 1;
+    if (!parts[idx]?.includes("-->")) continue;
+    if (parts.slice(idx + 1).filter((p) => p.trim()).length >= 2) return true;
+  }
+  return false;
+}
+
+export function parseImportedProject(text, filename = "", opts = {}) {
   const lower = filename.toLowerCase();
   if (lower.endsWith(".json") || text.trim().startsWith("{")) {
     const data = JSON.parse(text);
@@ -165,15 +190,35 @@ export function parseImportedProject(text, filename = "") {
     return importLRC(text);
   }
   if (lower.endsWith(".vtt") || text.trim().startsWith("WEBVTT")) {
-    return importVTT(text);
+    return importVTT(text, opts);
   }
-  return importSRT(text);
+  return importSRT(text, opts);
+}
+
+/** Parse (hh:)?mm:ss[,.]mmm → seconds. */
+export function parseCueTime(raw) {
+  const m = String(raw)
+    .trim()
+    .match(/^(?:(\d{1,2}):)?(\d{1,2}):(\d{1,2})[,.](\d{1,3})$/);
+  if (!m) return null;
+  const h = m[1] != null ? Number(m[1]) : 0;
+  const min = Number(m[2]);
+  const sec = Number(m[3]);
+  const fracRaw = m[4];
+  const ms =
+    fracRaw.length === 3
+      ? Number(fracRaw)
+      : fracRaw.length === 2
+        ? Number(fracRaw) * 10
+        : Number(fracRaw) * 100;
+  return h * 3600 + min * 60 + sec + ms / 1000;
 }
 
 function importLRC(text) {
   const lines = [];
   let title = "";
   let artist = "";
+  let offsetMs = 0;
   for (const raw of text.split(/\r?\n/)) {
     const ti = raw.match(/^\[ti:(.*)\]$/i);
     if (ti) {
@@ -185,55 +230,82 @@ function importLRC(text) {
       artist = ar[1].trim();
       continue;
     }
-    const m = raw.match(/^\[(\d{2}):(\d{2})\.(\d{2,3})\](.*)$/);
-    if (!m) continue;
-    const min = Number(m[1]);
-    const sec = Number(m[2]);
-    const frac = m[3].length === 3 ? Number(m[3]) / 1000 : Number(m[3]) / 100;
-    lines.push({
-      id: uid(),
-      start: min * 60 + sec + frac,
-      end: null,
-      text: m[4].trim(),
-      fr: "",
-      en: "",
-    });
+    const off = raw.match(/^\[offset:\s*([+-]?\d+)\s*\]$/i);
+    if (off) {
+      offsetMs = Number(off[1]) || 0;
+      continue;
+    }
+    // One or more leading timestamps, then lyric text
+    const tsRe = /\[(\d{1,3}):(\d{2})\.(\d{2,3})\]/g;
+    const stamps = [];
+    let match;
+    let lastIndex = 0;
+    while ((match = tsRe.exec(raw)) && match.index === lastIndex) {
+      const min = Number(match[1]);
+      const sec = Number(match[2]);
+      const frac = match[3].length === 3 ? Number(match[3]) / 1000 : Number(match[3]) / 100;
+      stamps.push(min * 60 + sec + frac);
+      lastIndex = match.index + match[0].length;
+    }
+    if (!stamps.length) continue;
+    const lyric = raw.slice(lastIndex).trim();
+    for (const start of stamps) {
+      lines.push({
+        id: uid(),
+        start: start + offsetMs / 1000,
+        end: null,
+        text: lyric,
+        fr: "",
+        en: "",
+      });
+    }
   }
+  lines.sort((a, b) => a.start - b.start);
   recomputeEnds(lines);
   return { title, artist, audioFileName: "", duration: 0, lines, settings: {} };
 }
 
-function importSRT(text) {
+function importSRT(text, opts = {}) {
+  const secondLineIsTranslation = Boolean(opts.secondLineIsTranslation);
   const blocks = text.replace(/^\uFEFF/, "").trim().split(/\n\s*\n/);
   const lines = [];
   for (const block of blocks) {
-    const parts = block.split(/\r?\n/).filter(Boolean);
+    const parts = block.split(/\r?\n/).filter((p) => p.trim().length);
     if (parts.length < 2) continue;
     let idx = 0;
-    if (/^\d+$/.test(parts[0])) idx = 1;
+    if (/^\d+$/.test(parts[0].trim())) idx = 1;
     const timeLine = parts[idx];
-    const tm = timeLine.match(
-      /(\d{2}):(\d{2}):(\d{2})[,.](\d{3})\s*-->\s*(\d{2}):(\d{2}):(\d{2})[,.](\d{3})/
-    );
-    if (!tm) continue;
-    const start =
-      Number(tm[1]) * 3600 + Number(tm[2]) * 60 + Number(tm[3]) + Number(tm[4]) / 1000;
-    const end =
-      Number(tm[5]) * 3600 + Number(tm[6]) * 60 + Number(tm[7]) + Number(tm[8]) / 1000;
-    const body = parts.slice(idx + 1);
+    if (!timeLine || !timeLine.includes("-->")) continue;
+    const [left, right] = timeLine.split("-->").map((s) => s.trim().split(/\s+/)[0]);
+    const start = parseCueTime(left);
+    const end = parseCueTime(right);
+    if (start == null || end == null) continue;
+    const body = parts.slice(idx + 1).map((s) => s.trim()).filter(Boolean);
+    let text = "";
+    let fr = "";
+    if (secondLineIsTranslation && body.length >= 2) {
+      text = body[0];
+      fr = body[1];
+      if (body.length > 2) text = [body[0], ...body.slice(2)].join("\n");
+    } else {
+      text = body.join("\n");
+    }
     lines.push({
       id: uid(),
       start,
       end,
-      text: body[0] || "",
-      fr: body[1] || "",
+      text,
+      fr,
       en: "",
     });
   }
   return { title: "", artist: "", audioFileName: "", duration: 0, lines, settings: {} };
 }
 
-function importVTT(text) {
-  const cleaned = text.replace(/^\uFEFF/, "").replace(/^WEBVTT[^\n]*\n/, "");
-  return importSRT(cleaned);
+function importVTT(text, opts = {}) {
+  const cleaned = text
+    .replace(/^\uFEFF/, "")
+    .replace(/^WEBVTT[^\n]*\n/, "")
+    .replace(/^(NOTE|STYLE|REGION)[\s\S]*?(?:\n\n|$)/gm, "\n");
+  return importSRT(cleaned, opts);
 }

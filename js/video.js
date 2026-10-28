@@ -29,6 +29,8 @@ let bgVideo = null;
 let recorder = null;
 let recordedChunks = [];
 let progressTimer = null;
+let visibilityHandler = null;
+let onVisibilityWarn = null;
 
 export function bindProject(getter) {
   projectGetter = getter;
@@ -82,6 +84,21 @@ export function disablePreview() {
 function stopLoop() {
   if (rafId) cancelAnimationFrame(rafId);
   rafId = 0;
+}
+
+export async function ensureVideoFonts() {
+  if (typeof document === "undefined" || !document.fonts?.load) return;
+  try {
+    await Promise.all([
+      document.fonts.load('600 48px "Noto Sans"'),
+      document.fonts.load('400 48px "Noto Sans"'),
+      document.fonts.load('600 48px "Noto Sans Tifinagh"'),
+      document.fonts.load('400 48px "Noto Sans Tifinagh"'),
+      document.fonts.load('600 48px Outfit'),
+    ]);
+  } catch {
+    /* fonts may be unavailable offline; canvas falls back */
+  }
 }
 
 export function renderFrame(project, overrideTime) {
@@ -196,7 +213,7 @@ function drawEclipseGlow(ctx, width, height, t, reduced) {
   ctx.stroke();
 }
 
-export async function startRecording(project, { onProgress, onDone, onError } = {}) {
+export async function startRecording(project, { onProgress, onDone, onError, onHidden } = {}) {
   if (recorder) return;
 
   const canvas = document.getElementById("video-canvas");
@@ -205,6 +222,7 @@ export async function startRecording(project, { onProgress, onDone, onError } = 
   canvas.width = w;
   canvas.height = h;
 
+  await ensureVideoFonts();
   await resumeContext();
   const fps = 30;
   const canvasStream = canvas.captureStream(fps);
@@ -215,13 +233,22 @@ export async function startRecording(project, { onProgress, onDone, onError } = 
   const combined = new MediaStream(tracks);
   recordedChunks = [];
   const mime = pickMime();
+  onVisibilityWarn = onHidden || null;
+  const squareish = Math.abs(w - h) < Math.min(w, h) * 0.2;
+  const bits = squareish ? 6_000_000 : 10_000_000;
+  const recorderOpts = { videoBitsPerSecond: bits };
+  if (mime) recorderOpts.mimeType = mime;
 
   try {
-    recorder = new MediaRecorder(combined, mime ? { mimeType: mime } : undefined);
+    recorder = new MediaRecorder(combined, recorderOpts);
   } catch (err) {
-    recorder = null;
-    onError?.(err);
-    return;
+    try {
+      recorder = new MediaRecorder(combined, mime ? { mimeType: mime } : undefined);
+    } catch (err2) {
+      recorder = null;
+      onError?.(err2);
+      return;
+    }
   }
 
   recorder.ondataavailable = (e) => {
@@ -231,6 +258,7 @@ export async function startRecording(project, { onProgress, onDone, onError } = 
   recorder.onstop = () => {
     clearInterval(progressTimer);
     progressTimer = null;
+    detachVisibilityWatch();
     const type = mime || "video/webm";
     const blob = new Blob(recordedChunks, { type });
     const ext = type.includes("mp4") ? "mp4" : "webm";
@@ -250,6 +278,7 @@ export async function startRecording(project, { onProgress, onDone, onError } = 
   enablePreview();
   recorder.start(250);
   await play();
+  attachVisibilityWatch();
 
   const duration = project.duration || getAudioElement().duration || 0;
   const audio = getAudioElement();
@@ -266,8 +295,44 @@ export async function startRecording(project, { onProgress, onDone, onError } = 
   }, 200);
 }
 
+function attachVisibilityWatch() {
+  detachVisibilityWatch();
+  visibilityHandler = () => {
+    if (document.visibilityState !== "hidden") return;
+    if (!recorder || recorder.state !== "recording") return;
+    try {
+      pause();
+      if (typeof recorder.pause === "function") recorder.pause();
+    } catch {
+      /* ignore */
+    }
+    onVisibilityWarn?.();
+  };
+  document.addEventListener("visibilitychange", visibilityHandler);
+}
+
+function detachVisibilityWatch() {
+  if (visibilityHandler) {
+    document.removeEventListener("visibilitychange", visibilityHandler);
+    visibilityHandler = null;
+  }
+  onVisibilityWarn = null;
+}
+
+export function resumeRecordingIfPaused() {
+  if (!recorder || recorder.state !== "paused") return false;
+  try {
+    if (typeof recorder.resume === "function") recorder.resume();
+    play();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function stopRecording() {
   pause();
+  detachVisibilityWatch();
   if (recorder && recorder.state !== "inactive") {
     try {
       recorder.stop();

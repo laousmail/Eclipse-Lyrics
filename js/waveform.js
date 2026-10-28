@@ -14,6 +14,7 @@ const STATE = {
   onMarkerDrag: null,
   onSelect: null,
   emptyLabel: "Load audio to see waveform",
+  peaksCache: null, // { canvas, viewStart, viewEnd, width, height, dpr }
 };
 
 export function initWaveform(canvas, handlers = {}) {
@@ -28,6 +29,7 @@ export function initWaveform(canvas, handlers = {}) {
     canvas.width = Math.max(1, Math.floor(rect.width * dpr));
     canvas.height = Math.max(1, Math.floor(rect.height * dpr));
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    STATE.peaksCache = null;
     draw();
   }
 
@@ -56,6 +58,7 @@ export function initWaveform(canvas, handlers = {}) {
       }
       STATE.viewStart = start;
       STATE.viewEnd = end;
+      STATE.peaksCache = null;
       draw();
     },
     { passive: false }
@@ -132,6 +135,7 @@ function setPeaks(peaks, duration) {
   STATE.duration = duration || STATE.duration;
   STATE.viewStart = 0;
   STATE.viewEnd = 1;
+  STATE.peaksCache = null;
   draw();
 }
 
@@ -188,6 +192,37 @@ function hitMarker(x, width) {
   return best;
 }
 
+function peaksCacheValid(width, height, dpr) {
+  const c = STATE.peaksCache;
+  return (
+    c &&
+    c.viewStart === STATE.viewStart &&
+    c.viewEnd === STATE.viewEnd &&
+    c.width === width &&
+    c.height === height &&
+    c.dpr === dpr
+  );
+}
+
+function rebuildPeaksCache(width, height, dpr) {
+  const off = document.createElement("canvas");
+  off.width = Math.max(1, Math.floor(width * dpr));
+  off.height = Math.max(1, Math.floor(height * dpr));
+  const octx = off.getContext("2d");
+  octx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  octx.fillStyle = "#0a0608";
+  octx.fillRect(0, 0, width, height);
+  paintPeaks(octx, width, height);
+  STATE.peaksCache = {
+    canvas: off,
+    viewStart: STATE.viewStart,
+    viewEnd: STATE.viewEnd,
+    width,
+    height,
+    dpr,
+  };
+}
+
 function draw() {
   const canvas = document.getElementById("waveform");
   if (!canvas) return;
@@ -197,12 +232,13 @@ function draw() {
   const height = canvas.height / dpr;
 
   ctx.clearRect(0, 0, width, height);
-  ctx.fillStyle = "#0a0608";
-  ctx.fillRect(0, 0, width, height);
 
   if (STATE.peaks && STATE.peaks.length && STATE.duration) {
-    drawPeaks(ctx, width, height);
+    if (!peaksCacheValid(width, height, dpr)) rebuildPeaksCache(width, height, dpr);
+    ctx.drawImage(STATE.peaksCache.canvas, 0, 0, width, height);
   } else {
+    ctx.fillStyle = "#0a0608";
+    ctx.fillRect(0, 0, width, height);
     ctx.fillStyle = "rgba(176,166,153,0.65)";
     ctx.font = "13px Outfit, Noto Sans, sans-serif";
     ctx.textAlign = "center";
@@ -246,7 +282,7 @@ function draw() {
   }
 }
 
-function drawPeaks(ctx, width, height) {
+function paintPeaks(ctx, width, height) {
   const peaks = STATE.peaks;
   const stride = 3;
   const pairCount = peaks.length / stride;
@@ -256,8 +292,6 @@ function drawPeaks(ctx, width, height) {
   const amp = height * 0.46;
   const visible = Math.max(1, endPeak - startPeak);
 
-  // Soft RMS fill (song energy)
-  ctx.beginPath();
   ctx.fillStyle = "rgba(255,106,19,0.22)";
   for (let i = 0; i < width; i++) {
     const peakIdx = startPeak + Math.floor((i / width) * visible);
@@ -267,7 +301,6 @@ function drawPeaks(ctx, width, height) {
     ctx.fillRect(i, mid - h, 1, h * 2);
   }
 
-  // Detailed min/max bars
   for (let i = 0; i < width; i++) {
     const peakIdx = startPeak + Math.floor((i / width) * visible);
     if (peakIdx < 0 || peakIdx >= pairCount) continue;
