@@ -74,6 +74,21 @@ export function resolveOutputSize(settings = {}) {
   return { w: Math.round(longEdge * (aw / ah)), h: longEdge };
 }
 
+export const CHROMA_GREEN = "#00ff00";
+
+/**
+ * Lyrics-only outputs ("use on my own video"): what goes behind the text.
+ * transparent: real alpha (WebM / PNG frames); green: chroma key in phone apps;
+ * black: "Screen" blend mode, which keeps the glow. null = the normal scene.
+ * @returns {null|"transparent"|"green"|"black"}
+ */
+export function overlayBackground(settings = {}) {
+  if (settings.output !== "overlay") return null;
+  const format = settings.overlayFormat || "webm";
+  if (format === "green" || format === "black") return format;
+  return "transparent";
+}
+
 /**
  * Draw one complete frame.
  *
@@ -83,6 +98,9 @@ export function resolveOutputSize(settings = {}) {
  * @param {object} settings  video settings (+ optional runtime: bgImage, bgVideo, rms, width, height, showSafeZones, reducedMotion)
  */
 export function drawFrame(ctx, project, tMs, settings = {}) {
+  const overlay = overlayBackground(settings);
+  // A glow halo would leave a green fringe after chroma keying
+  if (overlay === "green") settings = { ...settings, glowColor: "rgba(0,0,0,0)" };
   const width = settings.width || ctx.canvas?.width || 1080;
   const height = settings.height || ctx.canvas?.height || 1920;
   const tSec = (Number(tMs) || 0) / 1000;
@@ -92,7 +110,16 @@ export function drawFrame(ctx, project, tMs, settings = {}) {
     1;
   const durationSec = durationMs / 1000;
 
-  drawBackground(ctx, width, height, settings, tSec, durationSec);
+  if (overlay) {
+    // Lyrics only: nothing behind the text but the keyable colour, if any
+    ctx.clearRect(0, 0, width, height);
+    if (overlay !== "transparent") {
+      ctx.fillStyle = overlay === "green" ? CHROMA_GREEN : "#000000";
+      ctx.fillRect(0, 0, width, height);
+    }
+  } else {
+    drawBackground(ctx, width, height, settings, tSec, durationSec);
+  }
 
   // Intro title card (first 3s by default), never covering the first sung line
   const introSec = introDurationSec(project, settings);
@@ -102,7 +129,7 @@ export function drawFrame(ctx, project, tMs, settings = {}) {
     drawLyrics(ctx, project, tMs, width, height, settings);
   }
 
-  if (settings.letterbox) drawLetterbox(ctx, width, height);
+  if (settings.letterbox && !overlay) drawLetterbox(ctx, width, height);
   if (settings.watermark) drawWatermark(ctx, width, height, settings);
   if (settings.progressBar) drawProgressBar(ctx, width, height, tSec, durationSec);
   if (settings.credit !== false) drawCredit(ctx, width, height);
@@ -217,6 +244,7 @@ function drawCover(ctx, media, width, height, zoom, blur) {
 }
 
 function usesEclipse(settings) {
+  if (overlayBackground(settings)) return false;
   const mode = settings.background || "eclipse";
   return mode === "eclipse" || mode === "reactive" || !["solid", "gradient", "image", "video"].includes(mode);
 }

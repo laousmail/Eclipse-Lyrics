@@ -1,7 +1,8 @@
 /** Lyric video preview + export facade (Phase 4 video studio). */
 
-import { drawFrame, resolveOutputSize, parseAspect, rmsAtTime } from "../video/renderer.js";
+import { drawFrame, resolveOutputSize, parseAspect, rmsAtTime, overlayBackground } from "../video/renderer.js";
 import { applyTemplate, TEMPLATES } from "../video/templates.js";
+import { exportFileName } from "../video/export-overlay.js";
 import {
   getAudioElement,
   getMediaStreamDestination,
@@ -181,8 +182,9 @@ export function renderFrame(project, overrideTimeSec) {
   if (canvas.width !== width || canvas.height !== height) {
     canvas.width = width;
     canvas.height = height;
-    // Stage follows the output shape (9:16, 16:9, 1:1) so the preview is never letterboxed
-    canvas.parentElement?.style.setProperty("aspect-ratio", `${w} / ${h}`);
+    // Stage follows the output shape (9:16, 4:5, 1:1, 16:9) so the preview is never letterboxed
+    canvas.parentElement?.style.setProperty("--ar", `${w} / ${h}`);
+    canvas.parentElement?.style.setProperty("--arn", String(w / h));
   }
 
   const ctx = canvas.getContext("2d");
@@ -194,6 +196,9 @@ export function renderFrame(project, overrideTimeSec) {
         : Math.round((getAudioElement().currentTime || 0) * 1000);
 
   const runtime = runtimeSettings(project, { width, height });
+  // Checkerboard behind a transparent overlay so "empty" reads as empty
+  const stage = canvas.parentElement;
+  if (stage) stage.dataset.overlay = overlayBackground(runtime) || "";
   drawFrame(ctx, project, tMs, runtime);
 }
 
@@ -213,7 +218,9 @@ export async function startVideoExport(project, {
   await resumeContext();
 
   const canvas = document.getElementById("video-canvas");
-  const audioBuffer = getDecodedBuffer();
+  // Lyrics-only files go on top of footage that already has the song
+  const overlay = settings.output === "overlay";
+  const audioBuffer = overlay ? null : getDecodedBuffer();
   const peaks = peaksGetter?.() || null;
 
   try {
@@ -236,8 +243,8 @@ export async function startVideoExport(project, {
     });
 
     const result = await exportHandle.done;
-    const ext = result.mimeType?.includes("mp4") ? "mp4" : "webm";
-    const name = `${(project.title || "lyric-video").replace(/\s+/g, "-")}.${ext}`;
+    const ext = result.ext || (result.mimeType?.includes("mp4") ? "mp4" : "webm");
+    const name = exportFileName(project, settings, ext);
     downloadBlob(result.blob, name);
     const compatible = await isWidelyCompatible(exportHandle.path, result.blob).catch(() => true);
     exportHandle = null;

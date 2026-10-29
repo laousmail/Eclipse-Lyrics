@@ -1,5 +1,5 @@
 /* Eclipse Lyrics service worker — precache app shell, fonts, vendor. */
-const CACHE = "eclipse-lyrics-v8";
+const CACHE = "eclipse-lyrics-v9";
 
 const PRECACHE = [
   "./",
@@ -44,6 +44,7 @@ const PRECACHE = [
   "./video/export-webcodecs.js",
   "./video/export-mediarecorder.js",
   "./video/export-worker.js",
+  "./video/export-overlay.js",
   "./video/styles/index.js",
   "./video/styles/fadeUp.js",
   "./video/styles/glowSweep.js",

@@ -210,16 +210,77 @@ body.audio-ready #audio-status {
   font-size: 0.85rem;
 }
 
-/* ——— Film: preview stage takes the output's shape; quiet scrub row ——— */
+/* ——— Film: preview stage takes the output's exact shape ———
+   Width is the smaller of the column and (height cap × ratio), so wide ratios
+   shrink to fit instead of being squashed. --ar / --arn are set by js/video.js. */
 .video-stage {
-  width: auto;
-  max-width: 100%;
-  height: min(55vh, 34rem);
+  --stage-h: min(55vh, 34rem);
+  aspect-ratio: var(--ar, 9 / 16);
+  width: min(100%, calc(var(--stage-h) * var(--arn, 0.5625)));
+  height: auto;
   max-height: none;
+  transition: width var(--dur-slow) var(--ease);
 }
 
 .video-stage-compact {
-  height: min(32vh, 22rem);
+  --stage-h: min(30vh, 22rem);
+}
+
+/* Only the preview + scrubber stay pinned; solid so options never show through */
+.film-sticky {
+  background: var(--bg);
+}
+
+/* Ratio picker: small shapes you can read at a glance */
+.ratio-seg {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.35rem;
+  padding: 0.25rem;
+  margin: 0 auto 0.4rem;
+  max-width: 26rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  background: var(--bg2);
+}
+
+.ratio-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  min-height: 2.5rem;
+  padding: 0 0.5rem;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: none;
+  color: var(--mute);
+  font: 500 0.78rem var(--mono);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: background var(--dur) var(--ease), color var(--dur) var(--ease);
+}
+
+.ratio-btn[aria-checked="true"] {
+  background: var(--ink);
+  color: var(--bg);
+}
+
+.ratio-shape {
+  display: block;
+  height: 1rem;
+  aspect-ratio: var(--ar);
+  max-width: 1.6rem;
+  border: 1.5px solid currentColor;
+  border-radius: 3px;
+}
+
+.ratio-use {
+  margin: 0 0 0.55rem;
+  text-align: center;
+  font: 400 0.68rem/1.4 var(--mono);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
 }
 
 .film-scrub-field {
@@ -286,12 +347,17 @@ input[type="range"] {
   accent-color: var(--hot);
 }
 
-/* ——— Film on wide screens: preview on the left, settings and export on the right ——— */
+/* ——— Film layout: phones stack everything (wrappers are transparent so the preview
+   stays pinned while you scroll the options); wide screens get two columns ——— */
+.film-main,
+.film-side {
+  display: contents;
+}
+
 @media (min-width: 1024px) {
   #screen-video.is-active {
     display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(20rem, 28rem);
-    grid-template-rows: auto auto auto 1fr;
     column-gap: 2rem;
     align-items: start;
   }
@@ -300,40 +366,184 @@ input[type="range"] {
     grid-column: 1 / -1;
   }
 
-  #screen-video > .film-sticky {
-    grid-column: 1;
-    grid-row: 2 / span 3;
+  #screen-video .film-main {
+    display: block;
+    position: sticky;
     top: 0.5rem;
-    justify-self: center;
-    width: min(100%, 40rem);
   }
 
-  #screen-video > .film-customize,
-  #screen-video > .btn-stack,
-  #screen-video > .record-progress {
-    grid-column: 2;
+  #screen-video .film-side {
+    display: block;
   }
 
-  /* Export stays in view above the long settings panel */
-  #screen-video > .btn-stack {
-    grid-row: 2;
+  #screen-video .film-sticky {
+    position: static;
+    width: min(100%, 58rem);
+    margin-inline: auto;
+  }
+
+  #screen-video .film-output {
     margin-top: 0;
   }
 
-  #screen-video > .record-progress {
-    grid-row: 3;
-  }
-
-  #screen-video > .film-customize {
-    grid-row: 4;
-  }
-
   #screen-video .video-stage-compact {
-    height: min(62vh, 40rem);
+    --stage-h: min(52vh, 40rem);
   }
 }
 
 /* The toast lets taps through, except on its button (Undo, Export…) */
 .toast.is-on .toast-action {
   pointer-events: auto;
+}
+
+/* ——— Film: Full video / Lyrics only ——— */
+.film-output {
+  display: grid;
+  gap: 0.6rem;
+  margin: 0.25rem 0 0.9rem;
+}
+
+.output-seg {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.3rem;
+  padding: 0.25rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  background: var(--bg2);
+}
+
+.output-btn {
+  min-height: 2.6rem;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: none;
+  color: var(--mute);
+  font: 600 0.9rem var(--sans);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: background var(--dur) var(--ease), color var(--dur) var(--ease);
+}
+
+.output-btn[aria-checked="true"] {
+  background: var(--ink);
+  color: var(--bg);
+}
+
+.overlay-options {
+  display: grid;
+  gap: 0.45rem;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+
+.overlay-options[hidden] {
+  display: none;
+}
+
+.overlay-lead {
+  padding: 0;
+  margin-bottom: 0.15rem;
+  color: var(--mute);
+  font-size: var(--fs-sm);
+}
+
+.overlay-choice {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-height: var(--touch-lg);
+  padding: 0.6rem 0.85rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--bg2);
+  cursor: pointer;
+  transition: border-color var(--dur) var(--ease), background var(--dur) var(--ease);
+}
+
+.overlay-choice input {
+  flex: none;
+  width: 1.1rem;
+  height: 1.1rem;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  accent-color: var(--hot);
+}
+
+.overlay-choice span {
+  display: grid;
+  gap: 0.1rem;
+  min-width: 0;
+}
+
+.overlay-choice b {
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.overlay-choice small {
+  font: 400 0.72rem/1.4 var(--mono);
+  color: var(--mute);
+}
+
+.overlay-choice:has(input:checked) {
+  border-color: color-mix(in srgb, var(--hot) 70%, var(--line));
+  background: color-mix(in srgb, var(--hot) 8%, var(--bg2));
+}
+
+.overlay-choice.is-unavailable {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.overlay-howto {
+  margin: 0.1rem 0 0;
+  color: var(--mute);
+  font-size: var(--fs-sm);
+  line-height: 1.5;
+}
+
+/* Preview of a transparent overlay: a checkerboard behind the text */
+.video-stage[data-overlay="transparent"] {
+  background-color: #1b1714;
+  background-image:
+    linear-gradient(45deg, #2a2420 25%, transparent 25%),
+    linear-gradient(-45deg, #2a2420 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #2a2420 75%),
+    linear-gradient(-45deg, transparent 75%, #2a2420 75%);
+  background-size: 16px 16px;
+  background-position: 0 0, 0 8px, 8px -8px, -8px 0;
+}
+
+/* Export: where the .srt goes in each editor */
+.editor-card {
+  display: grid;
+  gap: 0.6rem;
+}
+
+.editor-list {
+  display: grid;
+  gap: 0.45rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.editor-list li {
+  display: grid;
+  gap: 0.1rem;
+  padding: 0.55rem 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--bg2);
+  font-size: var(--fs-sm);
+  color: var(--mute);
+}
+
+.editor-list b {
+  font-weight: 600;
+  color: var(--ink);
 }
