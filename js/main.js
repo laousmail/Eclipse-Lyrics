@@ -1610,7 +1610,13 @@ function setupNavigation() {
     btn.addEventListener("click", () => {
       i18n.setLang(btn.dataset.lang);
       haptics.tick();
+      // applyDom resets data-i18n labels to their defaults; redraw the live ones
       updatePlayButton();
+      updateTapButtons();
+      updateProgressChip();
+      updateOffsetChip();
+      updateFilmOutputs();
+      if (state.screen === "projects") refreshProjectsList();
       state.waveform?.setEmptyLabel?.(i18n.t("loadWaveform"));
       /* primary CTA stays “Go to sync” on the combined Song screen */
       // Language lives in More — close after pick for a calmer flow
@@ -1850,6 +1856,11 @@ function mergeImported(data) {
 
 function setupUI() {
   document.body.classList.add("has-tabbar");
+  // Save right away when the tab is hidden or closed (saves are otherwise debounced)
+  window.addEventListener("pagehide", () => db.flushSaveProject());
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") db.flushSaveProject();
+  });
   i18n.initI18n();
   setupNavigation();
   setupDropZone();
@@ -2448,10 +2459,13 @@ function setupUI() {
           info.path === "webcodecs" ? i18n.t("exportingOffline") : i18n.t("recordingKeep");
         status.textContent = `${path} ${Math.round(p * 100)}%${eta}`;
       },
-      onDone: () => {
+      onDone: (result) => {
         recordPausedByHide = false;
         bar.style.width = "100%";
-        status.textContent = "✓";
+        status.textContent = i18n.t("videoSaved").replace("{file}", result?.fileName || "");
+        if (result && !result.compatible) {
+          status.textContent += ` ${i18n.t("videoFormatWarn")}`;
+        }
         $("btn-stop-record").hidden = true;
         $("btn-record").disabled = false;
         $("btn-record").textContent = i18n.t("recordVideo");
@@ -2506,6 +2520,7 @@ async function refreshProjectsList() {
   const projects = await db.listProjects();
   renderProjectsList($("projects-list"), $("projects-empty"), {
     t: i18n.t,
+    locale: document.documentElement.lang || undefined,
     projects,
     onOpen: (p) => openProjectById(p.id),
     onDuplicate: async (p) => {

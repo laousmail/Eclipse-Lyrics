@@ -2,17 +2,25 @@
 
 import { formatMs, progressTimed } from "../sync.js";
 
-function formatEdited(ts) {
+function formatEdited(ts, locale) {
   if (!ts) return "—";
   try {
     const d = new Date(ts);
     const sameDay = d.toDateString() === new Date().toDateString();
     return sameDay
-      ? d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })
-      : d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+      ? d.toLocaleTimeString(locale, { hour: "numeric", minute: "2-digit" })
+      : d.toLocaleDateString(locale, { month: "short", day: "numeric", year: "numeric" });
   } catch {
     return "—";
   }
+}
+
+export function isEmptyProject(p) {
+  const hasLyrics = (p?.lines || []).some((l) => {
+    const t = l?.text;
+    return l?.type === "section" || Boolean(typeof t === "string" ? t.trim() : t?.kab || t?.fr || t?.en || l?.kab);
+  });
+  return !p?.audio?.fileName && !String(p?.title || "").trim() && !hasLyrics;
 }
 
 function formatDur(ms) {
@@ -42,10 +50,11 @@ function drawThumb(canvas, thumb) {
  * @param {HTMLElement} listEl
  * @param {{ projects: object[], onOpen, onDuplicate, onRename, onDelete, onExport, t?: (key: string) => string }} handlers
  */
-export function renderProjectsList(listEl, emptyEl, { projects, onOpen, onDuplicate, onRename, onDelete, onExport, t = (k) => k }) {
+export function renderProjectsList(listEl, emptyEl, { projects, onOpen, onDuplicate, onRename, onDelete, onExport, t = (k) => k, locale }) {
   if (!listEl) return;
   listEl.replaceChildren();
-  const rows = projects || [];
+  // A project nobody has touched yet (no audio, title or lyrics) isn't worth a card
+  const rows = (projects || []).filter((p) => !isEmptyProject(p));
   if (emptyEl) emptyEl.hidden = rows.length > 0;
 
   rows.forEach((p) => {
@@ -70,11 +79,11 @@ export function renderProjectsList(listEl, emptyEl, { projects, onOpen, onDuplic
         <button type="button" data-act="export"></button>
         <button type="button" data-act="delete"></button>
       </div>`;
-    li.querySelector(".project-title").textContent = p.title || p.audio?.fileName || "Untitled";
+    li.querySelector(".project-title").textContent = p.title || p.audio?.fileName || t("untitled");
     li.querySelector(".project-sub").textContent = [
       p.artist || "",
       formatDur(p.audio?.durationMs || 0),
-      formatEdited(p.updatedAt),
+      formatEdited(p.updatedAt, locale),
     ]
       .filter(Boolean)
       .join(" · ");

@@ -26,7 +26,21 @@ Then compared every screen against laousmail.com and brought the app onto the sa
 | L4 | Low | Film "Jump to line" stayed on "—" while scrubbing. | Not kept in sync. | Follows the scrubber. |
 | L5 | Low | Text fields used the browser's default font (Arial) instead of Outfit. | Inputs don't inherit `font-family`. | Inherit; lyric cells use the lyric stack (Noto Sans + Tifinagh). |
 
-All verified in the browser after the fix; C1, C2, C4, C5 have unit tests.
+### Second sweep (same day)
+
+| # | Severity | What a person saw | Fix |
+|---|---|---|---|
+| S1 | High | **No toast button could be clicked**: "Undo" after deleting a project, "Export" after syncing, "Refresh" for updates. | `.toast` let clicks through to the page, including on its button. The button now takes clicks. |
+| S2 | High | An edit made just before closing or reloading the tab was lost. | Saves are debounced by 500 ms. They are now written immediately when the tab is hidden or closed, and the database commits at once. |
+| S3 | Medium | Lyric videos kept a line on screen through long instrumental gaps and outros. | Lines leave after the export "max gap" (8 s default), the same rule the subtitle files use. |
+| S4 | Medium | Export with no explicit settings applied **no** max gap and **no** minimum line length (`Number(undefined) ?? 8000` is `NaN`). | Defaults now apply. |
+| S5 | Medium | Eclipse template: the lyric ran across the lower edge of the ring; in 16:9 the ring was huge. | Ring sized from the short side and kept clear of the text (above it, or below when lyrics sit at the top); the title card sits inside it. |
+| S6 | Medium | Some browsers save the "MP4" as VP9 or Opus, which Instagram, TikTok or iPhone Photos may refuse, and nothing said so. | The recorder now asks for H.264 explicitly, and the app checks the codecs inside the finished file and explains when it isn't H.264 + AAC. |
+| S7 | Medium | Deleting the open project left an empty "Untitled" card. | Projects with no audio, title or lyrics stay out of the library. |
+| S8 | Low | Switching language reset live labels: the Tap button said "mark start" with every line timed. | Live labels are redrawn after a language change. |
+| S9 | Low | French: the Gap button said "Pause" (looks like play/pause); the Sync header wrapped onto three lines; project times used the browser's language. | "Silence"; a short "Exporter →" button; dates follow the app's language. |
+
+All verified in the browser after the fix; C1, C2, C4, C5, S3–S7 have unit tests.
 
 ## 2. Design: laousmail.com language
 
@@ -43,8 +57,6 @@ Fonts are self-hosted (OFL, from Fontsource) and precached by the service worker
 
 ## 3. Still open (recommended next)
 
-1. **Eclipse template:** the lyric crosses the lower edge of the ring. Move the ring up or the text block below it.
-2. **Kabyle strings** for the new labels (paste toast, Export subtitles, project card actions) fall back to English. Needs a native speaker.
-3. **Last cue runs to the end of the song** when there's a long outro. "Max gap" in Export options handles it, but a default (e.g. 8 s) would be safer.
-4. **Light theme:** laousmail.com has one, the app is dark only.
-5. **Headless/Chromium builds without H.264** export VP9/Opus inside `.mp4`. Real Chrome/Safari produce H.264; worth a "best for Instagram" note when the fallback kicks in.
+1. **Kabyle:** 202 labels the app shows have no Kabyle yet and appear in English. Fill-in sheet: `docs/KABYLE-STRINGS.md`.
+2. **Real-device check** on an iPhone (Safari) and an Android phone: paste, tap, export SRT, export MP4.
+3. Later features (not v1): light theme, word-by-word karaoke, link from laousmail.com.

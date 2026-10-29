@@ -332,3 +332,8 @@ input[type="range"] {
     height: min(62vh, 40rem);
   }
 }
+
+/* The toast lets taps through, except on its button (Undo, Export…) */
+.toast.is-on .toast-action {
+  pointer-events: auto;
+}
