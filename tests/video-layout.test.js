@@ -4,6 +4,8 @@ import {
   layoutText,
   applyTextCase,
   fontString,
+  lyricSizePx,
+  letterSpacingPx,
   positionY,
   alignX,
 } from "../video/layout.js";
@@ -51,5 +53,26 @@ describe("video/layout", () => {
     assert.ok(positionY(1000, "bottom") > positionY(1000, "center"));
     assert.equal(alignX(1000, "center"), 500);
     assert.ok(alignX(1000, "left") < 500);
+  });
+});
+
+describe("lyric size follows the frame", () => {
+  it("preview at 45% scale draws text at 45% of the export size", () => {
+    const settings = { fontSize: 80 };
+    const exportPx = lyricSizePx(settings, 1080, 1920);
+    const previewPx = lyricSizePx(settings, 486, 864);
+    assert.equal(exportPx, 80);
+    assert.equal(previewPx, 36);
+  });
+
+  it("auto size is the same for vertical, wide and square 1080p", () => {
+    assert.equal(lyricSizePx({}, 1080, 1920), 60);
+    assert.equal(lyricSizePx({}, 1920, 1080), 60);
+    assert.equal(lyricSizePx({ fontSize: 0 }, 1080, 1080), 60);
+  });
+
+  it("letter spacing scales with the frame", () => {
+    assert.equal(letterSpacingPx({ letterSpacing: 4 }, 540, 960), 2);
+    assert.equal(letterSpacingPx({}, 1080, 1920), 0);
   });
 });

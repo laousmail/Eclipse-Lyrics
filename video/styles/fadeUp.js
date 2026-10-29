@@ -1,6 +1,6 @@
 /** Fade up: line rises softly and fades in, then fades out. */
 
-import { layoutText, fillLayout, fontString, positionY, alignX, applyTextCase } from "../layout.js";
+import { layoutText, fillLayout, fontString, positionY, alignX, applyTextCase, lyricSizePx, letterSpacingPx } from "../layout.js";
 
 export function fadeUp(ctx, opts) {
   const {
@@ -30,9 +30,7 @@ export function fadeUp(ctx, opts) {
     }
   }
 
-  const sizePx = settings.fontSize
-    ? Number(settings.fontSize)
-    : Math.round(width * 0.035);
+  const sizePx = lyricSizePx(settings, width, height);
   const maxW = width * ((Number(settings.maxWidthPct) || 82) / 100);
   const cx = alignX(width, settings.align || "center");
   const cy = positionY(height, settings.position || "center");
@@ -45,7 +43,7 @@ export function fadeUp(ctx, opts) {
   ctx.fillStyle = colors.text;
   ctx.shadowColor = colors.glow;
   ctx.shadowBlur = 24;
-  if (settings.letterSpacing) ctx.letterSpacing = `${settings.letterSpacing}px`;
+  if (settings.letterSpacing) ctx.letterSpacing = `${letterSpacingPx(settings, width, height)}px`;
   ctx.font = fontString({
     font: settings.font,
     weight: settings.fontWeight || 600,

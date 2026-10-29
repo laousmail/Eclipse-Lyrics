@@ -23,7 +23,7 @@ Viewport is locked (no pinch-zoom) for an app-like feel. Haptics via the Vibrati
 ## Workflow
 
 1. **Load audio** — drag-and-drop or pick MP3 / WAV / M4A / OGG  
-2. **Paste lyrics** — one line per row; optional French / English columns  
+2. **Paste lyrics** — paste the whole song, it splits into one row per line; paste a translation into the FR / EN column the same way  
 3. **Tap to sync** — play, then press **Space** at the start of each line  
 4. **Fine-tune** — arrow keys (±0.05 s, Shift ±0.5 s) or drag waveform markers  
 5. **Export** — LRC, SRT, VTT, or JSON  
@@ -45,13 +45,15 @@ Viewport is locked (no pinch-zoom) for an app-like feel. Haptics via the Vibrati
 
 Plain HTML, CSS, and vanilla JS (ES modules). No build step, no backend, no accounts.
 
-Self-hosted **Noto Sans** + **Noto Sans Tifinagh** for Kabyle Latin and Tifinagh.
+Self-hosted **Noto Sans** + **Noto Sans Tifinagh** for Kabyle Latin and Tifinagh, plus **Cormorant Garamond** and **JetBrains Mono** to match laousmail.com.
 
 ## Project layout
 
 ```
 index.html
+css/tokens.css
 css/app.css
+css/brand.css   # laousmail.com look: serif titles, mono labels, gradient pills
 js/main.js
 js/audio.js
 js/waveform.js

@@ -32,9 +32,11 @@
   <meta name="twitter:image" content="https://laousmail.github.io/Eclipse-Lyrics/og/og-1200x630.png" />
   <link rel="preload" href="fonts/outfit-600.woff2" as="font" type="font/woff2" crossorigin />
   <link rel="preload" href="fonts/outfit-400.woff2" as="font" type="font/woff2" crossorigin />
+  <link rel="preload" href="fonts/cormorant-garamond-600.woff2" as="font" type="font/woff2" crossorigin />
   <link rel="modulepreload" href="js/main.js" />
   <link rel="stylesheet" href="css/tokens.css" />
   <link rel="stylesheet" href="css/app.css" />
+  <link rel="stylesheet" href="css/brand.css" />
   <script type="application/ld+json">
   {
     "@context": "https://schema.org",
@@ -383,6 +385,7 @@
               </svg>
               <span id="progress-chip-label">0 / 0</span>
             </div>
+            <button type="button" id="btn-sync-export" class="btn btn-fill btn-sm sync-export" data-goto="export" data-i18n="exportNext" hidden>Export subtitles</button>
           </div>
           <div class="sync-toolbar sync-toolbar-simple">
             <label class="speed-chip">
@@ -631,8 +634,8 @@
               </select>
             </label>
             <label class="field slider-compact">
-              <span class="slider-label-row"><span data-i18n="sizeShort">Size</span> <output id="font-size-out" for="font-size">0</output></span>
-              <input type="range" id="font-size" min="0" max="96" value="0" data-i18n-aria="fontSize" aria-label="Size" />
+              <span class="slider-label-row"><span data-i18n="sizeShort">Size</span> <output id="font-size-out" for="font-size">Auto</output></span>
+              <input type="range" id="font-size" min="0" max="140" value="0" data-i18n-aria="fontSize" aria-label="Size" />
             </label>
             <label class="field">
               <span data-i18n="fontWeight">Weight</span>

@@ -181,6 +181,8 @@ export function renderFrame(project, overrideTimeSec) {
   if (canvas.width !== width || canvas.height !== height) {
     canvas.width = width;
     canvas.height = height;
+    // Stage follows the output shape (9:16, 16:9, 1:1) so the preview is never letterboxed
+    canvas.parentElement?.style.setProperty("aspect-ratio", `${w} / ${h}`);
   }
 
   const ctx = canvas.getContext("2d");

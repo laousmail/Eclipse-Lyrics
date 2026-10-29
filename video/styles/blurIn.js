@@ -1,6 +1,6 @@
 /** Blur in: text starts blurred and sharpens while fading in. */
 
-import { layoutText, fillLayout, fontString, positionY, alignX, applyTextCase } from "../layout.js";
+import { layoutText, fillLayout, fontString, positionY, alignX, applyTextCase, lyricSizePx, letterSpacingPx } from "../layout.js";
 
 export function blurIn(ctx, opts) {
   const {
@@ -30,9 +30,7 @@ export function blurIn(ctx, opts) {
     }
   }
 
-  const sizePx = settings.fontSize
-    ? Number(settings.fontSize)
-    : Math.round(width * 0.035);
+  const sizePx = lyricSizePx(settings, width, height);
   const maxW = width * ((Number(settings.maxWidthPct) || 82) / 100);
   const cx = alignX(width, settings.align || "center");
   const cy = positionY(height, settings.position || "center");
@@ -51,7 +49,7 @@ export function blurIn(ctx, opts) {
     weight: settings.fontWeight || 600,
     sizePx,
   });
-  if (settings.letterSpacing) ctx.letterSpacing = `${settings.letterSpacing}px`;
+  if (settings.letterSpacing) ctx.letterSpacing = `${letterSpacingPx(settings, width, height)}px`;
 
   const main = layoutText(ctx, display, maxW, Math.round(sizePx * 1.28));
   fillLayout(ctx, main, cx, cy, Math.round(sizePx * 1.28), {

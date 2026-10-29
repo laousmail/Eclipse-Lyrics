@@ -1,5 +1,5 @@
 /* Eclipse Lyrics service worker — precache app shell, fonts, vendor. */
-const CACHE = "eclipse-lyrics-v7";
+const CACHE = "eclipse-lyrics-v8";
 
 const PRECACHE = [
   "./",
@@ -7,6 +7,7 @@ const PRECACHE = [
   "./manifest.webmanifest",
   "./css/tokens.css",
   "./css/app.css",
+  "./css/brand.css",
   "./js/main.js",
   "./js/audio.js",
   "./js/sync.js",
@@ -54,6 +55,10 @@ const PRECACHE = [
   "./fonts/outfit-400.woff2",
   "./fonts/outfit-500.woff2",
   "./fonts/outfit-600.woff2",
+  "./fonts/cormorant-garamond-600.woff2",
+  "./fonts/cormorant-garamond-500-italic.woff2",
+  "./fonts/jetbrains-mono-400.woff2",
+  "./fonts/jetbrains-mono-500.woff2",
   "./fonts/noto-sans-latin-400.woff2",
   "./fonts/noto-sans-latin-600.woff2",
   "./fonts/noto-sans-latin-ext-400.woff2",

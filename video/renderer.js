@@ -82,8 +82,8 @@ export function drawFrame(ctx, project, tMs, settings = {}) {
 
   drawBackground(ctx, width, height, settings, tSec, durationSec);
 
-  // Intro title card (first 3s by default)
-  const introSec = settings.introCard === false ? 0 : Number(settings.introDurationSec) || 3;
+  // Intro title card (first 3s by default), never covering the first sung line
+  const introSec = introDurationSec(project, settings);
   if (introSec > 0 && tSec < introSec) {
     drawTitleCard(ctx, width, height, project, settings, tSec / introSec);
   } else {
@@ -95,6 +95,18 @@ export function drawFrame(ctx, project, tMs, settings = {}) {
   if (settings.progressBar) drawProgressBar(ctx, width, height, tSec, durationSec);
   if (settings.credit !== false) drawCredit(ctx, width, height);
   if (settings.showSafeZones) drawSafeZones(ctx, width, height);
+}
+
+/** Title card length in seconds: ends before the first timed line, dropped if too short to read. */
+export function introDurationSec(project, settings = {}) {
+  if (settings.introCard === false) return 0;
+  const wanted = Number(settings.introDurationSec) || 3;
+  const starts = (project?.lines || [])
+    .filter((l) => l.type !== "section" && Number.isFinite(l.startMs))
+    .map((l) => l.startMs / 1000);
+  const first = starts.length ? Math.min(...starts) : Infinity;
+  const sec = Math.min(wanted, first - 0.2);
+  return sec >= 1 ? sec : 0;
 }
 
 function drawLyrics(ctx, project, tMs, width, height, settings) {

@@ -491,24 +491,8 @@ body.keyboard-open.dock-on .app-screens {
   box-shadow: 0 10px 28px -12px color-mix(in srgb, var(--hot) 70%, transparent);
 }
 
-/* Screen-primary fill follows active feature accent (calm, not rainbow) */
-body[data-screen="sync"] .btn-fill,
-body[data-screen="sync"] .screen-next {
-  background: var(--grad-sync);
-  box-shadow: 0 10px 28px -12px color-mix(in srgb, var(--feat-sync) 70%, transparent);
-}
-body[data-screen="video"] .btn-fill {
-  background: var(--grad-film);
-  box-shadow: 0 10px 28px -12px color-mix(in srgb, var(--feat-film) 65%, transparent);
-}
-body[data-screen="export"] .btn-fill {
-  background: linear-gradient(110deg, var(--feat-export), #ffe0a0);
-  box-shadow: 0 10px 28px -12px color-mix(in srgb, var(--feat-export) 65%, transparent);
-}
-body[data-screen="projects"] .btn-fill {
-  background: linear-gradient(110deg, #e08a28, var(--feat-projects));
-  box-shadow: 0 10px 28px -12px color-mix(in srgb, var(--feat-projects) 60%, transparent);
-}
+/* One primary look on every screen, like laousmail.com; screens keep their accent
+   in eyebrows, tabs and the Tap dock only. */
 
 .btn-ghost {
   background: none;

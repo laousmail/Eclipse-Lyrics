@@ -6,11 +6,14 @@ import { createLyricLine, createSectionLine, lineMainText, lineFr, lineEn, isLyr
 /**
  * Render editable grid into container.
  * @param {HTMLElement} root
- * @param {{ rows: Array<{main:string,fr:string,en:string}>, onChange: Function }} opts
+ * @param {{ rows: Array<{main:string,fr:string,en:string}>, onChange: Function, onPasteLines?: Function }} opts
  */
-export function renderLyricsGrid(root, { rows, onChange, onFocusField }) {
+export function renderLyricsGrid(root, { rows, onChange, onFocusField, onPasteLines }) {
   if (!root) return;
+  // Removing a focused input fires blur with its stale value; ignore it
+  root.dataset.rendering = "1";
   root.innerHTML = "";
+  delete root.dataset.rendering;
   rows.forEach((row, i) => {
     const el = document.createElement("div");
     el.className = "lyrics-row";
@@ -49,13 +52,31 @@ export function renderLyricsGrid(root, { rows, onChange, onFocusField }) {
       en: enInput.value,
     });
 
-    const emit = (reason) => onChange?.(readRow(), { reason, index: i });
+    const emit = (reason) => {
+      if (!el.isConnected || root.dataset.rendering) return;
+      onChange?.(readRow(), { reason, index: i });
+    };
 
     [mainInput, frInput, enInput].forEach((input) => {
       input.addEventListener("input", () => emit("input"));
       input.addEventListener("blur", () => emit("blur"));
       input.addEventListener("focus", () => onFocusField?.(input));
-      input.addEventListener("paste", () => {
+      input.addEventListener("paste", (e) => {
+        const text = e.clipboardData?.getData("text/plain") || "";
+        if (onPasteLines && /[\n\t]/.test(text.trim())) {
+          const v = input.value;
+          const handled = onPasteLines({
+            index: i,
+            col: input.dataset.col,
+            text,
+            before: v.slice(0, input.selectionStart ?? v.length),
+            after: v.slice(input.selectionEnd ?? v.length),
+          });
+          if (handled) {
+            e.preventDefault();
+            return;
+          }
+        }
         queueMicrotask(() => emit("paste"));
       });
     });

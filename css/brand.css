@@ -1,0 +1,334 @@
+/* laousmail.com design language on top of the app shell.
+   Cormorant Garamond carries the voice (screen titles), JetBrains Mono the labels
+   and timecodes, Outfit everything else. Ember-to-gold pills for primary actions. */
+
+@font-face {
+  font-family: "Cormorant Garamond";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("../fonts/cormorant-garamond-600.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Cormorant Garamond";
+  font-style: italic;
+  font-weight: 500;
+  font-display: swap;
+  src: url("../fonts/cormorant-garamond-500-italic.woff2") format("woff2");
+}
+@font-face {
+  font-family: "JetBrains Mono";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("../fonts/jetbrains-mono-400.woff2") format("woff2");
+}
+@font-face {
+  font-family: "JetBrains Mono";
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("../fonts/jetbrains-mono-500.woff2") format("woff2");
+}
+
+/* Form controls inherit Outfit instead of the browser's default face */
+input,
+select,
+textarea,
+button {
+  font-family: inherit;
+}
+
+.lyrics-row-fields input,
+.field textarea {
+  font-family: var(--lyric);
+}
+
+/* ——— Brand: an eclipse, not a sun ——— */
+.brand-mark {
+  position: relative;
+  background:
+    radial-gradient(circle, var(--bg) 0 58%, transparent 61%),
+    conic-gradient(from 210deg, var(--hot), var(--gold), #ffe2b0, var(--gold), var(--hot));
+  box-shadow:
+    0 0 14px color-mix(in srgb, var(--hot) 55%, transparent),
+    0 0 34px -6px color-mix(in srgb, var(--gold) 35%, transparent);
+}
+
+.brand-name {
+  font-weight: 600;
+  letter-spacing: -0.005em;
+}
+
+.brand-tag {
+  font: 500 0.62rem/1.3 var(--mono);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+/* ——— Screen heads ——— */
+.screen-head h2,
+.intro-card h2 {
+  font-family: var(--serif);
+  font-weight: 600;
+  font-size: 2.35rem;
+  line-height: 1.02;
+  letter-spacing: -0.015em;
+  text-wrap: balance;
+}
+
+.screen-head-compact h2 {
+  font-size: 1.95rem;
+}
+
+.intro-card h2 {
+  font-size: 2rem;
+}
+
+.eyebrow,
+.subhead,
+.sheet-lang-label {
+  font-family: var(--mono);
+  font-weight: 500;
+  font-size: 0.66rem;
+  letter-spacing: 0.18em;
+}
+
+.screen-lead {
+  font-size: 1rem;
+  line-height: 1.55;
+  max-width: 38ch;
+}
+
+/* ——— Buttons: gradient pill with a passing sheen, as on laousmail.com ——— */
+.btn-fill {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+  background: var(--grad);
+  color: var(--on);
+  box-shadow: 0 10px 28px -12px color-mix(in srgb, var(--hot) 70%, transparent);
+}
+
+.btn-fill::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: linear-gradient(110deg, transparent 30%, rgba(255, 255, 255, 0.4) 50%, transparent 70%);
+  transform: translateX(-120%);
+  transition: transform 0.7s var(--ease);
+  pointer-events: none;
+}
+
+@media (hover: hover) {
+  .btn-fill:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: 0 12px 30px -10px color-mix(in srgb, var(--hot) 75%, transparent);
+  }
+
+  .btn-fill:hover:not(:disabled)::after {
+    transform: translateX(120%);
+  }
+
+  .btn-ghost:hover:not(:disabled) {
+    box-shadow: inset 0 0 0 1.5px var(--gold);
+  }
+}
+
+/* ——— Labels, chips, timecodes ——— */
+.status-pill {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: 400 0.75rem/1.4 var(--mono);
+  letter-spacing: 0.04em;
+}
+
+/* The loaded card already shows file + duration */
+body.audio-ready #audio-status {
+  display: none;
+}
+
+.progress-chip,
+.offset-chip,
+.time-display,
+.project-progress,
+#video-scrub-time,
+#loaded-duration {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.project-progress {
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--gold);
+}
+
+.simple-more > summary {
+  font: 500 0.7rem/1.4 var(--mono);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  padding: 0.8rem 0.15rem;
+}
+
+.simple-more > summary::after,
+.simple-more[open] > summary::after {
+  content: "";
+  width: 0.45rem;
+  height: 0.45rem;
+  margin-top: 0.2rem;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: rotate(-45deg);
+  transition: transform var(--dur) var(--ease);
+}
+
+.simple-more[open] > summary::after {
+  transform: rotate(45deg);
+}
+
+.simple-more[open] > summary {
+  color: var(--ink);
+}
+
+/* ——— Sync: "Export subtitles" appears once every line is timed ——— */
+.sync-head-row {
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.sync-head-row > div:first-child {
+  flex: 1 1 auto;
+}
+
+.sync-export {
+  min-height: 2.4rem;
+  padding: 0 1rem;
+  font-size: 0.85rem;
+}
+
+/* ——— Film: preview stage takes the output's shape; quiet scrub row ——— */
+.video-stage {
+  width: auto;
+  max-width: 100%;
+  height: min(55vh, 34rem);
+  max-height: none;
+}
+
+.video-stage-compact {
+  height: min(32vh, 22rem);
+}
+
+.film-scrub-field {
+  background: none;
+  border: 0;
+  padding: 0;
+}
+
+.film-scrub-meta {
+  flex-wrap: nowrap;
+}
+
+.film-scrub-meta .slider-short {
+  display: none;
+}
+
+.film-scrub-meta .field-inline {
+  flex-direction: row;
+}
+
+#video-scrub-time {
+  font-size: 0.8rem;
+  color: var(--mute);
+}
+
+/* ——— Toast never sits on top of a screen tip ——— */
+body:has(#screen-tip:not([hidden])) .toast {
+  bottom: calc(var(--tabbar-h) + var(--safe-b) + var(--kb-inset, 0px) + 5.25rem);
+}
+
+body.dock-on:has(#screen-tip:not([hidden])) .toast {
+  bottom: calc(var(--tabbar-h) + var(--dock-h) + var(--safe-b) + var(--kb-inset, 0px) + 5rem);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .btn-fill::after {
+    display: none;
+  }
+
+  .btn-fill:hover:not(:disabled) {
+    transform: none;
+  }
+}
+
+/* Once complete, the Export button takes the progress chip's place (the dock still says "All lines timed") */
+.sync-head-row:has(#btn-sync-export:not([hidden])) .progress-chip {
+  display: none;
+}
+
+.sync-head-row:has(#btn-sync-export:not([hidden])) {
+  flex-wrap: nowrap;
+}
+
+/* Range sliders must not pick up the text-field box */
+.field input[type="range"],
+input[type="range"] {
+  min-height: var(--touch);
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  appearance: auto;
+  -webkit-appearance: auto;
+  accent-color: var(--hot);
+}
+
+/* ——— Film on wide screens: preview on the left, settings and export on the right ——— */
+@media (min-width: 1024px) {
+  #screen-video.is-active {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(20rem, 28rem);
+    grid-template-rows: auto auto auto 1fr;
+    column-gap: 2rem;
+    align-items: start;
+  }
+
+  #screen-video > .screen-head {
+    grid-column: 1 / -1;
+  }
+
+  #screen-video > .film-sticky {
+    grid-column: 1;
+    grid-row: 2 / span 3;
+    top: 0.5rem;
+    justify-self: center;
+    width: min(100%, 40rem);
+  }
+
+  #screen-video > .film-customize,
+  #screen-video > .btn-stack,
+  #screen-video > .record-progress {
+    grid-column: 2;
+  }
+
+  /* Export stays in view above the long settings panel */
+  #screen-video > .btn-stack {
+    grid-row: 2;
+    margin-top: 0;
+  }
+
+  #screen-video > .record-progress {
+    grid-row: 3;
+  }
+
+  #screen-video > .film-customize {
+    grid-row: 4;
+  }
+
+  #screen-video .video-stage-compact {
+    height: min(62vh, 40rem);
+  }
+}

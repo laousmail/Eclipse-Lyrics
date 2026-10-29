@@ -68,3 +68,66 @@ export function splitLineText(text, at) {
 export function exportableLines(lines) {
   return (lines || []).filter(isLyric);
 }
+
+const GRID_COLS = ["main", "fr", "en"];
+
+/**
+ * Multi-line paste into the lyric grid (inputs drop newlines on their own).
+ * Main column: line 1 goes into the focused cell, the rest become new rows below.
+ * FR/EN column: lines fill that column down the following lyric rows (sections
+ * skipped), adding rows when the song runs out.
+ * Tab-separated lines (copied from a sheet) spread across the columns.
+ *
+ * @returns {{ rows: Array<{main:string,fr:string,en:string}>, added: number, last: number, count: number } | null}
+ *   null when the text has a single line (let the input paste normally).
+ */
+export function pasteIntoRows(rows, { index = 0, col = "main", text = "", before = "", after = "" } = {}) {
+  const lines = String(text || "")
+    .replace(/\r\n?/g, "\n")
+    .split("\n")
+    .map((l) => l.replace(/\s+$/, ""))
+    .filter((l) => l.trim());
+  if (lines.length < 2 && !/\t/.test(lines[0] || "")) return null;
+
+  const out = rows.map((r) => ({ main: r.main || "", fr: r.fr || "", en: r.en || "" }));
+  const startCol = Math.max(0, GRID_COLS.indexOf(col));
+  const cellsOf = (line) => line.split("\t").map((c) => c.trim());
+  const put = (row, cells, first) => {
+    cells.slice(0, GRID_COLS.length - startCol).forEach((cell, k) => {
+      const key = GRID_COLS[startCol + k];
+      row[key] = first && k === 0 ? `${before}${cell}${after}` : cell;
+    });
+  };
+  const empty = () => ({ main: "", fr: "", en: "" });
+  let at = Math.max(0, Math.min(index, out.length - 1));
+  if (!out.length) out.push(empty());
+  let added = 0;
+
+  if (startCol === 0) {
+    lines.forEach((line, k) => {
+      if (k === 0) {
+        put(out[at], cellsOf(line), true);
+        return;
+      }
+      const row = empty();
+      put(row, cellsOf(line), false);
+      at += 1;
+      out.splice(at, 0, row);
+      added += 1;
+    });
+    return { rows: out, added, last: at, count: lines.length };
+  }
+
+  lines.forEach((line, k) => {
+    if (k > 0) {
+      at += 1;
+      while (at < out.length && isSectionText(out[at].main)) at += 1;
+    }
+    if (at >= out.length) {
+      out.push(empty());
+      added += 1;
+    }
+    put(out[at], cellsOf(line), k === 0);
+  });
+  return { rows: out, added, last: at, count: lines.length };
+}

@@ -8,6 +8,7 @@ import {
   resolveTimeRange,
   parseAspect,
   rmsAtTime,
+  introDurationSec,
 } from "../video/renderer.js";
 import { applyTemplate, TEMPLATES } from "../video/templates.js";
 
@@ -172,5 +173,22 @@ describe("video/renderer", () => {
     assert.deepEqual(parseAspect("1080x1920"), { w: 1080, h: 1920 });
     const peaks = [0.1, 0.5, 0.9];
     assert.ok(rmsAtTime(peaks, 0.5, 1) > 0.1);
+  });
+});
+
+describe("intro title card timing", () => {
+  const proj = (startMs) => ({ lines: [{ type: "lyric", startMs }] });
+
+  it("keeps the 3 s card when the first line starts later", () => {
+    assert.equal(introDurationSec(proj(12000), {}), 3);
+  });
+
+  it("ends before an early first line instead of hiding it", () => {
+    assert.ok(Math.abs(introDurationSec(proj(2000), {}) - 1.8) < 1e-9);
+  });
+
+  it("drops the card when the song starts almost immediately or it is off", () => {
+    assert.equal(introDurationSec(proj(900), {}), 0);
+    assert.equal(introDurationSec(proj(20000), { introCard: false }), 0);
   });
 });

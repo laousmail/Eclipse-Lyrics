@@ -40,7 +40,9 @@
   /* Type */
   --sans: "Outfit", "Noto Sans", system-ui, sans-serif;
   --lyric: "Noto Sans", "Noto Sans Tifinagh", "Outfit", system-ui, sans-serif;
-  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  /* laousmail.com pairing: serif for the voice (titles), mono for labels + timecodes */
+  --serif: "Cormorant Garamond", Georgia, "Noto Serif", serif;
+  --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
   --fs-xs: 0.75rem;
   --fs-sm: 0.875rem;
   --fs-md: 1rem;
