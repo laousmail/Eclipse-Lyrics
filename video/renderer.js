@@ -4,7 +4,7 @@
  */
 
 import { STYLES } from "./styles/index.js";
-import { fontString } from "./layout.js";
+import { fontString, positionY } from "./layout.js";
 
 const DEFAULT_COLORS = {
   text: "#f4ebe6",
@@ -26,6 +26,18 @@ export function lineAtTimeMs(lines, timeMs) {
     else break;
   }
   return active;
+}
+
+/**
+ * When a line leaves the screen: its end, capped at the export "max gap" (8 s by
+ * default) so the video matches the subtitle files.
+ */
+export function lineEndMs(project, line) {
+  const start = line.startMs ?? 0;
+  const end = line.endMs ?? start + 3000;
+  const raw = project?.settings?.export?.maxGapMs;
+  const cap = Number.isFinite(Number(raw)) && raw !== null && raw !== "" ? Number(raw) : 8000;
+  return cap > 0 ? Math.min(end, start + cap) : end;
 }
 
 export function lineMainText(line) {
@@ -82,8 +94,8 @@ export function drawFrame(ctx, project, tMs, settings = {}) {
 
   drawBackground(ctx, width, height, settings, tSec, durationSec);
 
-  // Intro title card (first 3s by default)
-  const introSec = settings.introCard === false ? 0 : Number(settings.introDurationSec) || 3;
+  // Intro title card (first 3s by default), never covering the first sung line
+  const introSec = introDurationSec(project, settings);
   if (introSec > 0 && tSec < introSec) {
     drawTitleCard(ctx, width, height, project, settings, tSec / introSec);
   } else {
@@ -97,6 +109,18 @@ export function drawFrame(ctx, project, tMs, settings = {}) {
   if (settings.showSafeZones) drawSafeZones(ctx, width, height);
 }
 
+/** Title card length in seconds: ends before the first timed line, dropped if too short to read. */
+export function introDurationSec(project, settings = {}) {
+  if (settings.introCard === false) return 0;
+  const wanted = Number(settings.introDurationSec) || 3;
+  const starts = (project?.lines || [])
+    .filter((l) => l.type !== "section" && Number.isFinite(l.startMs))
+    .map((l) => l.startMs / 1000);
+  const first = starts.length ? Math.min(...starts) : Infinity;
+  const sec = Math.min(wanted, first - 0.2);
+  return sec >= 1 ? sec : 0;
+}
+
 function drawLyrics(ctx, project, tMs, width, height, settings) {
   const lines = project?.lines || [];
   const idx = lineAtTimeMs(lines, tMs);
@@ -105,7 +129,9 @@ function drawLyrics(ctx, project, tMs, width, height, settings) {
   if (line.type === "section") return;
 
   const start = line.startMs ?? 0;
-  const end = line.endMs ?? start + 3000;
+  const end = lineEndMs(project, line);
+  // Long instrumental gaps and outros: the line fades out instead of staying up
+  if (tMs >= end) return;
   const progress = Math.max(0, Math.min(1, (tMs - start) / Math.max(1, end - start)));
 
   let translation = "";
@@ -153,9 +179,9 @@ function drawBackground(ctx, width, height, settings, t, duration) {
   } else if (mode === "video" && settings.bgVideo) {
     drawCover(ctx, settings.bgVideo, width, height, zoom, blur);
   } else if (mode === "reactive") {
-    drawEclipseGlow(ctx, width, height, t, reduced, settings.rms || 0.35);
+    drawEclipseGlow(ctx, width, height, t, reduced, settings.rms || 0.35, settings.position);
   } else {
-    drawEclipseGlow(ctx, width, height, t, reduced, 1);
+    drawEclipseGlow(ctx, width, height, t, reduced, 1, settings.position);
   }
 
   if (mode !== "solid") {
@@ -190,12 +216,33 @@ function drawCover(ctx, media, width, height, zoom, blur) {
   ctx.filter = "none";
 }
 
-function drawEclipseGlow(ctx, width, height, t, reduced, energy = 1) {
-  const cx = width * 0.5;
-  const cy = height * 0.48;
+function usesEclipse(settings) {
+  const mode = settings.background || "eclipse";
+  return mode === "eclipse" || mode === "reactive" || !["solid", "gradient", "image", "video"].includes(mode);
+}
+
+/**
+ * Eclipse placement: sized from the short side, and kept clear of the lyric block
+ * (above it, or below when lyrics sit at the top) so text never crosses the ring.
+ * @returns {{ cx: number, cy: number, r: number }} r is the ring radius at full energy
+ */
+export function eclipseGeometry(width, height, position = "center") {
+  const s = Math.min(width, height);
+  const textY = positionY(height, position);
+  const offset = s * 0.32;
+  return {
+    cx: width * 0.5,
+    cy: position === "top" ? textY + offset : textY - offset,
+    r: s * 0.12 * 1.1 * 1.05,
+  };
+}
+
+function drawEclipseGlow(ctx, width, height, t, reduced, energy = 1, position = "center") {
+  const { cx, cy } = eclipseGeometry(width, height, position);
+  const s = Math.min(width, height);
   const pulse = reduced ? 1 : (0.85 + 0.15 * Math.sin(t * 0.7)) * (0.7 + 0.3 * energy);
 
-  const g1 = ctx.createRadialGradient(cx, cy, 0, cx, cy, width * 0.45 * pulse);
+  const g1 = ctx.createRadialGradient(cx, cy, 0, cx, cy, s * 0.45 * pulse);
   g1.addColorStop(0, `rgba(255,180,120,${0.35 * energy})`);
   g1.addColorStop(0.35, `rgba(255,107,53,${0.28 * energy})`);
   g1.addColorStop(0.65, `rgba(196,30,30,${0.18 * energy})`);
@@ -203,7 +250,7 @@ function drawEclipseGlow(ctx, width, height, t, reduced, energy = 1) {
   ctx.fillStyle = g1;
   ctx.fillRect(0, 0, width, height);
 
-  const r = width * 0.12 * (0.9 + 0.2 * energy);
+  const r = s * 0.12 * (0.9 + 0.2 * energy);
   const disk = ctx.createRadialGradient(cx - r * 0.15, cy - r * 0.1, r * 0.2, cx, cy, r * 1.4);
   disk.addColorStop(0, "#1a0a0c");
   disk.addColorStop(0.7, "#0a0608");
@@ -214,7 +261,7 @@ function drawEclipseGlow(ctx, width, height, t, reduced, energy = 1) {
   ctx.fill();
 
   ctx.strokeStyle = `rgba(255,107,53,${0.45 * Math.min(1.2, energy)})`;
-  ctx.lineWidth = Math.max(2, width * 0.003);
+  ctx.lineWidth = Math.max(2, s * 0.003);
   ctx.beginPath();
   ctx.arc(cx, cy, r * 1.05, 0, Math.PI * 2);
   ctx.stroke();
@@ -231,21 +278,25 @@ function drawTitleCard(ctx, width, height, project, settings, p) {
   ctx.shadowBlur = 28;
   const title = project?.title || "Untitled";
   const artist = project?.artist || "";
+  // Title sits in the eclipse when there is one, otherwise mid-frame
+  const s = Math.min(width, height);
+  const cy = usesEclipse(settings) ? eclipseGeometry(width, height, settings.position).cy : height * 0.46;
+  const titleY = artist ? cy - s * 0.025 : cy;
   ctx.font = fontString({
     font: settings.font || "Outfit",
     weight: 700,
-    sizePx: Math.round(width * 0.055),
+    sizePx: Math.round(s * 0.055),
   });
-  ctx.fillText(title, width / 2, height * 0.46);
+  ctx.fillText(title, width / 2, titleY);
   if (artist) {
     ctx.shadowBlur = 12;
     ctx.font = fontString({
       font: settings.font || "Noto Sans",
       weight: 400,
-      sizePx: Math.round(width * 0.028),
+      sizePx: Math.round(s * 0.028),
     });
     ctx.fillStyle = settings.translationColor || DEFAULT_COLORS.translation;
-    ctx.fillText(artist, width / 2, height * 0.46 + width * 0.06);
+    ctx.fillText(artist, width / 2, titleY + s * 0.06);
   }
   ctx.restore();
 }

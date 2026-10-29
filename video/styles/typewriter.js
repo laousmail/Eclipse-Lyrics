@@ -1,6 +1,6 @@
 /** Typewriter: characters appear sequentially. */
 
-import { layoutText, fontString, positionY, alignX, applyTextCase } from "../layout.js";
+import { layoutText, fontString, positionY, alignX, applyTextCase, lyricSizePx, letterSpacingPx } from "../layout.js";
 
 export function typewriter(ctx, opts) {
   const {
@@ -14,9 +14,7 @@ export function typewriter(ctx, opts) {
     reducedMotion = false,
   } = opts;
 
-  const sizePx = settings.fontSize
-    ? Number(settings.fontSize)
-    : Math.round(width * 0.035);
+  const sizePx = lyricSizePx(settings, width, height);
   const lineHeight = Math.round(sizePx * 1.28);
   const maxW = width * ((Number(settings.maxWidthPct) || 82) / 100);
   const cx = alignX(width, settings.align || "center");
@@ -40,7 +38,7 @@ export function typewriter(ctx, opts) {
     weight: settings.fontWeight || 600,
     sizePx,
   });
-  if (settings.letterSpacing) ctx.letterSpacing = `${settings.letterSpacing}px`;
+  if (settings.letterSpacing) ctx.letterSpacing = `${letterSpacingPx(settings, width, height)}px`;
 
   const layout = layoutText(ctx, partial || " ", maxW, lineHeight);
   const startY = cy - ((layout.lines.length - 1) * lineHeight) / 2;

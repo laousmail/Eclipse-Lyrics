@@ -94,8 +94,10 @@ export function resolveExportLang(opts = {}) {
  */
 export function prepareExportLines(project, exportSettings = {}) {
   const offset = Math.round(Number(exportSettings.globalOffsetMs) || 0);
-  const minLineMs = Math.max(0, Math.round(Number(exportSettings.minLineMs) ?? 700));
-  const maxGapMs = Math.max(0, Math.round(Number(exportSettings.maxGapMs) ?? 8000));
+  // Number(undefined) is NaN, which `??` lets through, so check finiteness instead
+  const num = (v, fallback) => (Number.isFinite(Number(v)) && v !== null && v !== "" ? Number(v) : fallback);
+  const minLineMs = Math.max(0, Math.round(num(exportSettings.minLineMs, 700)));
+  const maxGapMs = Math.max(0, Math.round(num(exportSettings.maxGapMs, 8000)));
   const dur = durationMsOf(project);
 
   const lines = (project.lines || []).map((l) => {

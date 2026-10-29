@@ -2,13 +2,25 @@
 
 import { formatMs, progressTimed } from "../sync.js";
 
-function formatEdited(ts) {
+function formatEdited(ts, locale) {
   if (!ts) return "—";
   try {
-    return new Date(ts).toLocaleString();
+    const d = new Date(ts);
+    const sameDay = d.toDateString() === new Date().toDateString();
+    return sameDay
+      ? d.toLocaleTimeString(locale, { hour: "numeric", minute: "2-digit" })
+      : d.toLocaleDateString(locale, { month: "short", day: "numeric", year: "numeric" });
   } catch {
     return "—";
   }
+}
+
+export function isEmptyProject(p) {
+  const hasLyrics = (p?.lines || []).some((l) => {
+    const t = l?.text;
+    return l?.type === "section" || Boolean(typeof t === "string" ? t.trim() : t?.kab || t?.fr || t?.en || l?.kab);
+  });
+  return !p?.audio?.fileName && !String(p?.title || "").trim() && !hasLyrics;
 }
 
 function formatDur(ms) {
@@ -36,12 +48,13 @@ function drawThumb(canvas, thumb) {
 
 /**
  * @param {HTMLElement} listEl
- * @param {{ projects: object[], onOpen, onDuplicate, onRename, onDelete, onExport }} handlers
+ * @param {{ projects: object[], onOpen, onDuplicate, onRename, onDelete, onExport, t?: (key: string) => string }} handlers
  */
-export function renderProjectsList(listEl, emptyEl, { projects, onOpen, onDuplicate, onRename, onDelete, onExport }) {
+export function renderProjectsList(listEl, emptyEl, { projects, onOpen, onDuplicate, onRename, onDelete, onExport, t = (k) => k, locale }) {
   if (!listEl) return;
   listEl.replaceChildren();
-  const rows = projects || [];
+  // A project nobody has touched yet (no audio, title or lyrics) isn't worth a card
+  const rows = (projects || []).filter((p) => !isEmptyProject(p));
   if (emptyEl) emptyEl.hidden = rows.length > 0;
 
   rows.forEach((p) => {
@@ -58,7 +71,7 @@ export function renderProjectsList(listEl, emptyEl, { projects, onOpen, onDuplic
       </div>
       <div class="project-actions">
         <button type="button" class="btn btn-ghost btn-sm" data-act="open"></button>
-        <button type="button" class="btn btn-ghost btn-sm" data-act="more" aria-haspopup="true">⋯</button>
+        <button type="button" class="btn btn-ghost btn-sm" data-act="more" aria-haspopup="true" aria-expanded="false">⋯</button>
       </div>
       <div class="project-menu" hidden>
         <button type="button" data-act="duplicate"></button>
@@ -66,20 +79,23 @@ export function renderProjectsList(listEl, emptyEl, { projects, onOpen, onDuplic
         <button type="button" data-act="export"></button>
         <button type="button" data-act="delete"></button>
       </div>`;
-    li.querySelector(".project-title").textContent = p.title || p.audio?.fileName || "Untitled";
+    li.querySelector(".project-title").textContent = p.title || p.audio?.fileName || t("untitled");
     li.querySelector(".project-sub").textContent = [
       p.artist || "",
       formatDur(p.audio?.durationMs || 0),
-      formatEdited(p.updatedAt),
+      formatEdited(p.updatedAt, locale),
     ]
       .filter(Boolean)
       .join(" · ");
-    li.querySelector(".project-progress").textContent = `${timed} / ${total}`;
-    li.querySelector('[data-act="open"]').textContent = "Open";
-    li.querySelector('[data-act="duplicate"]').textContent = "Duplicate";
-    li.querySelector('[data-act="rename"]').textContent = "Rename";
-    li.querySelector('[data-act="export"]').textContent = "Export file";
-    li.querySelector('[data-act="delete"]').textContent = "Delete";
+    li.querySelector(".project-progress").textContent = t("progressTimed")
+      .replace("{timed}", String(timed))
+      .replace("{total}", String(total));
+    li.querySelector('[data-act="open"]').textContent = t("projOpen");
+    li.querySelector('[data-act="more"]').setAttribute("aria-label", t("moreAria"));
+    li.querySelector('[data-act="duplicate"]').textContent = t("projDuplicate");
+    li.querySelector('[data-act="rename"]').textContent = t("projRename");
+    li.querySelector('[data-act="export"]').textContent = t("projExportFile");
+    li.querySelector('[data-act="delete"]').textContent = t("deleteConfirm");
     drawThumb(li.querySelector(".project-thumb"), p.audio?.waveformThumb);
 
     li.querySelector('[data-act="open"]').addEventListener("click", () => onOpen?.(p));
@@ -88,6 +104,7 @@ export function renderProjectsList(listEl, emptyEl, { projects, onOpen, onDuplic
     li.querySelector('[data-act="more"]').addEventListener("click", (e) => {
       e.stopPropagation();
       menu.hidden = !menu.hidden;
+      e.currentTarget.setAttribute("aria-expanded", String(!menu.hidden));
     });
     li.querySelector('[data-act="duplicate"]').addEventListener("click", () => {
       menu.hidden = true;

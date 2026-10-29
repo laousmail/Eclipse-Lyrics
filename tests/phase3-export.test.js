@@ -109,3 +109,18 @@ describe("Phase 3 zip + project file", () => {
     assert.equal(thumb.length, 8);
   });
 });
+
+describe("export caps apply even when settings are not passed", () => {
+  it("defaults to 8 s max and 0.7 s min instead of NaN (no cap)", () => {
+    const project = {
+      audio: { durationMs: 120000 },
+      lines: [
+        { id: "a", type: "lyric", startMs: 1000, endMs: null, text: { kab: "A" } },
+        { id: "b", type: "lyric", startMs: 1200, endMs: null, text: { kab: "B" } },
+      ],
+    };
+    const out = prepareExportLines(project, {});
+    assert.equal(out[1].endMs, 9200);
+    assert.ok(out[0].endMs - out[0].startMs >= 200);
+  });
+});

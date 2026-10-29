@@ -54,7 +54,7 @@ import {
   CALIBRATION_CLICKS,
   CALIBRATION_INTERVAL_MS,
 } from "./core/timing.js";
-import { MAX_SUBTITLE_CHARS } from "./core/lyrics.js";
+import { MAX_SUBTITLE_CHARS, pasteIntoRows } from "./core/lyrics.js";
 
 const state = {
   project: sync.createEmptyProject(),
@@ -164,7 +164,12 @@ function showScreen(name, { pushHash = true, persistScreen = true } = {}) {
       updateOffsetChip();
     });
   }
-  if (name === "video") video.renderFrame(state.project);
+  if (name === "video") {
+    // Wide screens have room for the settings next to the preview
+    const customize = document.querySelector(".film-customize");
+    if (customize && window.matchMedia("(min-width: 1024px)").matches) customize.open = true;
+    video.renderFrame(state.project);
+  }
   const main = $("main");
   if (main) main.scrollTop = 0;
   if (pushHash) {
@@ -216,7 +221,8 @@ function updateAudioLoadedUI(fileName, duration) {
   const prompt = $("meta-prompt");
   if (pick) pick.hidden = true;
   if (loaded) loaded.hidden = false;
-  if (prompt) prompt.hidden = false;
+  // Title is pre-filled from the file name; only nudge when it is still empty
+  if (prompt) prompt.hidden = Boolean(String(state.project?.title || "").trim());
   if ($("loaded-file-name")) $("loaded-file-name").textContent = fileName || "—";
   if ($("loaded-duration")) $("loaded-duration").textContent = formatClock(duration || 0);
   state.audioReady = true;
@@ -310,13 +316,23 @@ function updateProgressChip() {
   const label = $("progress-chip-label");
   if (label) label.textContent = i18n.t("progressTimed").replace("{timed}", String(timed)).replace("{total}", String(total));
   const chip = $("progress-chip");
-  if (chip) chip.classList.toggle("is-complete", total > 0 && timed >= total);
+  const complete = total > 0 && timed >= total;
+  if (chip) chip.classList.toggle("is-complete", complete);
+  if ($("btn-sync-export")) $("btn-sync-export").hidden = !complete;
   const ring = $("progress-ring-fg");
   if (ring) {
     const circ = 94.2;
     const pct = total ? timed / total : 0;
     ring.style.strokeDashoffset = String(circ * (1 - pct));
   }
+}
+
+function showDoneToast() {
+  showToast(i18n.t("allLinesTimed"), {
+    duration: 6000,
+    actionLabel: i18n.t("exportNext"),
+    onAction: () => showScreen("export"),
+  });
 }
 
 function updateOffsetChip() {
@@ -408,8 +424,10 @@ function updatePreview(tSec) {
   const curLine = lines[showIdx];
   const nextLyric = lines.slice(showIdx + 1).find(isLyric);
   if (!curLine) {
-    cur.textContent = "—";
-    if (next) next.textContent = "";
+    // Every line is timed and we're between lines (intro, gap): show what's coming
+    const upcoming = lines.find((l) => isLyric(l) && l.startMs != null && l.startMs > tSec * 1000);
+    cur.textContent = "♪";
+    if (next) next.textContent = upcoming ? lineMainText(upcoming) : "";
     if (tr) tr.textContent = "";
     return;
   }
@@ -481,6 +499,19 @@ function refreshLyricsGrid() {
     onFocusField: (el) => {
       state.gridFocusEl = el;
       ensureFieldVisible(el);
+    },
+    onPasteLines: ({ index, col, text, before, after }) => {
+      const result = pasteIntoRows(state.lyricsRows, { index, col, text, before, after });
+      if (!result) return false;
+      state.lyricsRows = result.rows;
+      refreshLyricsGrid();
+      applyLyricsFromGrid({ silent: true, stay: true });
+      const target = $("lyrics-grid")?.querySelector(
+        `.lyrics-row[data-index="${result.last}"] input[data-col="${col}"]`
+      );
+      target?.focus();
+      showToast(i18n.t("pastedLines").replace("{n}", String(result.count)));
+      return true;
     },
   });
   updateCharWarn();
@@ -813,7 +844,7 @@ function doTap() {
   haptics.tap();
   flashTapConfirm();
   announceLineTimed(idx, state.project.lines[idx]?.startMs ?? tMs);
-  if (result.done) showToast(i18n.t("allLinesTimed"));
+  if (result.done) showDoneToast();
   scrollTapLineIntoView(true);
 }
 
@@ -855,7 +886,7 @@ function doHoldRelease() {
   const afterSel = Math.min(afterTap, Math.max(0, state.project.lines.length - 1));
   pushTimingCommand("holdEnd", before, after, beforeTap, beforeSel, afterTap, afterSel);
   haptics.soft();
-  if (result.done) showToast(i18n.t("allLinesTimed"));
+  if (result.done) showDoneToast();
   scrollTapLineIntoView(true);
 }
 
@@ -1297,6 +1328,9 @@ function updateFilmOutputs() {
   for (const [id, out] of map) {
     if ($(id) && $(out)) $(out).textContent = $(id).value;
   }
+  if ($("font-size") && $("font-size-out") && Number($("font-size").value) === 0) {
+    $("font-size-out").textContent = i18n.t("sizeAuto");
+  }
   const solidField = $("solid-color-field");
   if (solidField && $("select-bg")) {
     solidField.hidden = $("select-bg").value !== "solid";
@@ -1576,7 +1610,13 @@ function setupNavigation() {
     btn.addEventListener("click", () => {
       i18n.setLang(btn.dataset.lang);
       haptics.tick();
+      // applyDom resets data-i18n labels to their defaults; redraw the live ones
       updatePlayButton();
+      updateTapButtons();
+      updateProgressChip();
+      updateOffsetChip();
+      updateFilmOutputs();
+      if (state.screen === "projects") refreshProjectsList();
       state.waveform?.setEmptyLabel?.(i18n.t("loadWaveform"));
       /* primary CTA stays “Go to sync” on the combined Song screen */
       // Language lives in More — close after pick for a calmer flow
@@ -1816,6 +1856,11 @@ function mergeImported(data) {
 
 function setupUI() {
   document.body.classList.add("has-tabbar");
+  // Save right away when the tab is hidden or closed (saves are otherwise debounced)
+  window.addEventListener("pagehide", () => db.flushSaveProject());
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") db.flushSaveProject();
+  });
   i18n.initI18n();
   setupNavigation();
   setupDropZone();
@@ -2080,6 +2125,7 @@ function setupUI() {
 
   const syncTitle = (value) => {
     state.project.title = value;
+    if ($("meta-prompt") && state.audioReady) $("meta-prompt").hidden = Boolean(String(value).trim());
     if ($("field-title") && $("field-title") !== document.activeElement) $("field-title").value = value;
     if ($("field-export-title") && $("field-export-title") !== document.activeElement) {
       $("field-export-title").value = value;
@@ -2350,6 +2396,11 @@ function setupUI() {
     const ms = Number($("video-scrub").value) || 0;
     video.setScrubMs(ms);
     if ($("video-scrub-time")) $("video-scrub-time").textContent = sync.formatMs(ms);
+    const jump = $("select-jump-line");
+    if (jump) {
+      const idx = sync.lineAtTime(state.project.lines, ms);
+      jump.value = [...jump.options].some((o) => o.value === String(idx)) ? String(idx) : "";
+    }
     video.disablePreview();
     if ($("btn-preview-video")) $("btn-preview-video").textContent = i18n.t("livePreview");
     video.renderFrame(state.project);
@@ -2408,10 +2459,13 @@ function setupUI() {
           info.path === "webcodecs" ? i18n.t("exportingOffline") : i18n.t("recordingKeep");
         status.textContent = `${path} ${Math.round(p * 100)}%${eta}`;
       },
-      onDone: () => {
+      onDone: (result) => {
         recordPausedByHide = false;
         bar.style.width = "100%";
-        status.textContent = "✓";
+        status.textContent = i18n.t("videoSaved").replace("{file}", result?.fileName || "");
+        if (result && !result.compatible) {
+          status.textContent += ` ${i18n.t("videoFormatWarn")}`;
+        }
         $("btn-stop-record").hidden = true;
         $("btn-record").disabled = false;
         $("btn-record").textContent = i18n.t("recordVideo");
@@ -2465,6 +2519,8 @@ function setupUI() {
 async function refreshProjectsList() {
   const projects = await db.listProjects();
   renderProjectsList($("projects-list"), $("projects-empty"), {
+    t: i18n.t,
+    locale: document.documentElement.lang || undefined,
     projects,
     onOpen: (p) => openProjectById(p.id),
     onDuplicate: async (p) => {

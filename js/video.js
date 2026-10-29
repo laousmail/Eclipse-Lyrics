@@ -181,6 +181,8 @@ export function renderFrame(project, overrideTimeSec) {
   if (canvas.width !== width || canvas.height !== height) {
     canvas.width = width;
     canvas.height = height;
+    // Stage follows the output shape (9:16, 16:9, 1:1) so the preview is never letterboxed
+    canvas.parentElement?.style.setProperty("aspect-ratio", `${w} / ${h}`);
   }
 
   const ctx = canvas.getContext("2d");
@@ -215,7 +217,7 @@ export async function startVideoExport(project, {
   const peaks = peaksGetter?.() || null;
 
   try {
-    const { startExport, downloadBlob } = await loadExportApi();
+    const { startExport, downloadBlob, isWidelyCompatible } = await loadExportApi();
     exportHandle = await startExport({
       mode: "auto",
       project,
@@ -237,8 +239,9 @@ export async function startVideoExport(project, {
     const ext = result.mimeType?.includes("mp4") ? "mp4" : "webm";
     const name = `${(project.title || "lyric-video").replace(/\s+/g, "-")}.${ext}`;
     downloadBlob(result.blob, name);
+    const compatible = await isWidelyCompatible(exportHandle.path, result.blob).catch(() => true);
     exportHandle = null;
-    onDone?.(result);
+    onDone?.({ ...result, fileName: name, compatible });
   } catch (err) {
     exportHandle = null;
     if (err?.name === "AbortError") {

@@ -12,6 +12,9 @@ const LEGACY_IDB = "eclipse-lyrics";
 
 let dbPromise = null;
 
+// Kept so a save can start synchronously while the page is closing
+let openConnection = null;
+
 function openDb() {
   if (dbPromise) return dbPromise;
   dbPromise = new Promise((resolve, reject) => {
@@ -25,7 +28,10 @@ function openDb() {
         db.createObjectStore(STORE_AUDIO, { keyPath: "id" });
       }
     };
-    req.onsuccess = () => resolve(req.result);
+    req.onsuccess = () => {
+      openConnection = req.result;
+      resolve(req.result);
+    };
     req.onerror = () => reject(req.error);
   });
   return dbPromise;
@@ -71,15 +77,22 @@ export function savePrefs(prefs) {
   }
 }
 
-export async function saveProject(project) {
-  if (!project?.id) throw new Error("project.id required");
-  const db = await openDb();
+function putProject(db, project) {
   const copy = { ...project, updatedAt: Date.now() };
   delete copy.audioBlob;
   delete copy._peaks;
   const tx = db.transaction(STORE_PROJECTS, "readwrite");
   tx.objectStore(STORE_PROJECTS).put(copy);
-  await txDone(tx);
+  // Commit now rather than at the end of the task, which may never come on page close
+  tx.commit?.();
+  return { copy, done: txDone(tx) };
+}
+
+export async function saveProject(project) {
+  if (!project?.id) throw new Error("project.id required");
+  const db = openConnection || (await openDb());
+  const { copy, done } = putProject(db, project);
+  await done;
   savePrefs({ lastProjectId: project.id });
   return copy;
 }
@@ -252,10 +265,20 @@ export async function clearLegacySession() {
 }
 
 let saveTimer = null;
+let pendingProject = null;
 
 export function scheduleSaveProject(project) {
   clearTimeout(saveTimer);
-  saveTimer = setTimeout(() => {
-    saveProject(project).catch((err) => console.warn("project save failed", err));
-  }, 500);
+  pendingProject = project;
+  saveTimer = setTimeout(flushSaveProject, 500);
+}
+
+/** Write a debounced save now (tab hidden or closing), so the last edit isn't lost. */
+export function flushSaveProject() {
+  clearTimeout(saveTimer);
+  saveTimer = null;
+  const project = pendingProject;
+  pendingProject = null;
+  if (!project) return Promise.resolve();
+  return saveProject(project).catch((err) => console.warn("project save failed", err));
 }

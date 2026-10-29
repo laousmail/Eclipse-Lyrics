@@ -84,7 +84,10 @@ export function closeDialog(dialogOrId) {
 
 export function isDialogOpen() {
   if (document.querySelector("dialog[open]")) return true;
-  return Boolean(document.querySelector('.sheet-overlay:not([hidden]), [role="dialog"]:not([hidden])'));
+  // A role="dialog" inside a hidden overlay (e.g. the intro card) is not open
+  return [...document.querySelectorAll('.sheet-overlay:not([hidden]), [role="dialog"]:not([hidden])')].some(
+    (el) => !el.parentElement?.closest("[hidden]")
+  );
 }
 
 /**

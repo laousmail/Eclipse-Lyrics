@@ -50,6 +50,28 @@ export function fillLayout(ctx, layout, x, y, lineHeight, { align = "center" } =
   return startY;
 }
 
+/** Font size and letter spacing in the Text tab are set for a 1080 px short side. */
+const REFERENCE_SHORT_SIDE = 1080;
+
+function frameScale(width, height) {
+  return Math.min(width, height) / REFERENCE_SHORT_SIDE;
+}
+
+/**
+ * Lyric size in canvas px. Scales with the frame so the reduced-size preview
+ * matches the export; auto size is 60 px at a 1080 px short side.
+ */
+export function lyricSizePx(settings, width, height) {
+  const k = frameScale(width, height);
+  const set = Number(settings?.fontSize) || 0;
+  return Math.max(1, Math.round(set ? set * k : 60 * k));
+}
+
+/** Letter spacing in canvas px, on the same scale as lyricSizePx. */
+export function letterSpacingPx(settings, width, height) {
+  return (Number(settings?.letterSpacing) || 0) * frameScale(width, height);
+}
+
 /** Apply text case transform from settings. */
 export function applyTextCase(text, textCase) {
   const s = String(text ?? "");

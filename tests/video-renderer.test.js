@@ -8,6 +8,9 @@ import {
   resolveTimeRange,
   parseAspect,
   rmsAtTime,
+  introDurationSec,
+  eclipseGeometry,
+  lineEndMs,
 } from "../video/renderer.js";
 import { applyTemplate, TEMPLATES } from "../video/templates.js";
 
@@ -172,5 +175,51 @@ describe("video/renderer", () => {
     assert.deepEqual(parseAspect("1080x1920"), { w: 1080, h: 1920 });
     const peaks = [0.1, 0.5, 0.9];
     assert.ok(rmsAtTime(peaks, 0.5, 1) > 0.1);
+  });
+});
+
+describe("intro title card timing", () => {
+  const proj = (startMs) => ({ lines: [{ type: "lyric", startMs }] });
+
+  it("keeps the 3 s card when the first line starts later", () => {
+    assert.equal(introDurationSec(proj(12000), {}), 3);
+  });
+
+  it("ends before an early first line instead of hiding it", () => {
+    assert.ok(Math.abs(introDurationSec(proj(2000), {}) - 1.8) < 1e-9);
+  });
+
+  it("drops the card when the song starts almost immediately or it is off", () => {
+    assert.equal(introDurationSec(proj(900), {}), 0);
+    assert.equal(introDurationSec(proj(20000), { introCard: false }), 0);
+  });
+});
+
+describe("eclipse ring stays clear of the lyrics", () => {
+  // Two wrapped lines of auto-size text (60 px at 1080, line height 1.28)
+  const halfText = (w, h) => (Math.min(w, h) / 1080) * 60 * 1.28;
+  for (const [w, h] of [[1080, 1920], [1920, 1080], [1080, 1080]]) {
+    for (const position of ["center", "top", "bottom"]) {
+      it(`${w}x${h} ${position}`, () => {
+        const { cy, r } = eclipseGeometry(w, h, position);
+        const textY = position === "top" ? h * 0.28 : position === "bottom" ? h * 0.72 : h * 0.55;
+        assert.ok(Math.abs(textY - cy) - r - halfText(w, h) > 0, "ring overlaps text");
+        assert.ok(cy - r > 0 && cy + r < h, "ring leaves the frame");
+      });
+    }
+  }
+});
+
+describe("lines leave the screen during long gaps", () => {
+  const line = { startMs: 10000, endMs: 60000 };
+  it("caps at 8 s by default, like the subtitle export", () => {
+    assert.equal(lineEndMs({}, line), 18000);
+  });
+  it("follows the project's max gap, and 0 means no cap", () => {
+    assert.equal(lineEndMs({ settings: { export: { maxGapMs: 5000 } } }, line), 15000);
+    assert.equal(lineEndMs({ settings: { export: { maxGapMs: 0 } } }, line), 60000);
+  });
+  it("keeps short lines as they are", () => {
+    assert.equal(lineEndMs({}, { startMs: 1000, endMs: 3000 }), 3000);
   });
 });

@@ -172,6 +172,8 @@ export async function exportWithMediaRecorder({
 function pickMime() {
   const candidates = [
     "video/mp4;codecs=avc1,mp4a.40.2",
+    // H.264 video even when AAC isn't offered (plain video/mp4 can mean VP9)
+    "video/mp4;codecs=avc1",
     "video/mp4",
     "video/webm;codecs=vp9,opus",
     "video/webm;codecs=vp8,opus",
