@@ -481,6 +481,19 @@
           </div>
         </article>
 
+        <article class="export-card editor-card" aria-labelledby="editor-title">
+          <h3 id="editor-title" class="export-primary-title" data-i18n="editorTitle">Use in a video editor</h3>
+          <p class="export-desc" data-i18n="editorLead">The same .srt imports as editable captions, timed to the song:</p>
+          <ul class="editor-list">
+            <li><b>CapCut</b> <span data-i18n="editorCapcut">computer or web: Captions › Import captions, pick the .srt</span></li>
+            <li><b>Premiere Pro</b> <span data-i18n="editorPremiere">File › Import the .srt, drag it onto the timeline</span></li>
+            <li><b>DaVinci Resolve</b> <span data-i18n="editorResolve">File › Import › Subtitle, drag it onto the timeline</span></li>
+            <li><b>Final Cut Pro</b> <span data-i18n="editorFcp">File › Import › Captions</span></li>
+          </ul>
+          <p class="export-desc" data-i18n="editorPhone">CapCut on a phone, Instagram Edits and InShot can’t import subtitle files. Export the lyrics as a video layer instead and put it over your clip.</p>
+          <button type="button" id="btn-goto-overlay" class="btn btn-ghost" data-i18n="editorOverlayBtn">Export lyrics only (video layer)</button>
+        </article>
+
         <details class="simple-more export-more">
           <summary data-i18n="exportMore">More export options</summary>
           <label class="field">
@@ -553,225 +566,264 @@
           <p class="screen-lead" data-i18n="videoLead">Offline MP4 when supported — works in the background.</p>
         </header>
 
-        <div class="film-sticky">
-          <div class="video-stage video-stage-compact">
-            <canvas id="video-canvas" width="540" height="960" aria-label="Lyric video preview"></canvas>
+        <div class="film-main">
+          <div class="film-ratio">
+            <div class="ratio-seg" role="radiogroup" data-i18n-aria="aspect" aria-label="Aspect">
+              <button type="button" class="ratio-btn" role="radio" aria-checked="true" data-aspect="1080x1920" title="Reels · TikTok · Shorts"><span class="ratio-shape" style="--ar: 9 / 16" aria-hidden="true"></span><span>9:16</span></button>
+              <button type="button" class="ratio-btn" role="radio" aria-checked="false" data-aspect="1080x1350" title="Instagram feed"><span class="ratio-shape" style="--ar: 4 / 5" aria-hidden="true"></span><span>4:5</span></button>
+              <button type="button" class="ratio-btn" role="radio" aria-checked="false" data-aspect="1080x1080" title="Square"><span class="ratio-shape" style="--ar: 1" aria-hidden="true"></span><span>1:1</span></button>
+              <button type="button" class="ratio-btn" role="radio" aria-checked="false" data-aspect="1920x1080" title="YouTube"><span class="ratio-shape" style="--ar: 16 / 9" aria-hidden="true"></span><span>16:9</span></button>
+            </div>
+            <select id="select-aspect" hidden tabindex="-1" aria-hidden="true">
+              <option value="1080x1920">9:16</option>
+              <option value="1080x1350">4:5</option>
+              <option value="1080x1080">1:1</option>
+              <option value="1920x1080">16:9</option>
+            </select>
+            <p id="ratio-use" class="ratio-use muted" aria-live="polite"></p>
           </div>
-          <div class="film-scrub">
-            <label class="field film-scrub-field slider-compact">
-              <span class="visually-hidden" data-i18n="previewScrub">Preview scrubber</span>
-              <input type="range" id="video-scrub" min="0" max="1000" value="0" step="1" />
-            </label>
-            <div class="film-scrub-meta">
-              <span id="video-scrub-time" class="muted">0:00</span>
-              <label class="field field-inline slider-compact">
-                <span class="slider-short" data-i18n="lineShort" aria-hidden="true">#</span>
-                <span class="visually-hidden" data-i18n="jumpToLine">Jump to line</span>
-                <select id="select-jump-line" aria-label="Jump to line"></select>
+          <div class="film-sticky">
+            <div class="video-stage video-stage-compact">
+              <canvas id="video-canvas" width="540" height="960" aria-label="Lyric video preview"></canvas>
+            </div>
+            <div class="film-scrub">
+              <label class="field film-scrub-field slider-compact">
+                <span class="visually-hidden" data-i18n="previewScrub">Preview scrubber</span>
+                <input type="range" id="video-scrub" min="0" max="1000" value="0" step="1" />
               </label>
+              <div class="film-scrub-meta">
+                <span id="video-scrub-time" class="muted">0:00</span>
+                <label class="field field-inline slider-compact">
+                  <span class="slider-short" data-i18n="lineShort" aria-hidden="true">#</span>
+                  <span class="visually-hidden" data-i18n="jumpToLine">Jump to line</span>
+                  <select id="select-jump-line" aria-label="Jump to line"></select>
+                </label>
+              </div>
             </div>
           </div>
         </div>
 
-        <details class="simple-more film-customize">
-          <summary data-i18n="filmCustomize">Customize</summary>
-        <div class="film-tabs" role="tablist" aria-label="Film settings">
-          <button type="button" class="film-tab is-active" role="tab" aria-selected="true" data-film-tab="style" data-i18n="filmTabStyle">Style</button>
-          <button type="button" class="film-tab" role="tab" aria-selected="false" data-film-tab="text" data-i18n="filmTabText">Text</button>
-          <button type="button" class="film-tab" role="tab" aria-selected="false" data-film-tab="background" data-i18n="filmTabBg">Background</button>
-          <button type="button" class="film-tab" role="tab" aria-selected="false" data-film-tab="format" data-i18n="filmTabFormat">Format</button>
-        </div>
-
-        <div class="film-panels">
-          <div class="film-panel field-stack" data-film-panel="style" role="tabpanel">
-            <label class="field">
-              <span data-i18n="template">Template</span>
-              <select id="select-template">
-                <option value="eclipse">Eclipse</option>
-                <option value="minimal">Minimal</option>
-                <option value="cinema">Cinema</option>
-                <option value="karaoke">Karaoke</option>
-                <option value="bilingual">Bilingual</option>
-              </select>
-            </label>
-            <label class="field">
-              <span data-i18n="style">Animation</span>
-              <select id="select-anim">
-                <option value="fadeUp" data-i18n="styleFadeUp">Fade up</option>
-                <option value="glowSweep" data-i18n="styleGlowSweep">Glow sweep</option>
-                <option value="smoke" data-i18n="styleSmoke">Smoke</option>
-                <option value="typewriter" data-i18n="styleTypewriter">Typewriter</option>
-                <option value="blurIn" data-i18n="styleBlurIn">Blur in</option>
-              </select>
-            </label>
-            <label class="field slider-compact">
-              <span class="slider-label-row"><span data-i18n="inOutShort">In/out</span> <output id="inout-out" for="inout-speed">0.15</output></span>
-              <input type="range" id="inout-speed" min="0.05" max="0.4" step="0.01" value="0.15" data-i18n-aria="inOutSpeed" aria-label="In / out speed" />
-            </label>
-            <label class="check-row"><input type="checkbox" id="video-show-tr" /> <span data-i18n="showTr">Show translation</span></label>
-            <label class="field">
-              <span data-i18n="translation">Translation</span>
-              <select id="select-video-tr">
-                <option value="fr">Français / French</option>
-                <option value="en">English / Anglais</option>
-              </select>
-            </label>
-            <label class="check-row"><input type="checkbox" id="video-intro" checked /> <span data-i18n="introCard">Intro title card</span></label>
-            <label class="check-row"><input type="checkbox" id="video-watermark" /> <span data-i18n="artistWatermark">Artist watermark</span></label>
-            <label class="check-row"><input type="checkbox" id="video-progress" /> <span data-i18n="progressBar">Progress bar</span></label>
-            <label class="check-row"><input type="checkbox" id="video-credit" checked /> <span data-i18n="madeWithCredit">Made with Eclipse Lyrics</span></label>
-            <label class="check-row"><input type="checkbox" id="video-safezones" /> <span data-i18n="safeZones">Safe-zone guides (preview)</span></label>
-          </div>
-
-          <div class="film-panel field-stack" data-film-panel="text" role="tabpanel" hidden>
-            <label class="field">
-              <span data-i18n="font">Font</span>
-              <select id="select-font">
-                <option value="Outfit">Outfit</option>
-                <option value="Noto Sans">Noto Sans</option>
-                <option value="Noto Serif">Noto Serif</option>
-                <option value="Noto Sans Tifinagh">Noto Sans Tifinagh</option>
-              </select>
-            </label>
-            <label class="field slider-compact">
-              <span class="slider-label-row"><span data-i18n="sizeShort">Size</span> <output id="font-size-out" for="font-size">Auto</output></span>
-              <input type="range" id="font-size" min="0" max="140" value="0" data-i18n-aria="fontSize" aria-label="Size" />
-            </label>
-            <label class="field">
-              <span data-i18n="fontWeight">Weight</span>
-              <select id="select-weight">
-                <option value="400">400</option>
-                <option value="500">500</option>
-                <option value="600" selected>600</option>
-                <option value="700">700</option>
-              </select>
-            </label>
-            <label class="field">
-              <span data-i18n="textCase">Case</span>
-              <select id="select-case">
-                <option value="none" data-i18n="caseNone">As written</option>
-                <option value="upper" data-i18n="caseUpper">UPPER</option>
-                <option value="lower" data-i18n="caseLower">lower</option>
-                <option value="title" data-i18n="caseTitle">Title Case</option>
-              </select>
-            </label>
-            <label class="field slider-compact">
-              <span class="slider-label-row"><span data-i18n="trackingShort">Track</span> <output id="letter-spacing-out" for="letter-spacing">0</output></span>
-              <input type="range" id="letter-spacing" min="-2" max="8" step="0.5" value="0" data-i18n-aria="letterSpacing" aria-label="Letter spacing" />
-            </label>
-            <label class="field">
-              <span data-i18n="position">Position</span>
-              <select id="select-position">
-                <option value="top" data-i18n="posTop">Top third</option>
-                <option value="center" selected data-i18n="posCenter">Center</option>
-                <option value="bottom" data-i18n="posBottom">Bottom third</option>
-              </select>
-            </label>
-            <label class="field">
-              <span data-i18n="align">Alignment</span>
-              <select id="select-align">
-                <option value="left" data-i18n="alignLeft">Left</option>
-                <option value="center" selected data-i18n="alignCenter">Center</option>
-                <option value="right" data-i18n="alignRight">Right</option>
-              </select>
-            </label>
-            <label class="field slider-compact">
-              <span class="slider-label-row"><span data-i18n="widthShort">Width</span> <output id="max-width-out" for="max-width">82</output></span>
-              <input type="range" id="max-width" min="50" max="95" value="82" data-i18n-aria="maxWidth" aria-label="Max width %" />
-            </label>
-            <label class="field">
-              <span data-i18n="textColor">Text color</span>
-              <input type="color" id="text-color" value="#f4ebe6" />
-            </label>
-            <label class="field">
-              <span data-i18n="trColor">Translation color</span>
-              <input type="color" id="tr-color" value="#ffb088" />
-            </label>
-          </div>
-
-          <div class="film-panel field-stack" data-film-panel="background" role="tabpanel" hidden>
-            <label class="field">
-              <span data-i18n="background">Background</span>
-              <select id="select-bg">
-                <option value="eclipse" data-i18n="bgEclipse">Eclipse glow</option>
-                <option value="image" data-i18n="bgImage">Cover image</option>
-                <option value="video" data-i18n="bgVideo">Background video</option>
-                <option value="solid" data-i18n="bgSolid">Solid</option>
-                <option value="gradient" data-i18n="bgGradient">Gradient</option>
-                <option value="reactive" data-i18n="bgReactive">Audio-reactive</option>
-              </select>
-            </label>
-            <label class="btn btn-ghost file-btn">
-              <span data-i18n="uploadBg">Upload background</span>
-              <input type="file" id="input-bg" accept="image/*,video/*" hidden />
-            </label>
-            <label class="field" id="solid-color-field" hidden>
-              <span data-i18n="solidColor">Solid color</span>
-              <input type="color" id="solid-color" value="#000000" />
-            </label>
-            <label class="field slider-compact">
-              <span class="slider-label-row"><span data-i18n="blur">Blur</span> <output id="bg-blur-out" for="bg-blur">8</output></span>
-              <input type="range" id="bg-blur" min="0" max="20" value="8" aria-label="Blur" />
-            </label>
-            <label class="field slider-compact">
-              <span class="slider-label-row"><span data-i18n="darkenShort">Dark</span> <output id="bg-darken-out" for="bg-darken">45</output></span>
-              <input type="range" id="bg-darken" min="0" max="90" value="45" data-i18n-aria="darken" aria-label="Darken" />
-            </label>
-            <label class="check-row"><input type="checkbox" id="bg-zoom" checked /> <span data-i18n="slowZoom">Slow zoom</span></label>
-          </div>
-
-          <div class="film-panel field-stack" data-film-panel="format" role="tabpanel" hidden>
-            <label class="field">
-              <span data-i18n="aspect">Aspect</span>
-              <select id="select-aspect">
-                <option value="1080x1920" data-i18n="aspect916">9:16 Reels / TikTok</option>
-                <option value="1920x1080" data-i18n="aspect169">16:9 YouTube</option>
-                <option value="1080x1080" data-i18n="aspect11">1:1 Square</option>
-              </select>
-            </label>
-            <label class="field">
-              <span data-i18n="resolution">Resolution</span>
-              <select id="select-resolution">
-                <option value="720p">720p</option>
-                <option value="1080p" selected>1080p</option>
-                <option value="4k" id="opt-4k">4K</option>
-              </select>
-            </label>
-            <label class="field">
-              <span data-i18n="fps">Frame rate</span>
-              <select id="select-fps">
-                <option value="30" selected>30 fps</option>
-                <option value="60">60 fps</option>
-              </select>
-            </label>
-            <fieldset class="film-section-range">
-              <legend data-i18n="sectionOnly">Render section only (Reels)</legend>
-              <label class="field">
-                <span data-i18n="sectionStart">Start line</span>
-                <select id="select-section-start">
-                  <option value="">— full —</option>
-                </select>
+        <div class="film-side">
+          <section class="film-output" aria-labelledby="film-output-title">
+            <h3 id="film-output-title" class="subhead" data-i18n="outputTitle">What to export</h3>
+            <div class="output-seg" role="radiogroup" aria-labelledby="film-output-title">
+              <button type="button" class="output-btn" role="radio" aria-checked="true" data-output="full" data-i18n="outputFull">Full video</button>
+              <button type="button" class="output-btn" role="radio" aria-checked="false" data-output="overlay" data-i18n="outputOverlay">Lyrics only</button>
+            </div>
+            <fieldset id="overlay-options" class="overlay-options" hidden>
+              <legend class="overlay-lead" data-i18n="overlayLead">To put on your own video. Pick what your app takes:</legend>
+              <label class="overlay-choice">
+                <input type="radio" name="overlay-format" value="webm" />
+                <span><b data-i18n="ovWebm">Transparent video</b><small data-i18n="ovWebmFor">.webm · one file with real transparency</small></span>
               </label>
-              <label class="field">
-                <span data-i18n="sectionEnd">End line</span>
-                <select id="select-section-end">
-                  <option value="">— full —</option>
-                </select>
+              <label class="overlay-choice">
+                <input type="radio" name="overlay-format" value="png" />
+                <span><b data-i18n="ovPng">Transparent PNG frames</b><small data-i18n="ovPngFor">.zip · Premiere, After Effects, DaVinci</small></span>
               </label>
+              <label class="overlay-choice">
+                <input type="radio" name="overlay-format" value="green" />
+                <span><b data-i18n="ovGreen">Green screen</b><small data-i18n="ovGreenFor">.mp4 · CapCut, InShot, iMovie on your phone</small></span>
+              </label>
+              <label class="overlay-choice">
+                <input type="radio" name="overlay-format" value="black" />
+                <span><b data-i18n="ovBlack">Black background</b><small data-i18n="ovBlackFor">.mp4 · “Screen” blend, keeps the glow</small></span>
+              </label>
+              <p id="overlay-howto" class="overlay-howto" aria-live="polite"></p>
             </fieldset>
-            <p id="export-path-hint" class="tip muted"></p>
-          </div>
-        </div>
-          <button type="button" id="btn-preview-video" class="btn btn-ghost" data-i18n="livePreview">Live preview</button>
-        </details>
+          </section>
 
-        <div class="btn-stack">
-          <button type="button" id="btn-record" class="btn btn-fill" data-i18n="recordVideo">Export MP4</button>
-          <button type="button" id="btn-stop-record" class="btn btn-ghost" hidden data-i18n="stopRecording">Cancel</button>
-        </div>
-        <div id="record-progress" class="record-progress" hidden>
-          <div class="bar"><span id="record-bar"></span></div>
-          <p id="record-status" class="muted" data-i18n="recordingKeep">Exporting…</p>
+          <div class="btn-stack">
+            <button type="button" id="btn-record" class="btn btn-fill" data-i18n="recordVideo">Export MP4</button>
+            <button type="button" id="btn-stop-record" class="btn btn-ghost" hidden data-i18n="stopRecording">Cancel</button>
+          </div>
+          <div id="record-progress" class="record-progress" hidden>
+            <div class="bar"><span id="record-bar"></span></div>
+            <p id="record-status" class="muted" data-i18n="recordingKeep">Exporting…</p>
+          </div>
+
+          <details class="simple-more film-customize">
+            <summary data-i18n="filmCustomize">Customize</summary>
+          <div class="film-tabs" role="tablist" aria-label="Film settings">
+            <button type="button" class="film-tab is-active" role="tab" aria-selected="true" data-film-tab="style" data-i18n="filmTabStyle">Style</button>
+            <button type="button" class="film-tab" role="tab" aria-selected="false" data-film-tab="text" data-i18n="filmTabText">Text</button>
+            <button type="button" class="film-tab" role="tab" aria-selected="false" data-film-tab="background" data-i18n="filmTabBg">Background</button>
+            <button type="button" class="film-tab" role="tab" aria-selected="false" data-film-tab="format" data-i18n="filmTabFormat">Format</button>
+          </div>
+
+          <div class="film-panels">
+            <div class="film-panel field-stack" data-film-panel="style" role="tabpanel">
+              <label class="field">
+                <span data-i18n="template">Template</span>
+                <select id="select-template">
+                  <option value="eclipse">Eclipse</option>
+                  <option value="minimal">Minimal</option>
+                  <option value="cinema">Cinema</option>
+                  <option value="karaoke">Karaoke</option>
+                  <option value="bilingual">Bilingual</option>
+                </select>
+              </label>
+              <label class="field">
+                <span data-i18n="style">Animation</span>
+                <select id="select-anim">
+                  <option value="fadeUp" data-i18n="styleFadeUp">Fade up</option>
+                  <option value="glowSweep" data-i18n="styleGlowSweep">Glow sweep</option>
+                  <option value="smoke" data-i18n="styleSmoke">Smoke</option>
+                  <option value="typewriter" data-i18n="styleTypewriter">Typewriter</option>
+                  <option value="blurIn" data-i18n="styleBlurIn">Blur in</option>
+                </select>
+              </label>
+              <label class="field slider-compact">
+                <span class="slider-label-row"><span data-i18n="inOutShort">In/out</span> <output id="inout-out" for="inout-speed">0.15</output></span>
+                <input type="range" id="inout-speed" min="0.05" max="0.4" step="0.01" value="0.15" data-i18n-aria="inOutSpeed" aria-label="In / out speed" />
+              </label>
+              <label class="check-row"><input type="checkbox" id="video-show-tr" /> <span data-i18n="showTr">Show translation</span></label>
+              <label class="field">
+                <span data-i18n="translation">Translation</span>
+                <select id="select-video-tr">
+                  <option value="fr">Français / French</option>
+                  <option value="en">English / Anglais</option>
+                </select>
+              </label>
+              <label class="check-row"><input type="checkbox" id="video-intro" checked /> <span data-i18n="introCard">Intro title card</span></label>
+              <label class="check-row"><input type="checkbox" id="video-watermark" /> <span data-i18n="artistWatermark">Artist watermark</span></label>
+              <label class="check-row"><input type="checkbox" id="video-progress" /> <span data-i18n="progressBar">Progress bar</span></label>
+              <label class="check-row"><input type="checkbox" id="video-credit" checked /> <span data-i18n="madeWithCredit">Made with Eclipse Lyrics</span></label>
+              <label class="check-row"><input type="checkbox" id="video-safezones" /> <span data-i18n="safeZones">Safe-zone guides (preview)</span></label>
+            </div>
+
+            <div class="film-panel field-stack" data-film-panel="text" role="tabpanel" hidden>
+              <label class="field">
+                <span data-i18n="font">Font</span>
+                <select id="select-font">
+                  <option value="Outfit">Outfit</option>
+                  <option value="Noto Sans">Noto Sans</option>
+                  <option value="Noto Serif">Noto Serif</option>
+                  <option value="Noto Sans Tifinagh">Noto Sans Tifinagh</option>
+                </select>
+              </label>
+              <label class="field slider-compact">
+                <span class="slider-label-row"><span data-i18n="sizeShort">Size</span> <output id="font-size-out" for="font-size">Auto</output></span>
+                <input type="range" id="font-size" min="0" max="140" value="0" data-i18n-aria="fontSize" aria-label="Size" />
+              </label>
+              <label class="field">
+                <span data-i18n="fontWeight">Weight</span>
+                <select id="select-weight">
+                  <option value="400">400</option>
+                  <option value="500">500</option>
+                  <option value="600" selected>600</option>
+                  <option value="700">700</option>
+                </select>
+              </label>
+              <label class="field">
+                <span data-i18n="textCase">Case</span>
+                <select id="select-case">
+                  <option value="none" data-i18n="caseNone">As written</option>
+                  <option value="upper" data-i18n="caseUpper">UPPER</option>
+                  <option value="lower" data-i18n="caseLower">lower</option>
+                  <option value="title" data-i18n="caseTitle">Title Case</option>
+                </select>
+              </label>
+              <label class="field slider-compact">
+                <span class="slider-label-row"><span data-i18n="trackingShort">Track</span> <output id="letter-spacing-out" for="letter-spacing">0</output></span>
+                <input type="range" id="letter-spacing" min="-2" max="8" step="0.5" value="0" data-i18n-aria="letterSpacing" aria-label="Letter spacing" />
+              </label>
+              <label class="field">
+                <span data-i18n="position">Position</span>
+                <select id="select-position">
+                  <option value="top" data-i18n="posTop">Top third</option>
+                  <option value="center" selected data-i18n="posCenter">Center</option>
+                  <option value="bottom" data-i18n="posBottom">Bottom third</option>
+                </select>
+              </label>
+              <label class="field">
+                <span data-i18n="align">Alignment</span>
+                <select id="select-align">
+                  <option value="left" data-i18n="alignLeft">Left</option>
+                  <option value="center" selected data-i18n="alignCenter">Center</option>
+                  <option value="right" data-i18n="alignRight">Right</option>
+                </select>
+              </label>
+              <label class="field slider-compact">
+                <span class="slider-label-row"><span data-i18n="widthShort">Width</span> <output id="max-width-out" for="max-width">82</output></span>
+                <input type="range" id="max-width" min="50" max="95" value="82" data-i18n-aria="maxWidth" aria-label="Max width %" />
+              </label>
+              <label class="field">
+                <span data-i18n="textColor">Text color</span>
+                <input type="color" id="text-color" value="#f4ebe6" />
+              </label>
+              <label class="field">
+                <span data-i18n="trColor">Translation color</span>
+                <input type="color" id="tr-color" value="#ffb088" />
+              </label>
+            </div>
+
+            <div class="film-panel field-stack" data-film-panel="background" role="tabpanel" hidden>
+              <label class="field">
+                <span data-i18n="background">Background</span>
+                <select id="select-bg">
+                  <option value="eclipse" data-i18n="bgEclipse">Eclipse glow</option>
+                  <option value="image" data-i18n="bgImage">Cover image</option>
+                  <option value="video" data-i18n="bgVideo">Background video</option>
+                  <option value="solid" data-i18n="bgSolid">Solid</option>
+                  <option value="gradient" data-i18n="bgGradient">Gradient</option>
+                  <option value="reactive" data-i18n="bgReactive">Audio-reactive</option>
+                </select>
+              </label>
+              <label class="btn btn-ghost file-btn">
+                <span data-i18n="uploadBg">Upload background</span>
+                <input type="file" id="input-bg" accept="image/*,video/*" hidden />
+              </label>
+              <label class="field" id="solid-color-field" hidden>
+                <span data-i18n="solidColor">Solid color</span>
+                <input type="color" id="solid-color" value="#000000" />
+              </label>
+              <label class="field slider-compact">
+                <span class="slider-label-row"><span data-i18n="blur">Blur</span> <output id="bg-blur-out" for="bg-blur">8</output></span>
+                <input type="range" id="bg-blur" min="0" max="20" value="8" aria-label="Blur" />
+              </label>
+              <label class="field slider-compact">
+                <span class="slider-label-row"><span data-i18n="darkenShort">Dark</span> <output id="bg-darken-out" for="bg-darken">45</output></span>
+                <input type="range" id="bg-darken" min="0" max="90" value="45" data-i18n-aria="darken" aria-label="Darken" />
+              </label>
+              <label class="check-row"><input type="checkbox" id="bg-zoom" checked /> <span data-i18n="slowZoom">Slow zoom</span></label>
+            </div>
+
+            <div class="film-panel field-stack" data-film-panel="format" role="tabpanel" hidden>
+              <label class="field">
+                <span data-i18n="resolution">Resolution</span>
+                <select id="select-resolution">
+                  <option value="720p">720p</option>
+                  <option value="1080p" selected>1080p</option>
+                  <option value="4k" id="opt-4k">4K</option>
+                </select>
+              </label>
+              <label class="field">
+                <span data-i18n="fps">Frame rate</span>
+                <select id="select-fps">
+                  <option value="30" selected>30 fps</option>
+                  <option value="60">60 fps</option>
+                </select>
+              </label>
+              <fieldset class="film-section-range">
+                <legend data-i18n="sectionOnly">Render section only (Reels)</legend>
+                <label class="field">
+                  <span data-i18n="sectionStart">Start line</span>
+                  <select id="select-section-start">
+                    <option value="">— full —</option>
+                  </select>
+                </label>
+                <label class="field">
+                  <span data-i18n="sectionEnd">End line</span>
+                  <select id="select-section-end">
+                    <option value="">— full —</option>
+                  </select>
+                </label>
+              </fieldset>
+              <p id="export-path-hint" class="tip muted"></p>
+            </div>
+          </div>
+            <button type="button" id="btn-preview-video" class="btn btn-ghost" data-i18n="livePreview">Live preview</button>
+          </details>
         </div>
       </section>
 

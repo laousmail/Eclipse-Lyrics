@@ -1278,6 +1278,8 @@ function syncFieldsFromProject() {
   updateOffsetChip();
   const v = s.video || {};
   if (v.aspect && $("select-aspect")) $("select-aspect").value = v.aspect;
+  syncRatioButtons();
+  syncOutputUI();
   if (v.resolution && $("select-resolution")) $("select-resolution").value = v.resolution;
   if (v.fps && $("select-fps")) $("select-fps").value = String(v.fps);
   if (v.template && $("select-template")) $("select-template").value = v.template;
@@ -1314,6 +1316,79 @@ function syncFieldsFromProject() {
     updateAudioLoadedUI(fileName, durationSec(state.project) || state.project.duration || 0);
   }
   syncVideoScrubRange();
+}
+
+const OVERLAY_EXT = { webm: ".webm", png: ".zip", green: ".mp4", black: ".mp4" };
+let transparentWebmOk = true;
+
+function videoSettings() {
+  if (!state.project.settings.video) {
+    state.project.settings.video = sync.createEmptyProject().settings.video;
+  }
+  return state.project.settings.video;
+}
+
+function overlayFormat() {
+  const f = videoSettings().overlayFormat || (transparentWebmOk ? "webm" : "png");
+  return f === "webm" && !transparentWebmOk ? "png" : f;
+}
+
+/** Export button text: "Export MP4", or "Export lyrics (.zip)" in lyrics-only mode. */
+function recordLabel() {
+  if (videoSettings().output !== "overlay") return i18n.t("recordVideo");
+  return i18n.t("exportOverlay").replace("{ext}", OVERLAY_EXT[overlayFormat()]);
+}
+
+/** Reflect Full video / Lyrics only and the chosen overlay format. */
+function syncOutputUI() {
+  const v = videoSettings();
+  const overlay = v.output === "overlay";
+  $("btn-goto-overlay")?.addEventListener("click", () => {
+    const v = videoSettings();
+    v.output = "overlay";
+    // Phone apps: green screen keys everywhere (CapCut, InShot, iMovie)
+    if (!v.overlayFormat) v.overlayFormat = "green";
+    persist();
+    showScreen("video");
+    syncOutputUI();
+    // The pinned preview covers the top of the screen, so land on the Export button
+    requestAnimationFrame(() => $("btn-record")?.scrollIntoView({ block: "end", behavior: "smooth" }));
+  });
+
+  document.querySelectorAll(".output-btn").forEach((btn) => {
+    btn.setAttribute("aria-checked", String((btn.dataset.output === "overlay") === overlay));
+  });
+  if ($("overlay-options")) $("overlay-options").hidden = !overlay;
+  const format = overlayFormat();
+  document.querySelectorAll('input[name="overlay-format"]').forEach((r) => {
+    r.checked = r.value === format;
+    if (r.value === "webm") {
+      r.disabled = !transparentWebmOk;
+      r.closest(".overlay-choice")?.classList.toggle("is-unavailable", !transparentWebmOk);
+    }
+  });
+  if ($("overlay-howto")) {
+    $("overlay-howto").textContent = overlay
+      ? i18n.t(`ovHowto_${format}`) + (transparentWebmOk ? "" : ` ${i18n.t("ovWebmUnsupported")}`)
+      : "";
+  }
+  if ($("btn-record") && !$("btn-record").disabled) $("btn-record").textContent = recordLabel();
+}
+
+const RATIO_USE = {
+  "1080x1920": "ratioUse916",
+  "1080x1350": "ratioUse45",
+  "1080x1080": "ratioUse11",
+  "1920x1080": "ratioUse169",
+};
+
+/** Reflect the chosen aspect on the ratio buttons and the "where it fits" line. */
+function syncRatioButtons() {
+  const value = $("select-aspect")?.value || "1080x1920";
+  document.querySelectorAll(".ratio-btn").forEach((btn) => {
+    btn.setAttribute("aria-checked", String(btn.dataset.aspect === value));
+  });
+  if ($("ratio-use")) $("ratio-use").textContent = i18n.t(RATIO_USE[value] || "ratioUse916");
 }
 
 function updateFilmOutputs() {
@@ -1616,6 +1691,8 @@ function setupNavigation() {
       updateProgressChip();
       updateOffsetChip();
       updateFilmOutputs();
+      syncRatioButtons();
+      syncOutputUI();
       if (state.screen === "projects") refreshProjectsList();
       state.waveform?.setEmptyLabel?.(i18n.t("loadWaveform"));
       /* primary CTA stays “Go to sync” on the combined Song screen */
@@ -2318,6 +2395,48 @@ function setupUI() {
     });
   });
 
+  document.querySelectorAll(".ratio-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const sel = $("select-aspect");
+      if (!sel || sel.value === btn.dataset.aspect) return;
+      sel.value = btn.dataset.aspect;
+      sel.dispatchEvent(new Event("change", { bubbles: true }));
+      syncRatioButtons();
+      haptics.tick();
+    });
+  });
+  $("select-aspect")?.addEventListener("change", syncRatioButtons);
+
+  document.querySelectorAll(".output-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const v = videoSettings();
+      const next = btn.dataset.output === "overlay" ? "overlay" : "full";
+      if ((v.output || "full") === next) return;
+      v.output = next;
+      if (next === "overlay" && !v.overlayFormat) v.overlayFormat = overlayFormat();
+      persist();
+      syncOutputUI();
+      video.renderFrame(state.project);
+      haptics.tick();
+    });
+  });
+  document.querySelectorAll('input[name="overlay-format"]').forEach((radio) => {
+    radio.addEventListener("change", () => {
+      if (!radio.checked) return;
+      videoSettings().overlayFormat = radio.value;
+      persist();
+      syncOutputUI();
+      video.renderFrame(state.project);
+    });
+  });
+  import("../video/export-overlay.js")
+    .then((m) => m.canExportTransparentWebm())
+    .then((ok) => {
+      transparentWebmOk = ok;
+      syncOutputUI();
+    })
+    .catch(() => {});
+
   // Hide 4K on narrow / touch-first (desktop only)
   const opt4k = $("opt-4k");
   if (opt4k && window.matchMedia("(max-width: 900px)").matches) {
@@ -2437,7 +2556,7 @@ function setupUI() {
       if (video.resumeRecordingIfPaused()) {
         recordPausedByHide = false;
         $("btn-record").disabled = true;
-        $("btn-record").textContent = i18n.t("recordVideo");
+        $("btn-record").textContent = recordLabel();
         if (status) status.textContent = i18n.t("recordingKeep");
       }
       return;
@@ -2468,7 +2587,7 @@ function setupUI() {
         }
         $("btn-stop-record").hidden = true;
         $("btn-record").disabled = false;
-        $("btn-record").textContent = i18n.t("recordVideo");
+        $("btn-record").textContent = recordLabel();
         $("btn-preview-video").textContent = i18n.t("livePreview");
         haptics.success();
         analytics.trackExport("video");
@@ -2482,7 +2601,7 @@ function setupUI() {
         }
         $("btn-stop-record").hidden = true;
         $("btn-record").disabled = false;
-        $("btn-record").textContent = i18n.t("recordVideo");
+        $("btn-record").textContent = recordLabel();
       },
       onHidden: () => {
         recordPausedByHide = true;
@@ -2499,7 +2618,7 @@ function setupUI() {
     video.stopRecording();
     $("btn-stop-record").hidden = true;
     $("btn-record").disabled = false;
-    $("btn-record").textContent = i18n.t("recordVideo");
+    $("btn-record").textContent = recordLabel();
     if ($("record-status")) $("record-status").textContent = i18n.t("exportCancelled");
   });
 

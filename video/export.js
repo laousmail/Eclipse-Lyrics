@@ -34,11 +34,30 @@ export async function startExport({
   onProgress,
   onHidden,
 } = {}) {
-  let path = mode || "auto";
-  if (path === "auto") path = await detectExportPath();
-
   let cancelled = false;
   const shouldCancel = () => cancelled;
+
+  // Lyrics only with real transparency: its own offline exporter
+  const transparent = settings?.output === "overlay" && ["webm", "png"].includes(settings.overlayFormat || "webm");
+  if (transparent) {
+    const { exportTransparentWebm, exportPngFrames } = await import("./export-overlay.js");
+    const run = (settings.overlayFormat || "webm") === "png" ? exportPngFrames : exportTransparentWebm;
+    return {
+      path: "overlay",
+      cancel() {
+        cancelled = true;
+      },
+      done: run({
+        project,
+        settings,
+        shouldCancel,
+        onProgress: (info) => onProgress?.({ ...info, path: "overlay" }),
+      }),
+    };
+  }
+
+  let path = mode || "auto";
+  if (path === "auto") path = await detectExportPath();
 
   if (path === "webcodecs") {
     const started = performance.now();
@@ -126,7 +145,7 @@ export function sniffMp4Codecs(head, tail = new Uint8Array()) {
  * @param {Blob} blob
  */
 export async function isWidelyCompatible(path, blob) {
-  if (path === "webcodecs") return true;
+  if (path === "webcodecs" || path === "overlay") return true;
   if (!blob || !String(blob.type).toLowerCase().startsWith("video/mp4")) return false;
   const size = blob.size || 0;
   const head = new Uint8Array(await blob.slice(0, HEADER_BYTES).arrayBuffer());

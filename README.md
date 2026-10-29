@@ -27,7 +27,10 @@ Viewport is locked (no pinch-zoom) for an app-like feel. Haptics via the Vibrati
 3. **Tap to sync** — play, then press **Space** at the start of each line  
 4. **Fine-tune** — arrow keys (±0.05 s, Shift ±0.5 s) or drag waveform markers  
 5. **Export** — LRC, SRT, VTT, or JSON  
-6. **Lyric video** — preview styles and record (real-time) to WebM/MP4  
+6. **Lyric video** — pick 9:16, 4:5, 1:1 or 16:9 and export an MP4 up to 4K  
+7. **Lyrics only** — a layer for your own footage: transparent WebM, transparent PNG frames (.zip), green-screen MP4 (CapCut / InShot / iMovie chroma key) or black MP4 (Screen blend)  
+
+Subtitles: the .srt imports as editable captions in CapCut (desktop/web), Premiere Pro, DaVinci Resolve and Final Cut Pro. Phone apps without subtitle import (CapCut mobile, Instagram Edits) take the lyrics-only video instead.
 
 ## Keyboard
 

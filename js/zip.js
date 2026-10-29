@@ -1,11 +1,18 @@
 /** Minimal ZIP (store / no compression) for project bundles. */
 
-function crc32(buf) {
-  let c = ~0;
-  for (let i = 0; i < buf.length; i++) {
-    c ^= buf[i];
+const CRC_TABLE = (() => {
+  const t = new Uint32Array(256);
+  for (let n = 0; n < 256; n++) {
+    let c = n;
     for (let k = 0; k < 8; k++) c = c & 1 ? (c >>> 1) ^ 0xedb88320 : c >>> 1;
+    t[n] = c >>> 0;
   }
+  return t;
+})();
+
+export function crc32(buf) {
+  let c = ~0;
+  for (let i = 0; i < buf.length; i++) c = CRC_TABLE[(c ^ buf[i]) & 0xff] ^ (c >>> 8);
   return ~c >>> 0;
 }
 
@@ -36,24 +43,46 @@ function encodeName(name) {
   return new TextEncoder().encode(name);
 }
 
+function toBytes(data) {
+  if (typeof data === "string") return new TextEncoder().encode(data);
+  if (data instanceof ArrayBuffer) return new Uint8Array(data);
+  return data;
+}
+
+/** Store-method ZIP limits without ZIP64. */
+export const ZIP_MAX_ENTRIES = 65535;
+export const ZIP_MAX_BYTES = 0xffffffff;
+
 /**
- * @param {Array<{ name: string, data: Uint8Array|ArrayBuffer|string }>} files
- * @returns {Blob}
+ * Streaming ZIP writer (store / no compression). Each entry becomes its own Blob
+ * part, so large archives (e.g. thousands of PNG frames) don't need one huge buffer.
  */
-export function createZip(files) {
-  const localParts = [];
-  const centralParts = [];
-  let offset = 0;
+export class ZipWriter {
+  constructor() {
+    this.parts = [];
+    this.centralParts = [];
+    this.offset = 0;
+    this.count = 0;
+  }
 
-  for (const file of files) {
-    const nameBytes = encodeName(file.name);
-    let data;
-    if (typeof file.data === "string") data = new TextEncoder().encode(file.data);
-    else if (file.data instanceof ArrayBuffer) data = new Uint8Array(file.data);
-    else data = file.data;
+  /** Bytes written so far (local headers + data). */
+  get size() {
+    return this.offset;
+  }
 
+  /**
+   * @param {string} name
+   * @param {Uint8Array|ArrayBuffer|string} input
+   */
+  add(name, input) {
+    const data = toBytes(input);
+    const nameBytes = encodeName(name);
+    const localLen = 30 + nameBytes.length + data.length;
+    if (this.count + 1 > ZIP_MAX_ENTRIES || this.offset + localLen > ZIP_MAX_BYTES) {
+      throw new RangeError("ZIP too large");
+    }
     const crc = crc32(data);
-    const local = concat([
+    const header = concat([
       u32(0x04034b50),
       u16(20),
       u16(0),
@@ -66,47 +95,59 @@ export function createZip(files) {
       u16(nameBytes.length),
       u16(0),
       nameBytes,
-      data,
     ]);
-    const central = concat([
-      u32(0x02014b50),
-      u16(20),
-      u16(20),
-      u16(0),
-      u16(0),
-      u16(0),
-      u16(0),
-      u32(crc),
-      u32(data.length),
-      u32(data.length),
-      u16(nameBytes.length),
-      u16(0),
-      u16(0),
-      u16(0),
-      u16(0),
-      u32(0),
-      u32(offset),
-      nameBytes,
-    ]);
-    localParts.push(local);
-    centralParts.push(central);
-    offset += local.length;
+    this.parts.push(new Blob([header, data]));
+    this.centralParts.push(
+      concat([
+        u32(0x02014b50),
+        u16(20),
+        u16(20),
+        u16(0),
+        u16(0),
+        u16(0),
+        u16(0),
+        u32(crc),
+        u32(data.length),
+        u32(data.length),
+        u16(nameBytes.length),
+        u16(0),
+        u16(0),
+        u16(0),
+        u16(0),
+        u32(0),
+        u32(this.offset),
+        nameBytes,
+      ])
+    );
+    this.offset += localLen;
+    this.count += 1;
   }
 
-  const centralDir = concat(centralParts);
-  const end = concat([
-    u32(0x06054b50),
-    u16(0),
-    u16(0),
-    u16(files.length),
-    u16(files.length),
-    u32(centralDir.length),
-    u32(offset),
-    u16(0),
-  ]);
+  /** @returns {Blob} */
+  finish(type = "application/zip") {
+    const centralDir = concat(this.centralParts);
+    const end = concat([
+      u32(0x06054b50),
+      u16(0),
+      u16(0),
+      u16(this.count),
+      u16(this.count),
+      u32(centralDir.length),
+      u32(this.offset),
+      u16(0),
+    ]);
+    return new Blob([...this.parts, centralDir, end], { type });
+  }
+}
 
-  const bytes = concat([...localParts, centralDir, end]);
-  return new Blob([bytes], { type: "application/zip" });
+/**
+ * @param {Array<{ name: string, data: Uint8Array|ArrayBuffer|string }>} files
+ * @returns {Blob}
+ */
+export function createZip(files) {
+  const zip = new ZipWriter();
+  for (const file of files) zip.add(file.name, file.data);
+  return zip.finish();
 }
 
 /** Parse store-method ZIP; returns Map name → Uint8Array. */
