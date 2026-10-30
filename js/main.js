@@ -44,7 +44,7 @@ import {
 import * as pwa from "./pwa.js";
 import * as onboarding from "./onboarding.js";
 import * as demo from "./demo.js";
-import { initFlow, flowWanted, showFlow } from "./flow/flow.js";
+import { initFlow, flowWanted, showFlow, modeSwitchHtml } from "./flow/flow.js";
 import * as analytics from "./analytics.js";
 import { initKeyboardGuards, ensureFieldVisible } from "./keyboard.js";
 import {
@@ -1702,6 +1702,7 @@ function setupNavigation() {
       updateFilmOutputs();
       syncRatioButtons();
       syncOutputUI();
+      mountModeSwitch();
       if (state.screen === "projects") refreshProjectsList();
       state.waveform?.setEmptyLabel?.(i18n.t("loadWaveform"));
       /* primary CTA stays “Go to sync” on the combined Song screen */
@@ -3099,10 +3100,22 @@ function flowApi() {
       updateProgressChip();
     },
     showEditor(screen = "sync") {
+      mountModeSwitch(); // the form may have changed the language
       this.refreshEditor();
       showScreen(screen);
     },
   };
+}
+
+/** Guided | Pro switch in the top bar (this editor is Pro mode). */
+function mountModeSwitch() {
+  const tools = document.querySelector(".app-topbar .topbar-tools");
+  if (!tools) return;
+  tools.querySelector(".mode-switch")?.remove();
+  tools.insertAdjacentHTML("afterbegin", modeSwitchHtml("pro"));
+  tools.querySelector('[data-act="mode-guided"]').addEventListener("click", () => {
+    showFlow(state.project?.flow?.step || "welcome");
+  });
 }
 
 async function boot() {
@@ -3171,8 +3184,9 @@ async function boot() {
     }
   }
 
-  // Guided form is the default way in; the full editor stays one tap away
+  // Guided form is the default way in; Pro (this editor) stays one tap away
   initFlow(flowApi());
+  mountModeSwitch();
   if (flowWanted()) {
     onboarding.markIntroSeen();
     showFlow();
