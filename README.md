@@ -22,17 +22,20 @@ Phone-first app shell: bottom tabs (Audio → Lyrics → Sync → Export → Fil
 
 Viewport is locked (no pinch-zoom) for an app-like feel. Haptics via the Vibration API when available.
 
-## Workflow
+## How it works (guided form)
 
-1. **Load audio** — drag-and-drop or pick MP3 / WAV / M4A / OGG  
-2. **Paste lyrics** — paste the whole song, it splits into one row per line; paste a translation into the FR / EN column the same way  
-3. **Tap to sync** — play, then press **Space** at the start of each line  
-4. **Fine-tune** — arrow keys (±0.05 s, Shift ±0.5 s) or drag waveform markers  
-5. **Export** — LRC, SRT, VTT, or JSON  
-6. **Lyric video** — pick 9:16, 4:5, 1:1 or 16:9 and export an MP4 up to 4K  
-7. **Lyrics only** — a layer for your own footage: transparent WebM, transparent PNG frames (.zip), green-screen MP4 (CapCut / InShot / iMovie chroma key) or black MP4 (Screen blend)  
+The app opens on a step-by-step form (one question per screen, Typeform-style):
 
-Subtitles: the .srt imports as editable captions in CapCut (desktop/web), Premiere Pro, DaVinci Resolve and Final Cut Pro. Phone apps without subtitle import (CapCut mobile, Instagram Edits) take the lyrics-only video instead.
+1. **Your song**: pick the audio file. The title is filled from the file name; if it looks like a default name ("New Recording 12", "AUD-2024…"), the form asks whether it's the real song name.
+2. **Artist** (optional).
+3. **Lyrics**: a check that each sung line is on its own line (with a do / don't example), then paste them or fetch them from a public Google Doc.
+4. **Translation** (optional): French, English or both, pasted next to the lyrics with a line-count check.
+5. **What to make** (pick any): subtitles (.srt), lyrics on a transparent layer, on black, on green, or the finished lyric video.
+6. **Tap along**: one big button; tap as each line starts, undo, start over, watch it back.
+7. **The look**: shape (9:16, 4:5, 1:1, 16:9), font (10 Google Fonts, self-hosted), colour, size, position, animation, translation on/off, with a live video player.
+8. **Export**: each file renders on the device in its own tile that fills up, then Download / Share, or Download all (.zip).
+
+The **full editor** (waveform, nudging, line menu, every export option) is one tap away in the form's menu; "Guided mode" in the editor's ⋮ menu goes back.
 
 ## Keyboard
 
@@ -67,6 +70,8 @@ js/storage.js
 js/export.js
 js/video.js
 js/styles/   # fadeUp, glowSweep, smoke
+js/flow/     # guided form: flow.js (shell + steps), sync-step, look-step, player, export-step, strings, helpers
+css/flow.css, css/fonts-video.css
 fonts/
 ```
 

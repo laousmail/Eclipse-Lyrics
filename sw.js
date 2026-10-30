@@ -1,5 +1,5 @@
 /* Eclipse Lyrics service worker — precache app shell, fonts, vendor. */
-const CACHE = "eclipse-lyrics-v10";
+const CACHE = "eclipse-lyrics-v11";
 
 const PRECACHE = [
   "./",
@@ -8,6 +8,31 @@ const PRECACHE = [
   "./css/tokens.css",
   "./css/app.css",
   "./css/brand.css",
+  "./css/fonts-video.css",
+  "./css/flow.css",
+  "./js/flow/flow.js",
+  "./js/flow/helpers.js",
+  "./js/flow/strings.js",
+  "./js/flow/sync-step.js",
+  "./js/flow/look-step.js",
+  "./js/flow/player.js",
+  "./js/flow/export-step.js",
+  "./fonts/gf/anton-latin-400-normal.woff2",
+  "./fonts/gf/anton-latin-ext-400-normal.woff2",
+  "./fonts/gf/bebas-neue-latin-400-normal.woff2",
+  "./fonts/gf/bebas-neue-latin-ext-400-normal.woff2",
+  "./fonts/gf/caveat-latin-700-normal.woff2",
+  "./fonts/gf/caveat-latin-ext-700-normal.woff2",
+  "./fonts/gf/dancing-script-latin-700-normal.woff2",
+  "./fonts/gf/dancing-script-latin-ext-700-normal.woff2",
+  "./fonts/gf/montserrat-latin-700-normal.woff2",
+  "./fonts/gf/montserrat-latin-ext-700-normal.woff2",
+  "./fonts/gf/oswald-latin-700-normal.woff2",
+  "./fonts/gf/oswald-latin-ext-700-normal.woff2",
+  "./fonts/gf/playfair-display-latin-700-normal.woff2",
+  "./fonts/gf/playfair-display-latin-ext-700-normal.woff2",
+  "./fonts/gf/poppins-latin-700-normal.woff2",
+  "./fonts/gf/poppins-latin-ext-700-normal.woff2",
   "./js/main.js",
   "./js/audio.js",
   "./js/sync.js",
