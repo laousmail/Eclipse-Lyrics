@@ -1745,3 +1745,102 @@ body.flow-on .intro-overlay {
     --ph: min(30vh, 22rem);
   }
 }
+
+/* ——— Guided | Pro switch (both modes) ——— */
+.mode-switch {
+  display: inline-flex;
+  flex: 0 0 auto;
+  padding: 3px;
+  gap: 2px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--bg2) 70%, transparent);
+}
+
+.mode-switch button {
+  min-height: 2.25rem;
+  padding: 0 0.85rem;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--mute);
+  font: 600 0.8rem var(--sans);
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: background-color 0.2s var(--ease), color 0.2s var(--ease);
+}
+
+.mode-switch button:hover {
+  color: var(--ink);
+}
+
+.mode-switch button[aria-pressed="true"] {
+  background: var(--ink);
+  color: var(--bg);
+  cursor: default;
+}
+
+.mode-switch button:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+}
+
+@media (max-width: 520px) {
+  .flow-brand-name {
+    display: none;
+  }
+  .mode-switch button {
+    padding: 0 0.7rem;
+  }
+}
+
+/* Welcome: the way into Pro for people who know what they want */
+.fw-pro {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  width: 100%;
+  margin-top: 1.75rem;
+  padding: 0.95rem 1.1rem;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--bg2) 60%, transparent);
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.2s var(--ease), background-color 0.2s var(--ease);
+}
+
+.fw-pro:hover {
+  border-color: color-mix(in srgb, var(--gold) 50%, var(--line));
+}
+
+.fw-pro:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+}
+
+.fw-pro-text {
+  display: grid;
+  gap: 0.2rem;
+  flex: 1;
+  min-width: 0;
+}
+
+.fw-pro-text b {
+  font-weight: 600;
+}
+
+.fw-pro-text small {
+  color: var(--mute);
+  font-size: 0.85rem;
+  line-height: 1.4;
+}
+
+.fw-pro-go {
+  flex: 0 0 auto;
+  color: var(--gold);
+  font-weight: 600;
+  white-space: nowrap;
+}

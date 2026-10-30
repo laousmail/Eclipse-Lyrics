@@ -34,13 +34,18 @@ let transparentWebm = true;
 // Read before the app boots: boot rewrites the hash to the screen it restores
 const INITIAL_HASH = typeof location !== "undefined" ? (location.hash || "").replace(/^#/, "") : "";
 
-/** Form by default; the editor when the user chose it or opened an editor link (#sync…). */
+/** Guided form by default; Pro (the editor) when the user chose it or opened a Pro link (#pro, #sync…). */
 export function flowWanted() {
   let mode = "";
   try {
     mode = localStorage.getItem(PREF_KEY) || "";
   } catch {
     /* storage blocked: default to the form */
+  }
+  // Shareable links: #guided / #pro pick the mode (and it is remembered)
+  if (INITIAL_HASH === "guided" || INITIAL_HASH === "pro") {
+    rememberMode(INITIAL_HASH === "pro" ? "editor" : "flow");
+    return INITIAL_HASH === "guided";
   }
   if (mode) return mode !== "editor";
   // First visit: an editor link (#sync…) opens the editor; anything else, the form.
@@ -156,13 +161,13 @@ export function initFlow(api) {
         <span class="flow-brand-name">${esc(ft("brand"))}</span>
       </button>
       <p class="flow-steplabel" aria-live="polite"></p>
+      ${modeSwitchHtml("guided")}
       <button type="button" class="flow-menu-btn" data-act="menu" aria-haspopup="true" aria-expanded="false" aria-label="${esc(ft("menu"))}">
         <span></span><span></span>
       </button>
     </header>
     <div class="flow-menu" hidden>
       <button type="button" data-act="songs">${esc(ft("yourSongs"))}</button>
-      <button type="button" data-act="editor">${esc(ft("fullEditor"))}</button>
       <div class="flow-menu-lang" role="group" aria-label="${esc(ft("language"))}">
         <button type="button" data-lang="en">EN</button>
         <button type="button" data-lang="fr">FR</button>
@@ -187,10 +192,7 @@ export function initFlow(api) {
       toggleMenu(false);
       go("welcome", -1);
     }
-    if (act === "editor") {
-      toggleMenu(false);
-      openEditor();
-    }
+    if (act === "mode-pro") openEditor();
   });
   root.querySelectorAll(".flow-menu-lang [data-lang]").forEach((b) =>
     b.addEventListener("click", () => {
@@ -239,10 +241,20 @@ function toggleMenu(force) {
 function refreshChrome() {
   root.querySelector(".flow-brand-name").textContent = ft("brand");
   root.querySelector('[data-act="songs"]').textContent = ft("yourSongs");
-  root.querySelector('[data-act="editor"]').textContent = ft("fullEditor");
+  root.querySelector(".mode-switch").outerHTML = modeSwitchHtml("guided");
   root.querySelectorAll(".flow-menu-lang [data-lang]").forEach((b) =>
     b.setAttribute("aria-pressed", String(b.dataset.lang === i18n.getLang()))
   );
+}
+
+/**
+ * The Guided | Pro switch, shown in both modes. Pro is the full editor: every
+ * tool on one screen for people who know what they want. Same song in both.
+ */
+export function modeSwitchHtml(active) {
+  const btn = (mode, act) =>
+    `<button type="button" data-act="${act}" data-mode="${mode}" aria-pressed="${mode === active}" title="${esc(ft(`mode_${mode}Hint`))}">${esc(ft(`mode_${mode}`))}</button>`;
+  return `<div class="mode-switch" role="group" aria-label="${esc(ft("modeAria"))}">${btn("guided", "mode-guided")}${btn("pro", "mode-pro")}</div>`;
 }
 
 /** 1-based number of a step among the main questions; sub-steps share their parent's. */
@@ -552,6 +564,10 @@ function renderWelcome(c) {
       <span class="f-hint">${esc(ft("pressEnter"))}</span>
     </div>
     <button type="button" class="f-link fw-demo">${esc(ft("welcomeDemo"))}</button>
+    <button type="button" class="fw-pro">
+      <span class="fw-pro-text"><b>${esc(ft("welcomeProTitle"))}</b><small>${esc(ft("welcomeProHelp"))}</small></span>
+      <span class="fw-pro-go">${esc(ft("welcomeProGo"))} <span aria-hidden="true">→</span></span>
+    </button>
     <section class="fw-recent" hidden>
       <h2 class="fw-recent-title">${esc(ft("welcomeRecent"))}</h2>
       <ul class="fw-recent-list"></ul>
@@ -560,6 +576,7 @@ function renderWelcome(c) {
     await c.app.newProject();
     go("audio", 1);
   });
+  el.querySelector(".fw-pro").addEventListener("click", () => openEditor());
   el.querySelector(".fw-demo").addEventListener("click", async () => {
     await c.app.loadDemo();
     const f = flowState();
