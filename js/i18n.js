@@ -372,6 +372,11 @@ const STRINGS = {
     madeSomething: "Made something?",
     tagLaousmail: "Tag @laousmail",
     madeInMtl: "Made in Montréal by laousmail",
+    studioCta: "Want it produced? EclipseTone ↗",
+    studioTitle: "From lyrics to a finished song",
+    studioBody: "Eclipse Lyrics is made by EclipseTone, a Montréal studio. Real musicians build the music around your voice memo or lyrics, then we mix, master and make the video.",
+    studioLink: "Visit EclipseTone ↗",
+    studioFooter: "An EclipseTone tool",
     feedback: "Feedback",
     support: "Support",
     privacyNote: "Privacy: audio and lyrics never leave this device. Optional cookie-free page-view analytics only if enabled.",
@@ -763,6 +768,11 @@ const STRINGS = {
     madeSomething: "Tu as créé quelque chose ?",
     tagLaousmail: "Tague @laousmail",
     madeInMtl: "Fait à Montréal par laousmail",
+    studioCta: "Envie de la produire ? EclipseTone ↗",
+    studioTitle: "Des paroles à la chanson finie",
+    studioBody: "Eclipse Lyrics est fait par EclipseTone, un studio à Montréal. De vrais musiciens construisent la musique autour de ton mémo vocal ou de tes paroles, puis on mixe, on masterise et on fait le clip.",
+    studioLink: "Voir EclipseTone ↗",
+    studioFooter: "Un outil EclipseTone",
     feedback: "Retour",
     support: "Soutenir",
     privacyNote: "Confidentialité : l’audio et les paroles ne quittent pas cet appareil. Analytics optionnelles sans cookies si activées.",
@@ -982,6 +992,10 @@ export function applyDom() {
   document.querySelectorAll("[data-i18n-title]").forEach((el) => {
     const key = el.getAttribute("data-i18n-title");
     if (key) el.setAttribute("title", t(key));
+  });
+  // Links with a French version (e.g. eclipsetone.com/fr/)
+  document.querySelectorAll("[data-href-fr]").forEach((el) => {
+    el.setAttribute("href", lang === "fr" ? el.dataset.hrefFr : el.dataset.hrefEn || el.getAttribute("href"));
   });
   const meta = document.querySelector('meta[name="description"]');
   if (meta) meta.setAttribute("content", t("metaDescription"));
