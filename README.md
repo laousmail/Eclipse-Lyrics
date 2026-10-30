@@ -2,11 +2,13 @@
 
 Free, no-login, browser-only tool to **time song lyrics**, export subtitles, and render animated lyric videos.
 
-Made by [laousmail](https://laousmail.com). Audio never leaves your device.
+**Live:** https://lyrics.eclipsetone.com/ · an [EclipseTone](https://eclipsetone.com/) tool, made by [laousmail](https://laousmail.com). Audio never leaves your device.
+
+Hosted on GitHub Pages from `main`; the custom domain is set by `CNAME` (DNS: `lyrics` CNAME → `laousmail.github.io`).
 
 ## Try it
 
-Open `index.html` locally (any static server), or use GitHub Pages after merge:
+Open `index.html` locally (any static server):
 
 ```bash
 # from this folder
