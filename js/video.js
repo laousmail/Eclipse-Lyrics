@@ -210,6 +210,7 @@ export async function startVideoExport(project, {
   onDone,
   onError,
   onHidden,
+  autoDownload = true, // the guided form keeps the file and offers Download / Share
 } = {}) {
   if (exportHandle) return;
 
@@ -245,7 +246,7 @@ export async function startVideoExport(project, {
     const result = await exportHandle.done;
     const ext = result.ext || (result.mimeType?.includes("mp4") ? "mp4" : "webm");
     const name = exportFileName(project, settings, ext);
-    downloadBlob(result.blob, name);
+    if (autoDownload) downloadBlob(result.blob, name);
     const compatible = await isWidelyCompatible(exportHandle.path, result.blob).catch(() => true);
     exportHandle = null;
     onDone?.({ ...result, fileName: name, compatible });

@@ -44,6 +44,7 @@ import {
 import * as pwa from "./pwa.js";
 import * as onboarding from "./onboarding.js";
 import * as demo from "./demo.js";
+import { initFlow, flowWanted, showFlow } from "./flow/flow.js";
 import * as analytics from "./analytics.js";
 import { initKeyboardGuards, ensureFieldVisible } from "./keyboard.js";
 import {
@@ -680,9 +681,11 @@ async function handleAudioFile(file, { stayOnScreen = false } = {}) {
         title?.scrollIntoView({ block: "center", behavior: "smooth" });
       });
     }
+    return true;
   } catch (err) {
     console.error(err);
     setStatus(i18n.t("errAudioLoad"));
+    return false;
   }
 }
 
@@ -1501,6 +1504,7 @@ function isDialogOpen() {
 
 function setupKeyboard() {
   window.addEventListener("keyup", (e) => {
+    if (document.body.classList.contains("flow-on")) return;
     if (isTypingTarget(e.target) || isDialogOpen()) return;
     if (state.screen !== "sync") return;
     if ((e.key === " " || e.key === "Spacebar") && state.tapMode === "hold") {
@@ -1509,6 +1513,7 @@ function setupKeyboard() {
     }
   });
   window.addEventListener("keydown", (e) => {
+    if (document.body.classList.contains("flow-on")) return;
     if (isTypingTarget(e.target)) return;
     if (isDialogOpen()) return;
     const key = e.key;
@@ -1680,6 +1685,10 @@ function setupNavigation() {
     if (e.target === $("more-sheet")) closeSheet("more-sheet");
   });
   $("input-import")?.addEventListener("change", () => closeSheet("more-sheet"));
+  $("btn-guided")?.addEventListener("click", () => {
+    closeSheet("more-sheet");
+    showFlow(state.project?.flow?.step || "welcome");
+  });
 
   document.querySelectorAll(".lang-btn").forEach((btn) => {
     btn.addEventListener("click", () => {
@@ -3049,6 +3058,53 @@ function focusLineOption(index) {
   items[index]?.focus();
 }
 
+/** What the guided form (js/flow) may do with the app's state. */
+function flowApi() {
+  return {
+    getProject: () => state.project,
+    persist,
+    toast: (msg, opts) => showToast(msg, opts),
+    hasAudio: () => Boolean(state.audioReady),
+    getPeaks: () => state.peaks,
+    listProjects: () => db.listProjects(),
+    async newProject() {
+      await startNewProject();
+    },
+    async openProject(id) {
+      const project = await db.getProject(id);
+      if (!project) return false;
+      await restoreSession(project);
+      return true;
+    },
+    async loadDemo() {
+      await loadDemoProject();
+    },
+    loadAudio: (file) => handleAudioFile(file, { stayOnScreen: true }),
+    /** Replace lyrics + translations from plain text (keeps timings of unchanged lines). */
+    setLyrics(mainText, frText = "", enText = "") {
+      const result = sync.applyLyrics(state.project, mainText, frText, enText);
+      state.project.lines = result.lines;
+      state.lyricsRows = rowsFromProject(state.project);
+      state.tapIndex = sync.nextTapIndex(state.project.lines);
+      renderLineList();
+      persist();
+      return result;
+    },
+    /** Bring the full editor up to date after the form changed the project. */
+    refreshEditor() {
+      state.tapIndex = sync.nextTapIndex(state.project.lines);
+      syncFieldsFromProject();
+      renderLineList();
+      updateTapButtons();
+      updateProgressChip();
+    },
+    showEditor(screen = "sync") {
+      this.refreshEditor();
+      showScreen(screen);
+    },
+  };
+}
+
 async function boot() {
   // Pinch-zoom: document allows intentional pinch (B20). Controls use
   // touch-action: manipulation to block accidental double-tap zoom; waveform
@@ -3115,7 +3171,12 @@ async function boot() {
     }
   }
 
-  if (!onboarding.hasSeenIntro()) {
+  // Guided form is the default way in; the full editor stays one tap away
+  initFlow(flowApi());
+  if (flowWanted()) {
+    onboarding.markIntroSeen();
+    showFlow();
+  } else if (!onboarding.hasSeenIntro()) {
     showIntro(0);
   } else {
     maybeShowScreenTip(state.screen);
