@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://laousmail.github.io/Eclipse-Lyrics/sitemap.xml
+Sitemap: https://lyrics.eclipsetone.com/sitemap.xml
