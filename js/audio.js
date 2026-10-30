@@ -64,14 +64,6 @@ export async function loadAudioFile(file) {
   const arrayBuffer = await file.arrayBuffer();
   decodedBuffer = await ctx.decodeAudioData(arrayBuffer.slice(0));
 
-  // Wire MediaElementSource once for recording later
-  if (!mediaElementSource) {
-    mediaElementSource = ctx.createMediaElementSource(audio);
-    streamDest = ctx.createMediaStreamDestination();
-    mediaElementSource.connect(ctx.destination);
-    mediaElementSource.connect(streamDest);
-  }
-
   return {
     fileName: file.name || "audio",
     duration: audio.duration || decodedBuffer.duration,
@@ -119,15 +111,34 @@ export function getDecodedBuffer() {
   return decodedBuffer;
 }
 
-export function getAudioStreamTrack() {
-  return streamDest ? streamDest.stream.getAudioTracks()[0] : null;
-}
-
-export function getMediaStreamDestination() {
+/**
+ * Route the element through Web Audio so the live-recording export can capture it.
+ * Done only when that fallback needs it: on some phones (iOS Safari, Bluetooth
+ * headphones) a routed element plays at the wrong pitch when the context's sample
+ * rate differs from the device's, and an element can never be un-routed.
+ */
+function wireRecordingTap() {
+  if (!mediaElementSource) {
+    const ctx = ensureContext();
+    mediaElementSource = ctx.createMediaElementSource(getAudioElement());
+    streamDest = ctx.createMediaStreamDestination();
+    mediaElementSource.connect(ctx.destination);
+    mediaElementSource.connect(streamDest);
+  }
   return streamDest;
 }
 
+export function getAudioStreamTrack() {
+  return wireRecordingTap().stream.getAudioTracks()[0] || null;
+}
+
+export function getMediaStreamDestination() {
+  return wireRecordingTap();
+}
+
 export function play() {
+  // The element plays on its own; only resume the context once it is routed
+  if (!mediaElementSource) return getAudioElement().play();
   return resumeContext().then(() => getAudioElement().play());
 }
 
