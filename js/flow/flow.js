@@ -17,6 +17,7 @@ import { fetchGoogleDocText } from "../docs.js";
 import { lineMainText, lineFr, lineEn, isLyric } from "../core/project.js";
 import { isSectionText } from "../core/lyrics.js";
 import * as i18n from "../i18n.js";
+import * as audio from "../audio.js";
 import { formatTime } from "../sync.js";
 import { renderSyncStep } from "./sync-step.js";
 import { renderLookStep, renderReadyStep } from "./look-step.js";
@@ -283,6 +284,9 @@ function teardown() {
  * Show a step. dir: 1 = forward (comes up from below), -1 = back (comes down from above).
  */
 export function go(stepId, dir = 1, { instant = false } = {}) {
+  // The form has no speed control: always play the song as recorded, even if
+  // the editor was left on 0.75× (the editor puts its speed back when opened)
+  if (audio.getPlaybackRate() !== 1) audio.setPlaybackRate(1);
   const step = stepById(stepId) || STEPS[0];
   if (step.visible && !step.visible()) {
     // Asked for a hidden step: move on in that direction

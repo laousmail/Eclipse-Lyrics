@@ -95,7 +95,7 @@ export async function startExport({
     seek,
     play,
     pause,
-    audioDest,
+    audioDest: typeof audioDest === "function" ? audioDest() : audioDest,
     ensureFonts,
     onHidden,
     onProgress: (p) => onProgress?.({ progress: p, path: "mediarecorder" }),

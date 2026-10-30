@@ -7,7 +7,6 @@ import {
   getAudioElement,
   getMediaStreamDestination,
   getDecodedBuffer,
-  resumeContext,
   seek,
   play,
   pause,
@@ -216,8 +215,6 @@ export async function startVideoExport(project, {
 
   const settings = { ...(project.settings?.video || {}) };
   await ensureVideoFonts(settings);
-  await resumeContext();
-
   const canvas = document.getElementById("video-canvas");
   // Lyrics-only files go on top of footage that already has the song
   const overlay = settings.output === "overlay";
@@ -237,7 +234,8 @@ export async function startVideoExport(project, {
       seek,
       play,
       pause,
-      audioDest: getMediaStreamDestination(),
+      // A getter: only the live-recording fallback routes the audio (see audio.js)
+      audioDest: getMediaStreamDestination,
       ensureFonts: () => ensureVideoFonts(settings),
       onHidden,
       onProgress: (info) => onProgress?.(info),
