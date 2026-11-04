@@ -1,5 +1,5 @@
 /* Eclipse Lyrics service worker — precache app shell, fonts, vendor. */
-const CACHE = "eclipse-lyrics-v17";
+const CACHE = "eclipse-lyrics-v18";
 
 const PRECACHE = [
   "./",
@@ -10,6 +10,7 @@ const PRECACHE = [
   "./css/brand.css",
   "./css/fonts-video.css",
   "./css/flow.css",
+  "./css/actions.css",
   "./js/flow/flow.js",
   "./js/flow/helpers.js",
   "./js/flow/strings.js",
