@@ -1,0 +1,113 @@
+/*
+ * Action colours. The workspace is grey; colour on a button tells you what it does.
+ * Each colour means one thing, everywhere (Guided and Studio), like a DAW's transport:
+ *   blue   = go forward / the main action (Start, OK, Next, Export, Make files)
+ *   green  = listen or take your result (Play, Watch it back, Download, Share)
+ *   yellow = timing (Tap)
+ *   red    = undo or destroy (Start over, Stop, Delete)
+ *   grey   = move around / secondary (Back, Change the look, menus)
+ * Colours are Apple's dark-mode system colours: bright enough on near-black, familiar.
+ */
+
+:root {
+  --act-go: #0a84ff;
+  --act-go-hover: #409cff;
+  --on-go: #ffffff;
+  --act-play: #30d158;
+  --act-play-hover: #4ade74;
+  --on-play: #06210f;
+  --act-time: #ffd60a;
+  --act-time-hover: #ffe04d;
+  --on-time: #1f1a00;
+  --act-stop: #ff453a;
+}
+
+/* ——— Blue: go forward ——— */
+.f-ok,
+.btn-fill,
+.sync-export {
+  background: var(--act-go);
+  color: var(--on-go);
+}
+
+.f-ok:hover:not(:disabled),
+.btn-fill:hover:not(:disabled) {
+  background: var(--act-go-hover);
+}
+
+.f-ok:disabled,
+.btn-fill:disabled {
+  background: color-mix(in srgb, var(--act-go) 35%, var(--bg3));
+  color: color-mix(in srgb, var(--on-go) 60%, transparent);
+}
+
+/* ——— Green: listen / take your result ——— */
+.fx-dl,
+.fx-all,
+.fs-check,
+#btn-export-srt {
+  background: var(--act-play);
+  color: var(--on-play);
+  box-shadow: none;
+}
+
+.fx-dl:hover,
+.fx-all:hover:not(:disabled),
+.fs-check:hover,
+#btn-export-srt:hover {
+  background: var(--act-play-hover);
+}
+
+.fx-share,
+#btn-export-zip {
+  color: var(--act-play);
+  box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--act-play) 70%, transparent);
+}
+
+/* Play buttons: a green play symbol (pause stays white, so the state reads at a glance) */
+.fp-big,
+.fs-play,
+.dock-play {
+  color: var(--act-play);
+}
+
+.fp-big {
+  box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--act-play) 70%, transparent);
+}
+
+.fp.is-playing .fp-big,
+.fs.is-playing .fs-play,
+.dock-play[data-icon="pause"] {
+  color: var(--ink);
+}
+
+.fp-toggle .i-play {
+  color: var(--act-play);
+}
+
+/* ——— Yellow: timing ——— */
+.fs-tap,
+.dock-tap {
+  background: var(--act-time);
+  color: var(--on-time);
+}
+
+.fs-tap:hover:not(:disabled),
+.dock-tap:hover:not(:disabled) {
+  background: var(--act-time-hover);
+}
+
+/* ——— Red: undo or destroy ——— */
+.fs-redo,
+.fx-stop {
+  color: var(--act-stop);
+}
+
+.fx-stop {
+  box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--act-stop) 65%, transparent);
+}
+
+#btn-delete-confirm {
+  background: var(--act-stop);
+  color: #ffffff;
+}

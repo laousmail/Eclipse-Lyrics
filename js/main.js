@@ -267,6 +267,7 @@ function updatePlayButton() {
   if (btn) {
     btn.innerHTML = playing ? iconHtml("pause") : iconHtml("play");
     btn.setAttribute("aria-label", playing ? i18n.t("pause") : i18n.t("play"));
+    btn.dataset.icon = playing ? "pause" : "play"; // green play / white pause (css/actions.css)
   }
   updateDockVisibility();
 }
