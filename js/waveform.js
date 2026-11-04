@@ -479,7 +479,7 @@ function rebuildPeaksCache(width, height, dpr) {
   off.height = Math.max(1, Math.floor(height * dpr));
   const octx = off.getContext("2d");
   octx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  octx.fillStyle = "#0a0608";
+  octx.fillStyle = "#111113";
   octx.fillRect(0, 0, width, height);
   paintPeaks(octx, width, height);
   STATE.peaksCache = {
@@ -506,9 +506,9 @@ function draw() {
     if (!peaksCacheValid(width, height, dpr)) rebuildPeaksCache(width, height, dpr);
     ctx.drawImage(STATE.peaksCache.canvas, 0, 0, width, height);
   } else {
-    ctx.fillStyle = "#0a0608";
+    ctx.fillStyle = "#111113";
     ctx.fillRect(0, 0, width, height);
-    ctx.fillStyle = "rgba(176,166,153,0.65)";
+    ctx.fillStyle = "rgba(160,160,166,0.65)";
     ctx.font = "13px Outfit, Noto Sans, sans-serif";
     ctx.textAlign = "center";
     ctx.fillText(STATE.emptyLabel, width / 2, height / 2 + 4);
@@ -528,9 +528,9 @@ function draw() {
     const selected = i === STATE.selectedIndex;
     const left = Math.max(0, x0);
     const right = Math.min(width, x1);
-    ctx.fillStyle = selected ? "rgba(255,106,19,0.28)" : "rgba(255,179,71,0.16)";
+    ctx.fillStyle = selected ? "rgba(255,255,255,0.2)" : "rgba(255,255,255,0.08)";
     ctx.fillRect(left, height * 0.18, Math.max(2, right - left), height * 0.64);
-    ctx.strokeStyle = selected ? "#ff6a13" : "rgba(255,179,71,0.55)";
+    ctx.strokeStyle = selected ? "#ffffff" : "rgba(255,255,255,0.4)";
     ctx.lineWidth = selected ? 2 : 1;
     ctx.beginPath();
     ctx.moveTo(x0, height * 0.12);
@@ -542,7 +542,7 @@ function draw() {
     if (showText && right - left > 36) {
       const label = lineMainText(line) || String(i + 1);
       ctx.font = "11px Outfit, Noto Sans, sans-serif";
-      ctx.fillStyle = "rgba(242,233,221,0.9)";
+      ctx.fillStyle = "rgba(236,236,236,0.9)";
       ctx.textAlign = "left";
       const clipped = label.length > 28 ? `${label.slice(0, 27)}…` : label;
       ctx.fillText(clipped, left + 6, height * 0.42);
@@ -551,7 +551,7 @@ function draw() {
 
   if (STATE.duration) {
     const px = timeToX(STATE.playhead, width);
-    ctx.strokeStyle = "#ff3d1f";
+    ctx.strokeStyle = "#ffffff";
     ctx.lineWidth = 1.5;
     ctx.beginPath();
     ctx.moveTo(px, 0);
@@ -570,7 +570,7 @@ function paintPeaks(ctx, width, height) {
   const amp = height * 0.46;
   const visible = Math.max(1, endPeak - startPeak);
 
-  ctx.fillStyle = "rgba(255,106,19,0.22)";
+  ctx.fillStyle = "rgba(255,255,255,0.14)";
   for (let i = 0; i < width; i++) {
     const peakIdx = startPeak + Math.floor((i / width) * visible);
     if (peakIdx < 0 || peakIdx >= pairCount) continue;
@@ -587,14 +587,14 @@ function paintPeaks(ctx, width, height) {
     const y1 = mid + min * amp;
     const y2 = mid + max * amp;
     const hot = Math.abs(max - min) > 0.35;
-    ctx.strokeStyle = hot ? "rgba(255,179,71,0.95)" : "rgba(255,106,19,0.85)";
+    ctx.strokeStyle = hot ? "rgba(255,255,255,0.95)" : "rgba(200,200,204,0.8)";
     ctx.beginPath();
     ctx.moveTo(i + 0.5, y1);
     ctx.lineTo(i + 0.5, y2);
     ctx.stroke();
   }
 
-  ctx.strokeStyle = "rgba(255,120,80,0.18)";
+  ctx.strokeStyle = "rgba(255,255,255,0.1)";
   ctx.beginPath();
   ctx.moveTo(0, mid);
   ctx.lineTo(width, mid);

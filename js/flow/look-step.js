@@ -198,6 +198,23 @@ export function renderLookStep(c) {
   colorRow.appendChild(clash);
   rows.appendChild(colorRow);
 
+  // Next to the colour it changes: a soft halo behind the words, or crisp text
+  rows.appendChild(
+    optionRow(c, {
+      title: t("lookGlow"),
+      current: v.glow !== false ? "on" : "off",
+      className: "fl-seg",
+      items: [
+        { value: "on", html: esc(t("on")) },
+        { value: "off", html: esc(t("off")) },
+      ],
+      onPick: (val) => {
+        v.glow = val === "on";
+        changed();
+      },
+    })
+  );
+
   const sizeNow = SIZES.reduce((best, s) => (Math.abs(s.fontSize - (v.fontSize || 72)) < Math.abs(best.fontSize - (v.fontSize || 72)) ? s : best), SIZES[1]);
   rows.appendChild(
     optionRow(c, {

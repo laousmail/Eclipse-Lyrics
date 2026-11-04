@@ -40,7 +40,7 @@ describe("feature color cues + standalone fullscreen", () => {
     assert.match(html, /viewport-fit=cover/);
     assert.match(html, /apple-mobile-web-app-capable/);
     assert.match(html, /black-translucent/);
-    assert.match(html, /theme-color[^>]*#070605/);
+    assert.match(html, /theme-color[^>]*#0b0b0c/);
     assert.match(css, /display-mode:\s*standalone/);
     assert.match(css, /-webkit-fill-available/);
     assert.match(css, /100svh/);
@@ -52,8 +52,8 @@ describe("feature color cues + standalone fullscreen", () => {
   it("manifest stays standalone with matching theme/background", () => {
     const manifest = JSON.parse(readFileSync(new URL("manifest.webmanifest", root), "utf8"));
     assert.equal(manifest.display, "standalone");
-    assert.equal(manifest.background_color, "#070605");
-    assert.equal(manifest.theme_color, "#070605");
+    assert.equal(manifest.background_color, "#0b0b0c");
+    assert.equal(manifest.theme_color, "#0b0b0c");
     assert.ok(manifest.display_override?.includes("standalone"));
   });
 

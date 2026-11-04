@@ -1306,6 +1306,7 @@ function syncFieldsFromProject() {
   if ($("tr-color") && v.translationColor) $("tr-color").value = v.translationColor;
   if ($("solid-color") && v.solidColor) $("solid-color").value = v.solidColor;
   if ($("video-intro")) $("video-intro").checked = v.introCard !== false;
+  if ($("video-glow")) $("video-glow").checked = v.glow !== false;
   if ($("video-watermark")) $("video-watermark").checked = Boolean(v.watermark);
   if ($("video-progress")) $("video-progress").checked = Boolean(v.progressBar);
   if ($("video-credit")) $("video-credit").checked = v.credit !== false;
@@ -1479,6 +1480,7 @@ function readVideoSettings({ save = true } = {}) {
   if ($("tr-color")) v.translationColor = $("tr-color").value;
   if ($("solid-color")) v.solidColor = $("solid-color").value;
   if ($("video-intro")) v.introCard = $("video-intro").checked;
+  if ($("video-glow")) v.glow = $("video-glow").checked;
   if ($("video-watermark")) {
     v.watermark = $("video-watermark").checked;
     v.watermarkText = v.watermark ? state.project.artist || state.project.title || "" : "";
@@ -2485,6 +2487,7 @@ function setupUI() {
     "tr-color",
     "solid-color",
     "video-intro",
+    "video-glow",
     "video-watermark",
     "video-progress",
     "video-credit",
