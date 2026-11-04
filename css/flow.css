@@ -53,6 +53,7 @@ body.flow-on .intro-overlay {
 
 .flow-brand {
   display: inline-flex;
+  min-height: 2.75rem;
   align-items: center;
   gap: 0.6rem;
   padding: 0.25rem 0;
@@ -72,10 +73,14 @@ body.flow-on .intro-overlay {
   flex: 1;
   margin: 0;
   text-align: center;
-  font: 500 0.66rem/1 var(--mono);
+  font: 500 0.75rem/1 var(--mono);
   letter-spacing: 0.16em;
   text-transform: uppercase;
   color: var(--mute);
+}
+
+.flow-steplabel {
+  white-space: nowrap;
 }
 
 .flow.is-welcome .flow-steplabel {
@@ -157,49 +162,51 @@ body.flow-on .intro-overlay {
   color: var(--bg);
 }
 
-.flow-nav {
-  position: fixed;
-  right: calc(clamp(1rem, 4vw, 2rem) + var(--safe-r));
-  bottom: calc(1rem + var(--safe-b));
-  z-index: 4;
-  display: flex;
-  overflow: hidden;
-  border-radius: var(--radius-md);
-  box-shadow: 0 10px 28px -14px rgba(0, 0, 0, 0.9);
-}
-
-.flow-nav button {
-  display: grid;
-  place-items: center;
-  width: 2.75rem;
-  height: 2.5rem;
-  border: 0;
-  background: var(--grad);
-  color: var(--on);
+/* Back sits top-left, where people look for it, with a word, not just an arrow */
+.flow-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-height: 2.75rem;
+  padding: 0 0.95rem 0 0.8rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--bg2) 70%, transparent);
+  color: var(--ink);
+  font: 600 0.88rem var(--sans);
   cursor: pointer;
+  touch-action: manipulation;
 }
 
-.flow-nav button + button {
-  border-left: 1px solid color-mix(in srgb, var(--on) 25%, transparent);
+.flow-back:hover {
+  border-color: color-mix(in srgb, var(--gold) 50%, var(--line));
 }
 
-.flow-nav button:disabled {
-  opacity: 0.45;
-  cursor: default;
+.flow-back:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
 }
 
-.flow-nav svg {
-  width: 1.15rem;
-  height: 1.15rem;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 2.4;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-
-.flow.is-welcome .flow-nav {
+.flow-back[hidden],
+.flow.is-welcome .flow-back {
   display: none;
+}
+
+.flow-steplabel .sl-short {
+  display: none;
+}
+
+@media (max-width: 560px) {
+  .flow-steplabel .sl-long {
+    display: none;
+  }
+  .flow-steplabel .sl-short {
+    display: inline;
+  }
+  /* On a step, Back replaces the logo; the logo comes back on the welcome page */
+  .flow:not(.is-welcome) .flow-brand {
+    display: none;
+  }
 }
 
 /* ——— stage + transitions ——— */
@@ -215,7 +222,7 @@ body.flow-on .intro-overlay {
   overscroll-behavior: contain;
   display: flex;
   flex-direction: column;
-  padding: clamp(1.25rem, 5vh, 3.5rem) clamp(1.1rem, 5vw, 3rem) calc(5.5rem + var(--safe-b));
+  padding: clamp(1.25rem, 5vh, 3.5rem) clamp(1.1rem, 5vw, 3rem) calc(2.5rem + var(--safe-b));
   -webkit-overflow-scrolling: touch;
 }
 
@@ -349,7 +356,7 @@ body.flow-on .intro-overlay {
 }
 
 .f-hint {
-  font: 400 0.72rem var(--mono);
+  font: 400 0.75rem var(--mono);
   color: var(--mute);
   letter-spacing: 0.04em;
 }
@@ -471,7 +478,7 @@ body.flow-on .intro-overlay {
   height: 1.6rem;
   border: 1px solid color-mix(in srgb, var(--gold) 55%, transparent);
   border-radius: 5px;
-  font: 600 0.72rem var(--mono);
+  font: 600 0.75rem var(--mono);
   color: var(--gold);
 }
 
@@ -531,7 +538,7 @@ body.flow-on .intro-overlay {
 /* ——— welcome ——— */
 .fw-eyebrow {
   margin: 0 0 1rem;
-  font: 500 0.7rem var(--mono);
+  font: 500 0.75rem var(--mono);
   letter-spacing: 0.18em;
   text-transform: uppercase;
   color: var(--gold);
@@ -583,7 +590,7 @@ body.flow-on .intro-overlay {
   border-radius: 50%;
   background: color-mix(in srgb, var(--hot) 20%, transparent);
   color: var(--gold);
-  font: 600 0.7rem var(--mono);
+  font: 600 0.75rem var(--mono);
 }
 
 .fw-recent {
@@ -596,7 +603,7 @@ body.flow-on .intro-overlay {
 
 .fw-recent-title {
   margin: 0 0 0.6rem;
-  font: 500 0.68rem var(--mono);
+  font: 500 0.75rem var(--mono);
   letter-spacing: 0.18em;
   text-transform: uppercase;
   color: var(--mute);
@@ -747,7 +754,7 @@ body.flow-on .intro-overlay {
 
 .f-example figcaption {
   margin-bottom: 0.4rem;
-  font: 600 0.72rem var(--mono);
+  font: 600 0.75rem var(--mono);
   letter-spacing: 0.1em;
   text-transform: uppercase;
 }
@@ -845,7 +852,7 @@ body.flow-on .intro-overlay {
 }
 
 .f-or {
-  font: 400 0.72rem var(--mono);
+  font: 400 0.75rem var(--mono);
   text-transform: uppercase;
   letter-spacing: 0.14em;
   color: var(--mute);
@@ -939,7 +946,7 @@ body.flow-on .intro-overlay {
 
 .fs-count {
   margin: 0;
-  font: 500 0.7rem var(--mono);
+  font: 500 0.75rem var(--mono);
   letter-spacing: 0.16em;
   text-transform: uppercase;
   color: var(--mute);
@@ -954,7 +961,7 @@ body.flow-on .intro-overlay {
 }
 
 .fs-next span {
-  font: 500 0.66rem var(--mono);
+  font: 500 0.75rem var(--mono);
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--mute);
@@ -1249,7 +1256,7 @@ body.flow-on .intro-overlay {
 .fp-time,
 .fp-dur {
   flex: none;
-  font: 400 0.72rem var(--mono);
+  font: 400 0.75rem var(--mono);
   color: var(--mute);
   font-variant-numeric: tabular-nums;
 }
@@ -1305,15 +1312,15 @@ body.flow-on .intro-overlay {
 }
 
 .fl-modes-label {
-  font: 500 0.66rem var(--mono);
+  font: 500 0.75rem var(--mono);
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--mute);
 }
 
 .fl-modes button {
-  min-height: 2.1rem;
-  padding: 0 0.75rem;
+  min-height: 2.5rem;
+  padding: 0 0.85rem;
   border: 1px solid var(--line);
   border-radius: var(--radius-pill);
   background: none;
@@ -1348,7 +1355,7 @@ body.flow-on .intro-overlay {
 .fl-legend {
   margin-bottom: 0.55rem;
   padding: 0;
-  font: 500 0.68rem var(--mono);
+  font: 500 0.75rem var(--mono);
   letter-spacing: 0.16em;
   text-transform: uppercase;
   color: var(--mute);
@@ -1440,7 +1447,7 @@ body.flow-on .intro-overlay {
 }
 
 .fl-font-name {
-  font: 400 0.68rem var(--mono);
+  font: 400 0.75rem var(--mono);
   color: var(--mute);
 }
 
@@ -1507,12 +1514,24 @@ body.flow-on .intro-overlay {
   margin-inline: auto;
 }
 
+/* The player gives way so "Export" is always on screen without scrolling */
 .fr .fp {
-  --ph: min(54vh, 46rem);
+  --ph: clamp(13rem, calc(100dvh - 29rem), 46rem);
 }
 
 .fr-actions {
   justify-content: center;
+  margin-top: 0.25rem;
+}
+
+/* Look: "Next" stays pinned at the bottom while you scroll the options */
+.fl-panel > .fq-actions {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  margin-top: 1.5rem;
+  padding: 0.85rem 0 1rem;
+  background: linear-gradient(transparent, var(--bg) 28%);
 }
 
 /* ——— export ——— */
@@ -1538,7 +1557,7 @@ body.flow-on .intro-overlay {
 
 .fx-overall-label {
   margin: 0.45rem 0 0;
-  font: 500 0.72rem var(--mono);
+  font: 500 0.75rem var(--mono);
   color: var(--mute);
 }
 
@@ -1641,7 +1660,7 @@ body.flow-on .intro-overlay {
 }
 
 .fx-text small {
-  font: 400 0.72rem/1.4 var(--mono);
+  font: 400 0.75rem/1.4 var(--mono);
   color: var(--mute);
 }
 
@@ -1826,7 +1845,7 @@ body.flow-on .intro-overlay {
 
 .fw-mode-tag {
   margin: 0;
-  font: 500 0.66rem var(--mono);
+  font: 500 0.75rem var(--mono);
   letter-spacing: 0.16em;
   text-transform: uppercase;
   color: var(--gold);

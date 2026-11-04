@@ -160,6 +160,7 @@ export function initFlow(api) {
         <span class="brand-mark" aria-hidden="true"></span>
         <span class="flow-brand-name">${esc(ft("brand"))}</span>
       </button>
+      <button type="button" class="flow-back" data-act="back"><span aria-hidden="true">←</span> <span class="flow-back-label">${esc(ft("back"))}</span></button>
       <p class="flow-steplabel" aria-live="polite"></p>
       ${modeSwitchHtml("guided")}
       <button type="button" class="flow-menu-btn" data-act="menu" aria-haspopup="true" aria-expanded="false" aria-label="${esc(ft("menu"))}">
@@ -173,11 +174,7 @@ export function initFlow(api) {
         <button type="button" data-lang="fr">FR</button>
       </div>
     </div>
-    <div class="flow-stage"></div>
-    <nav class="flow-nav" aria-label="Steps">
-      <button type="button" data-act="back" aria-label="${esc(ft("back"))}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 15l6-6 6 6"/></svg></button>
-      <button type="button" data-act="next" aria-label="${esc(ft("next"))}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button>
-    </nav>`;
+    <div class="flow-stage"></div>`;
   document.body.appendChild(root);
   stage = root.querySelector(".flow-stage");
 
@@ -185,7 +182,6 @@ export function initFlow(api) {
     const act = e.target.closest("[data-act]")?.dataset.act;
     if (!act) return;
     if (act === "back") back();
-    if (act === "next") next();
     if (act === "home") go("welcome", -1);
     if (act === "menu") toggleMenu();
     if (act === "songs") {
@@ -240,6 +236,7 @@ function toggleMenu(force) {
 
 function refreshChrome() {
   root.querySelector(".flow-brand-name").textContent = ft("brand");
+  root.querySelector(".flow-back-label").textContent = ft("back");
   root.querySelector('[data-act="songs"]').textContent = ft("yourSongs");
   root.querySelector(".mode-switch").outerHTML = modeSwitchHtml("guided");
   root.querySelectorAll(".flow-menu-lang [data-lang]").forEach((b) =>
@@ -274,12 +271,14 @@ function updateProgress(stepId) {
   const idx = n - 1;
   const pct = idx < 0 ? 0 : ((idx + 1) / steps.length) * 100;
   root.querySelector(".flow-progress span").style.width = `${pct}%`;
-  root.querySelector(".flow-steplabel").textContent =
-    idx < 0 ? "" : ft("stepOf", { n: idx + 1, total: steps.length });
+  // Full "Step 3 of 10" on wide screens, "3 / 10" on phones (CSS picks one)
+  root.querySelector(".flow-steplabel").innerHTML =
+    idx < 0
+      ? ""
+      : `<span class="sl-long">${esc(ft("stepOf", { n: idx + 1, total: steps.length }))}</span><span class="sl-short" aria-hidden="true">${idx + 1} / ${steps.length}</span>`;
   const all = visibleSteps();
   const pos = all.findIndex((s) => s.id === stepId);
-  root.querySelector('[data-act="back"]').disabled = pos <= 0;
-  root.querySelector('[data-act="next"]').disabled = pos < 0 || pos >= all.length - 1;
+  root.querySelector(".flow-back").hidden = pos <= 0;
 }
 
 function teardown() {

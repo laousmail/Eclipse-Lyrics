@@ -61,7 +61,7 @@ button {
 }
 
 .brand-tag {
-  font: 500 0.62rem/1.3 var(--mono);
+  font: 500 0.75rem/1.3 var(--mono);
   letter-spacing: 0.16em;
   text-transform: uppercase;
 }
@@ -90,7 +90,7 @@ button {
 .sheet-lang-label {
   font-family: var(--mono);
   font-weight: 500;
-  font-size: 0.66rem;
+  font-size: 0.75rem;
   letter-spacing: 0.18em;
 }
 
@@ -161,14 +161,14 @@ body.audio-ready #audio-status {
 }
 
 .project-progress {
-  font-size: 0.7rem;
+  font-size: 0.75rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--gold);
 }
 
 .simple-more > summary {
-  font: 500 0.7rem/1.4 var(--mono);
+  font: 500 0.75rem/1.4 var(--mono);
   letter-spacing: 0.14em;
   text-transform: uppercase;
   padding: 0.8rem 0.15rem;
@@ -278,7 +278,7 @@ body.audio-ready #audio-status {
 .ratio-use {
   margin: 0 0 0.55rem;
   text-align: center;
-  font: 400 0.68rem/1.4 var(--mono);
+  font: 400 0.75rem/1.4 var(--mono);
   letter-spacing: 0.12em;
   text-transform: uppercase;
 }
@@ -485,7 +485,7 @@ input[type="range"] {
 }
 
 .overlay-choice small {
-  font: 400 0.72rem/1.4 var(--mono);
+  font: 400 0.75rem/1.4 var(--mono);
   color: var(--mute);
 }
 
