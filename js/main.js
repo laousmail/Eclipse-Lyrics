@@ -3107,12 +3107,12 @@ function flowApi() {
   };
 }
 
-/** Guided | Pro switch in the top bar (this editor is Pro mode). */
+/** Guided | Studio switch in the top bar (this editor is Studio mode). */
 function mountModeSwitch() {
   const tools = document.querySelector(".app-topbar .topbar-tools");
   if (!tools) return;
   tools.querySelector(".mode-switch")?.remove();
-  tools.insertAdjacentHTML("afterbegin", modeSwitchHtml("pro"));
+  tools.insertAdjacentHTML("afterbegin", modeSwitchHtml("studio"));
   tools.querySelector('[data-act="mode-guided"]').addEventListener("click", () => {
     showFlow(state.project?.flow?.step || "welcome");
   });
@@ -3184,7 +3184,7 @@ async function boot() {
     }
   }
 
-  // Guided form is the default way in; Pro (this editor) stays one tap away
+  // Guided form is the default way in; Studio (this editor) stays one tap away
   initFlow(flowApi());
   mountModeSwitch();
   if (flowWanted()) {

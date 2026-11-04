@@ -35,12 +35,12 @@ The app opens on a step-by-step form (one question per screen, Typeform-style):
 7. **The look**: shape (9:16, 4:5, 1:1, 16:9), font (10 Google Fonts, self-hosted), colour, size, position, animation, translation on/off, with a live video player.
 8. **Export**: each file renders on the device in its own tile that fills up, then Download / Share, or Download all (.zip).
 
-Two modes, same song, switch any time with the **Guided | Pro** switch in the top bar:
+Two modes, same song, switch any time with the **Guided | Studio** switch in the top bar:
 
 - **Guided**: the form above, one question at a time. The default for new visitors.
-- **Pro**: the full editor, every tool on one screen (waveform, nudging, line menu, every export option). Also on the welcome screen ("Know what you're doing?").
+- **Studio**: the full editor, every tool on one screen (waveform, nudging, line menu, every export option). The landing page offers both side by side.
 
-The last mode used is remembered. Links can pick one: `/#guided` or `/#pro`.
+The last mode used is remembered. Links can pick one: `/#guided` or `/#studio`.
 
 ## Keyboard
 

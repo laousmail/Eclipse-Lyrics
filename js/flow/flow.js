@@ -34,7 +34,7 @@ let transparentWebm = true;
 // Read before the app boots: boot rewrites the hash to the screen it restores
 const INITIAL_HASH = typeof location !== "undefined" ? (location.hash || "").replace(/^#/, "") : "";
 
-/** Guided form by default; Pro (the editor) when the user chose it or opened a Pro link (#pro, #sync…). */
+/** Guided form by default; Studio (the editor) when the user chose it or opened a Studio link (#studio, #sync…). */
 export function flowWanted() {
   let mode = "";
   try {
@@ -42,9 +42,9 @@ export function flowWanted() {
   } catch {
     /* storage blocked: default to the form */
   }
-  // Shareable links: #guided / #pro pick the mode (and it is remembered)
-  if (INITIAL_HASH === "guided" || INITIAL_HASH === "pro") {
-    rememberMode(INITIAL_HASH === "pro" ? "editor" : "flow");
+  // Shareable links: #guided / #studio pick the mode (and it is remembered); #pro is an old alias
+  if (["guided", "studio", "pro"].includes(INITIAL_HASH)) {
+    rememberMode(INITIAL_HASH === "guided" ? "flow" : "editor");
     return INITIAL_HASH === "guided";
   }
   if (mode) return mode !== "editor";
@@ -98,7 +98,7 @@ function save() {
 /* ——— steps ——— */
 
 const STEPS = [
-  { id: "welcome", counted: false, render: renderWelcome },
+  { id: "welcome", counted: false, wide: true, render: renderWelcome },
   { id: "audio", render: renderAudio, next: () => app.hasAudio() },
   { id: "name", render: renderName },
   { id: "artist", render: renderArtist },
@@ -192,7 +192,7 @@ export function initFlow(api) {
       toggleMenu(false);
       go("welcome", -1);
     }
-    if (act === "mode-pro") openEditor();
+    if (act === "mode-studio") openEditor();
   });
   root.querySelectorAll(".flow-menu-lang [data-lang]").forEach((b) =>
     b.addEventListener("click", () => {
@@ -248,13 +248,13 @@ function refreshChrome() {
 }
 
 /**
- * The Guided | Pro switch, shown in both modes. Pro is the full editor: every
+ * The Guided | Studio switch, shown in both modes. Studio is the full editor: every
  * tool on one screen for people who know what they want. Same song in both.
  */
 export function modeSwitchHtml(active) {
   const btn = (mode, act) =>
     `<button type="button" data-act="${act}" data-mode="${mode}" aria-pressed="${mode === active}" title="${esc(ft(`mode_${mode}Hint`))}">${esc(ft(`mode_${mode}`))}</button>`;
-  return `<div class="mode-switch" role="group" aria-label="${esc(ft("modeAria"))}">${btn("guided", "mode-guided")}${btn("pro", "mode-pro")}</div>`;
+  return `<div class="mode-switch" role="group" aria-label="${esc(ft("modeAria"))}">${btn("guided", "mode-guided")}${btn("studio", "mode-studio")}</div>`;
 }
 
 /** 1-based number of a step among the main questions; sub-steps share their parent's. */
@@ -553,21 +553,37 @@ function renderWelcome(c) {
     <p class="fw-eyebrow">${esc(ft("welcomeEyebrow"))}</p>
     <h1 class="fw-title">${esc(ft("welcomeTitle"))}</h1>
     <p class="fw-lead">${esc(ft("welcomeLead"))}</p>
-    <ol class="fw-path" aria-hidden="true">
-      <li><span>1</span>${esc(ft("welcomeWhat1"))}</li>
-      <li><span>2</span>${esc(ft("welcomeWhat2"))}</li>
-      <li><span>3</span>${esc(ft("welcomeWhat3"))}</li>
-      <li><span>4</span>${esc(ft("welcomeWhat4"))}</li>
-    </ol>
-    <div class="fq-actions">
-      <button type="button" class="f-ok fw-start">${esc(ft("welcomeStart"))} <span aria-hidden="true">→</span></button>
-      <span class="f-hint">${esc(ft("pressEnter"))}</span>
+    <div class="fw-modes">
+      <article class="fw-mode fw-mode-guided">
+        <p class="fw-mode-tag">${esc(ft("welcomeGuidedTag"))}</p>
+        <h2 class="fw-mode-title">${esc(ft("mode_guided"))}</h2>
+        <p class="fw-mode-text">${esc(ft("welcomeGuidedText"))}</p>
+        <ol class="fw-path" aria-label="${esc(ft("welcomeGuidedSteps"))}">
+          <li><span>1</span>${esc(ft("welcomeWhat1"))}</li>
+          <li><span>2</span>${esc(ft("welcomeWhat2"))}</li>
+          <li><span>3</span>${esc(ft("welcomeWhat3"))}</li>
+          <li><span>4</span>${esc(ft("welcomeWhat4"))}</li>
+        </ol>
+        <div class="fq-actions">
+          <button type="button" class="f-ok fw-start">${esc(ft("welcomeStart"))} <span aria-hidden="true">→</span></button>
+          <span class="f-hint">${esc(ft("pressEnter"))}</span>
+        </div>
+      </article>
+      <article class="fw-mode fw-mode-studio">
+        <p class="fw-mode-tag">${esc(ft("welcomeStudioTag"))}</p>
+        <h2 class="fw-mode-title">${esc(ft("mode_studio"))}</h2>
+        <p class="fw-mode-text">${esc(ft("welcomeStudioText"))}</p>
+        <ul class="fw-feats">
+          <li>${esc(ft("welcomeStudio1"))}</li>
+          <li>${esc(ft("welcomeStudio2"))}</li>
+          <li>${esc(ft("welcomeStudio3"))}</li>
+        </ul>
+        <div class="fq-actions">
+          <button type="button" class="f-btn fw-studio">${esc(ft("welcomeStudioGo"))} <span aria-hidden="true">→</span></button>
+        </div>
+      </article>
     </div>
     <button type="button" class="f-link fw-demo">${esc(ft("welcomeDemo"))}</button>
-    <button type="button" class="fw-pro">
-      <span class="fw-pro-text"><b>${esc(ft("welcomeProTitle"))}</b><small>${esc(ft("welcomeProHelp"))}</small></span>
-      <span class="fw-pro-go">${esc(ft("welcomeProGo"))} <span aria-hidden="true">→</span></span>
-    </button>
     <section class="fw-recent" hidden>
       <h2 class="fw-recent-title">${esc(ft("welcomeRecent"))}</h2>
       <ul class="fw-recent-list"></ul>
@@ -576,7 +592,7 @@ function renderWelcome(c) {
     await c.app.newProject();
     go("audio", 1);
   });
-  el.querySelector(".fw-pro").addEventListener("click", () => openEditor());
+  el.querySelector(".fw-studio").addEventListener("click", () => openEditor());
   el.querySelector(".fw-demo").addEventListener("click", async () => {
     await c.app.loadDemo();
     const f = flowState();
