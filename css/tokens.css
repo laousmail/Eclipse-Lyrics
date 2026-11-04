@@ -1,38 +1,36 @@
 /* Design tokens — colors, spacing, radius, type, motion */
 
 :root {
-  /* Color — Eclipse dark + warm ember palette */
-  --bg: #070605;
-  --bg2: #110e0c;
-  --bg3: #1b1613;
-  --surface: #1a1412;
-  --ink: #f2e9dd;
+  /* Color: studio greys, like a DAW. The lyrics are the only colour on screen. */
+  --bg: #0b0b0c;
+  --bg2: #151516;
+  --bg3: #1f1f21;
+  --surface: #1c1c1e;
+  --ink: #ececec;
   --text: var(--ink);
-  /* ≥4.5:1 on --bg #070605 for muted body text (a11y) */
-  --mute: #c4b8a8;
-  --line: #2b241e;
-  --hot: #ff6a13;
-  --gold: #ffb347;
-  --on: #1a0a02;
-  --glass: rgba(7, 6, 5, 0.86);
-  --warn: #ffb020;
-  --danger: #ff4d3a;
-  /* Warm success (not lime / not purple) — readable gold-amber */
-  --ok: #d4b06a;
-  --ok-strong: #e8c070;
-  --grad: linear-gradient(110deg, var(--hot), var(--gold));
+  /* ≥4.5:1 on --bg for muted body text (a11y) */
+  --mute: #a3a3a8;
+  --line: #2e2e31;
+  /* "hot" and "gold" are the accent pair: light greys, so actions read as the brightest thing */
+  --hot: #e6e6e6;
+  --gold: #c9c9cc;
+  --on: #0b0b0c;
+  --glass: rgba(11, 11, 12, 0.88);
+  --warn: #e0b341;
+  --danger: #ff5a4e;
+  /* Success stays green: the one colour people read as "done" */
+  --ok: #8fcf9a;
+  --ok-strong: #a6dcae;
+  --grad: linear-gradient(180deg, #f4f4f5, #d4d4d8);
 
-  /*
-   * Feature accents — same family, distinct enough to cue Song vs Sync vs Film.
-   * Calm, premium: used for active tabs, eyebrows, and primary actions — not rainbow chrome.
-   */
-  --feat-projects: #e8a54a; /* amber — library */
-  --feat-song: #ff6a13;     /* brand hot — prepare / Song */
-  --feat-sync: #ff7a3d;     /* brighter ember — Tap / sync action */
-  --feat-film: #e23d2e;     /* deep ember — Film / cinema */
-  --feat-export: #ffb347;   /* gold — Export (More) */
-  --grad-sync: linear-gradient(110deg, #ff5a18, var(--gold));
-  --grad-film: linear-gradient(110deg, #e23d2e, #ff8a4a);
+  /* One accent for every screen: consistent, so a highlighted control always means the same thing */
+  --feat-projects: var(--hot);
+  --feat-song: var(--hot);
+  --feat-sync: var(--hot);
+  --feat-film: var(--hot);
+  --feat-export: var(--hot);
+  --grad-sync: var(--grad);
+  --grad-film: var(--grad);
 
   /* Active feature (set via body[data-screen] or defaults to brand) */
   --feat: var(--hot);

@@ -100,7 +100,8 @@ export function overlayBackground(settings = {}) {
 export function drawFrame(ctx, project, tMs, settings = {}) {
   const overlay = overlayBackground(settings);
   // A glow halo would leave a green fringe after chroma keying
-  if (overlay === "green") settings = { ...settings, glowColor: "rgba(0,0,0,0)" };
+  // The glow is optional (on unless turned off); off = crisp text with no halo
+  if (overlay === "green" || settings.glow === false) settings = { ...settings, glowColor: "rgba(0,0,0,0)" };
   const width = settings.width || ctx.canvas?.width || 1080;
   const height = settings.height || ctx.canvas?.height || 1920;
   const tSec = (Number(tMs) || 0) / 1000;

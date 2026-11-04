@@ -300,8 +300,8 @@ a:hover {
   border-radius: 50%;
   flex-shrink: 0;
   background:
-    radial-gradient(circle at 35% 35%, #ffd29a 0%, var(--gold) 28%, var(--hot) 62%, #2a0808 100%);
-  box-shadow: 0 0 18px color-mix(in srgb, var(--hot) 40%, transparent);
+    radial-gradient(circle at 35% 35%, #ffffff 0%, #d4d4d8 28%, #8e8e93 62%, #1c1c1e 100%);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
 }
 
 .brand-text {
@@ -488,7 +488,7 @@ body.keyboard-open.dock-on .app-screens {
 .btn-fill {
   background: var(--grad);
   color: var(--on);
-  box-shadow: 0 10px 28px -12px color-mix(in srgb, var(--hot) 70%, transparent);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
 }
 
 /* One primary look on every screen, like laousmail.com; screens keep their accent
@@ -741,7 +741,7 @@ input[type="range"] {
   font-family: var(--lyric);
   font-size: clamp(1.15rem, 4.5vw, 1.4rem);
   font-weight: 600;
-  text-shadow: 0 0 22px color-mix(in srgb, var(--hot) 45%, transparent);
+  text-shadow: none;
   word-break: break-word;
 }
 
@@ -1013,8 +1013,8 @@ kbd {
 
 .film-tab.is-active {
   color: var(--fg);
-  border-color: var(--accent, #ff6b35);
-  background: color-mix(in srgb, var(--accent, #ff6b35) 14%, var(--bg2));
+  border-color: var(--accent, var(--hot));
+  background: color-mix(in srgb, var(--accent, var(--hot)) 14%, var(--bg2));
 }
 
 .film-panels {
@@ -1146,7 +1146,7 @@ kbd {
   font: inherit;
   font-weight: 600;
   cursor: pointer;
-  box-shadow: 0 8px 24px -10px color-mix(in srgb, var(--feat-sync) 70%, transparent);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
   -webkit-tap-highlight-color: transparent;
   touch-action: manipulation;
   transition: transform 0.15s var(--ease), box-shadow 0.2s var(--ease);
@@ -1843,7 +1843,7 @@ details.export-preview:not([open]) > *:not(summary) {
   border-radius: 50%;
   background: var(--grad);
   border: 2px solid #fff2;
-  box-shadow: 0 4px 14px color-mix(in srgb, var(--hot) 45%, transparent);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
   transition: transform 0.15s var(--ease);
 }
 
@@ -1853,7 +1853,7 @@ details.export-preview:not([open]) > *:not(summary) {
   border: 0;
   border-radius: 50%;
   background: var(--grad);
-  box-shadow: 0 4px 14px color-mix(in srgb, var(--hot) 45%, transparent);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
 }
 
 .scrubber.is-scrubbing::-webkit-slider-thumb,
@@ -1882,7 +1882,7 @@ details.export-preview:not([open]) > *:not(summary) {
 }
 
 .preview-current.tap-flash {
-  text-shadow: 0 0 28px color-mix(in srgb, var(--gold) 70%, transparent);
+  text-shadow: none;
 }
 
 .dock-tap.tap-flash {
@@ -2408,7 +2408,7 @@ details.export-preview:not([open]) > *:not(summary) {
   padding: 0.7rem 1rem;
   border-radius: 0.75rem;
   background: color-mix(in srgb, var(--surface, #1a1412) 92%, #000);
-  border: 1px solid color-mix(in srgb, var(--gold, #ffb347) 35%, transparent);
+  border: 1px solid color-mix(in srgb, var(--gold) 35%, transparent);
   color: var(--text, #f2e9dd);
   font-size: 0.9rem;
   line-height: 1.35;

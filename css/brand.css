@@ -49,7 +49,7 @@ button {
   position: relative;
   background:
     radial-gradient(circle, var(--bg) 0 58%, transparent 61%),
-    conic-gradient(from 210deg, var(--hot), var(--gold), #ffe2b0, var(--gold), var(--hot));
+    conic-gradient(from 210deg, #8e8e93, #f4f4f5, #8e8e93, #3a3a3c, #8e8e93);
   box-shadow:
     0 0 14px color-mix(in srgb, var(--hot) 55%, transparent),
     0 0 34px -6px color-mix(in srgb, var(--gold) 35%, transparent);
@@ -107,7 +107,7 @@ button {
   isolation: isolate;
   background: var(--grad);
   color: var(--on);
-  box-shadow: 0 10px 28px -12px color-mix(in srgb, var(--hot) 70%, transparent);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
 }
 
 .btn-fill::after {
@@ -124,7 +124,7 @@ button {
 @media (hover: hover) {
   .btn-fill:hover:not(:disabled) {
     transform: translateY(-1px);
-    box-shadow: 0 12px 30px -10px color-mix(in srgb, var(--hot) 75%, transparent);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
   }
 
   .btn-fill:hover:not(:disabled)::after {

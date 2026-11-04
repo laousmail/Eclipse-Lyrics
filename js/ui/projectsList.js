@@ -41,7 +41,7 @@ function drawThumb(canvas, thumb) {
   const barW = w / data.length;
   for (let i = 0; i < data.length; i++) {
     const amp = Math.max(1, data[i] * mid * 1.6);
-    ctx.fillStyle = "rgba(255,106,19,0.75)";
+    ctx.fillStyle = "rgba(220,220,224,0.7)";
     ctx.fillRect(i * barW, mid - amp, Math.max(1, barW * 0.7), amp * 2);
   }
 }
