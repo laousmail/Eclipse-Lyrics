@@ -95,12 +95,12 @@ export function createEmptyProject() {
         position: "center",
         align: "center",
         maxWidthPct: 82,
-        textColor: "#f4ebe6",
-        translationColor: "#ffb088",
-        glowColor: "rgba(255,107,53,0.55)",
+        textColor: "#f2f2f2",
+        translationColor: "#b8b8bc",
+        glowColor: "rgba(255,255,255,0.35)",
         solidColor: "#000000",
-        gradientFrom: "#1a0a0c",
-        gradientTo: "#0a0608",
+        gradientFrom: "#1c1c1e",
+        gradientTo: "#0b0b0c",
         inOutSpeed: 0.15,
         introCard: true,
         introDurationSec: 3,
@@ -156,6 +156,23 @@ export function isV2Project(data) {
  * Migrate v1 localStorage / import shapes to v2.
  * Safe to call on already-v2 projects (returns normalized clone).
  */
+// The old warm defaults, from before the grey look. Only exact matches change,
+// so a colour someone picked on purpose is kept.
+const OLD_DEFAULTS = {
+  textColor: ["#f4ebe6", "#f2f2f2"],
+  translationColor: ["#ffb088", "#b8b8bc"],
+  glowColor: ["rgba(255,107,53,0.55)", "rgba(255,255,255,0.35)"],
+  gradientFrom: ["#1a0a0c", "#1c1c1e"],
+  gradientTo: ["#0a0608", "#0b0b0c"],
+};
+
+export function greyOldDefaults(video) {
+  for (const [key, [from, to]] of Object.entries(OLD_DEFAULTS)) {
+    if (String(video[key] || "").toLowerCase() === from) video[key] = to;
+  }
+  return video;
+}
+
 export function migrateProject(raw) {
   if (!raw || typeof raw !== "object") return createEmptyProject();
   if (isV2Project(raw)) return normalizeV2(raw);
@@ -194,10 +211,10 @@ export function migrateProject(raw) {
     });
   });
 
-  const video = {
+  const video = greyOldDefaults({
     ...base.settings.video,
     ...(raw.settings?.video || {}),
-  };
+  });
 
   return {
     ...base,
@@ -264,7 +281,7 @@ function normalizeV2(raw) {
       ...base.settings,
       ...(raw.settings || {}),
       export: { ...base.settings.export, ...(raw.settings?.export || {}) },
-      video: { ...base.settings.video, ...(raw.settings?.video || {}) },
+      video: greyOldDefaults({ ...base.settings.video, ...(raw.settings?.video || {}) }),
     },
     updatedAt: Date.now(),
   };

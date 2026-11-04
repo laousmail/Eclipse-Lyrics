@@ -1712,7 +1712,16 @@ body.flow-on .intro-overlay {
   flex-wrap: wrap;
   align-items: center;
   gap: 0.75rem;
-  margin-top: 1.5rem;
+  margin-top: 1rem;
+  padding: 0.85rem 0 1rem;
+}
+
+/* While picking, "Make N files" stays pinned at the bottom, however many files are listed */
+.fx.is-choosing .fx-actions {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  background: linear-gradient(transparent, var(--bg) 28%);
 }
 
 .fx-actions [hidden] {
@@ -1910,4 +1919,63 @@ body.flow-on .intro-overlay {
 
 .fw-demo {
   margin-top: 1rem;
+}
+
+/* Export, picking: the whole tile is the checkbox; a tick box on the right shows the state */
+.fx-tile[hidden] {
+  display: none;
+}
+
+.fx-pick {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding-right: 1rem;
+  border: 0;
+  border-radius: inherit;
+  background: transparent;
+  cursor: pointer;
+}
+
+.fx-pick[hidden] {
+  display: none;
+}
+
+.fx-pick:focus-visible {
+  outline: 2px solid var(--hot);
+  outline-offset: -2px;
+}
+
+.fx-check {
+  width: 1.5rem;
+  height: 1.5rem;
+  border: 1.5px solid var(--mute);
+  border-radius: 6px;
+}
+
+.fx-pick[aria-checked="true"] .fx-check {
+  border-color: var(--hot);
+  background: var(--hot)
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%230b0b0c' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12.5l4.5 4.5L19 7.5'/%3E%3C/svg%3E")
+    center / 1rem no-repeat;
+}
+
+.fx.is-choosing .fx-tile {
+  padding-right: 3.5rem;
+  transition: border-color 0.15s var(--ease);
+}
+
+.fx.is-choosing .fx-tile[data-picked="true"] {
+  border-color: var(--hot);
+}
+
+.fx.is-choosing .fx-tile:hover {
+  border-color: color-mix(in srgb, var(--hot) 60%, var(--line));
+}
+
+.fx-overall[hidden] {
+  display: none;
 }

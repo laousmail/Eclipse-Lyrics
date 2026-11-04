@@ -1,6 +1,8 @@
 /**
- * Step 7: export, Canva-style. One tile per chosen file; each tile fills as it
- * renders, then offers Download / Share. Everything is made on this device.
+ * Step 7: export, Canva-style. First the user picks what they need (every kind of
+ * file is offered, their earlier picks pre-ticked); then one tile per file fills as
+ * it renders and offers Download / Share. "Make other files" goes back to picking.
+ * Everything is made on this device.
  */
 
 import * as video from "../video.js";
@@ -54,8 +56,11 @@ export function renderExportStep(c) {
   const { t, esc } = c;
   const p = c.project();
   const f = c.flow();
-  const ids = OUTPUTS.map((o) => o.id).filter((id) => f.outputs.includes(id));
-  const items = ids.map((id) => ({ id, state: "queued", progress: 0, eta: null, blob: null, fileName: "", compatible: true }));
+  const ids = OUTPUTS.map((o) => o.id);
+  const items = ids.map((id) => ({ id, state: "idle", progress: 0, eta: null, blob: null, fileName: "", compatible: true }));
+  const selected = new Set(ids.filter((id) => f.outputs.includes(id)));
+  let choosing = true;
+  const chosen = () => items.filter((i) => selected.has(i.id));
 
   const el = document.createElement("div");
   el.className = "fx";
@@ -68,7 +73,9 @@ export function renderExportStep(c) {
     </header>
     <ul class="fx-tiles"></ul>
     <div class="fx-actions">
+      <button type="button" class="f-ok fx-make"></button>
       <button type="button" class="f-ok fx-all" hidden>${esc(t("exportAll"))}</button>
+      <button type="button" class="f-btn fx-more" hidden>${esc(t("exportMore"))}</button>
       <button type="button" class="f-btn fx-stop">${esc(t("exportCancel"))}</button>
       <button type="button" class="f-btn fx-look" hidden>${esc(t("exportBackLook"))}</button>
       <button type="button" class="f-link fx-again" hidden>${esc(t("exportAgain"))}</button>
@@ -82,6 +89,7 @@ export function renderExportStep(c) {
     const label = it.id === "transparent" && !c.transparentWebm() ? "outTransparentPng" : LABELS[it.id][1];
     li.innerHTML = `
       <span class="fx-fill" aria-hidden="true"></span>
+      <button type="button" class="fx-pick" role="checkbox" aria-checked="false" aria-label="${esc(t(LABELS[it.id][0]))}"><span class="fx-check" aria-hidden="true"></span></button>
       <span class="fx-icon" aria-hidden="true"><svg viewBox="0 0 24 24">${ICONS[it.id]}</svg></span>
       <span class="fx-text"><b>${esc(t(LABELS[it.id][0]))}</b><small>${esc(t(label))}</small></span>
       <span class="fx-status" aria-live="polite"></span>
@@ -91,6 +99,11 @@ export function renderExportStep(c) {
         <button type="button" class="f-btn fx-retry" hidden>${esc(t("exportRetry"))}</button>
       </span>
       <p class="fx-warn" hidden>${esc(t("exportFormatWarn"))}</p>`;
+    li.querySelector(".fx-pick").addEventListener("click", () => {
+      if (selected.has(it.id)) selected.delete(it.id);
+      else selected.add(it.id);
+      paint();
+    });
     li.querySelector(".fx-dl").addEventListener("click", () => it.blob && downloadBlob(it.blob, it.fileName));
     li.querySelector(".fx-share").addEventListener("click", async () => {
       const file = new File([it.blob], it.fileName, { type: it.blob.type });
@@ -114,24 +127,42 @@ export function renderExportStep(c) {
   let wakeLock = null;
 
   const paint = () => {
-    const done = items.filter((i) => i.state === "done").length;
-    const finished = items.every((i) => i.state === "done" || i.state === "error");
-    el.querySelector(".fq-title").textContent = t(finished ? "exportDoneQ" : "exportQ");
-    el.querySelector(".fq-help").textContent = t(finished ? "exportDoneHelp" : "exportHelp");
-    const overall = items.reduce((n, i) => n + (i.state === "done" ? 1 : i.state === "working" ? i.progress : 0), 0) / Math.max(1, items.length);
+    const mine = chosen();
+    const done = mine.filter((i) => i.state === "done").length;
+    const finished = !choosing && mine.every((i) => i.state === "done" || i.state === "error");
+    const title = choosing ? "exportChooseQ" : finished ? "exportDoneQ" : "exportQ";
+    el.querySelector(".fq-title").textContent = t(title);
+    el.querySelector(".fq-help").textContent = t(choosing ? "exportChooseHelp" : finished ? "exportDoneHelp" : "exportHelp");
+    const overall = mine.reduce((n, i) => n + (i.state === "done" ? 1 : i.state === "working" ? i.progress : 0), 0) / Math.max(1, mine.length);
+    el.querySelector(".fx-overall").hidden = choosing;
     el.querySelector(".fx-overall span").style.width = `${Math.round(overall * 100)}%`;
-    el.querySelector(".fx-overall-label").textContent = t("exportOverall", { done, total: items.length });
-    el.querySelector(".fx-all").hidden = !(finished && done > 1);
-    el.querySelector(".fx-stop").hidden = finished;
-    el.querySelector(".fx-look").hidden = !finished || !items.some((i) => i.id !== "srt");
-    el.querySelector(".fx-again").hidden = !finished;
+    el.querySelector(".fx-overall-label").textContent = choosing ? "" : t("exportOverall", { done, total: mine.length });
+    // Picking: one clear action, off until something is picked (a constraint, not an error later)
+    const toMake = mine.filter((i) => i.state !== "done").length;
+    const make = el.querySelector(".fx-make");
+    make.hidden = !choosing;
+    make.disabled = toMake === 0;
+    make.innerHTML = `${esc(toMake === 0 ? t(mine.length ? "exportAllMade" : "exportPickOne") : t(toMake === 1 ? "exportMakeOne" : "exportMake", { n: toMake }))} <span aria-hidden="true">→</span>`;
+    el.querySelector(".fx-all").hidden = choosing || !(finished && done > 1);
+    el.querySelector(".fx-more").hidden = choosing || !finished;
+    el.querySelector(".fx-stop").hidden = choosing || finished;
+    el.querySelector(".fx-look").hidden = choosing || !finished || !mine.some((i) => i.id !== "srt");
+    el.querySelector(".fx-again").hidden = choosing || !finished;
     el.classList.toggle("is-finished", finished);
+    el.classList.toggle("is-choosing", choosing);
 
     items.forEach((it) => {
       const li = list.querySelector(`[data-id="${it.id}"]`);
+      const on = selected.has(it.id);
+      li.hidden = !choosing && !on;
       li.dataset.state = it.state;
+      li.dataset.picked = String(on);
+      const pick = li.querySelector(".fx-pick");
+      pick.hidden = !choosing;
+      pick.setAttribute("aria-checked", String(on));
       li.style.setProperty("--p", String(it.state === "done" ? 1 : it.progress));
       const status = li.querySelector(".fx-status");
+      if (it.state === "idle") status.textContent = "";
       if (it.state === "queued") status.textContent = t("exportQueued");
       if (it.state === "working") {
         const pct = Math.round(it.progress * 100);
@@ -139,10 +170,10 @@ export function renderExportStep(c) {
       }
       if (it.state === "done") status.textContent = `${t("exportReady")} ✓ · ${it.fileName}`;
       if (it.state === "error") status.textContent = t("exportFailed");
-      li.querySelector(".fx-dl").hidden = it.state !== "done";
+      li.querySelector(".fx-dl").hidden = choosing || it.state !== "done";
       li.querySelector(".fx-share").hidden =
-        it.state !== "done" || !canShareFile(new File([it.blob || new Blob()], it.fileName || "x", { type: it.blob?.type }));
-      li.querySelector(".fx-retry").hidden = it.state !== "error";
+        choosing || it.state !== "done" || !canShareFile(new File([it.blob || new Blob()], it.fileName || "x", { type: it.blob?.type }));
+      li.querySelector(".fx-retry").hidden = choosing || it.state !== "error";
       li.querySelector(".fx-warn").hidden = it.state !== "done" || it.compatible !== false;
     });
   };
@@ -201,7 +232,7 @@ export function renderExportStep(c) {
     } catch {
       wakeLock = null;
     }
-    for (const it of items) {
+    for (const it of chosen()) {
       if (stopped) break;
       if (it.state !== "queued") continue;
       try {
@@ -217,10 +248,29 @@ export function renderExportStep(c) {
     paint();
   };
 
+  el.querySelector(".fx-make").addEventListener("click", () => {
+    if (!choosing || !chosen().some((i) => i.state !== "done")) return;
+    choosing = false;
+    chosen().forEach((i) => {
+      if (i.state !== "done") {
+        i.state = "queued";
+        i.progress = 0;
+      }
+    });
+    // Remember the picks for next time (and for the preview on the look step)
+    f.outputs = [...selected];
+    c.save();
+    paint();
+    run();
+  });
+  el.querySelector(".fx-more").addEventListener("click", () => {
+    choosing = true;
+    paint();
+  });
   el.querySelector(".fx-stop").addEventListener("click", () => {
     stopped = true;
     video.stopRecording();
-    items.forEach((i) => {
+    chosen().forEach((i) => {
       if (i.state === "working" || i.state === "queued") {
         i.state = "error";
       }
@@ -232,7 +282,7 @@ export function renderExportStep(c) {
     btn.disabled = true;
     try {
       const zip = new ZipWriter();
-      for (const it of items) {
+      for (const it of chosen()) {
         if (it.state === "done" && it.blob) zip.add(it.fileName, new Uint8Array(await it.blob.arrayBuffer()));
       }
       downloadBlob(zip.finish(), `${(p.title || "lyrics").replace(/\s+/g, "-")}-eclipse-lyrics.zip`);
@@ -244,8 +294,6 @@ export function renderExportStep(c) {
   el.querySelector(".fx-again").addEventListener("click", () => c.go("welcome", -1));
 
   paint();
-  // Start right away: the user already said "Export"
-  setTimeout(run, 350);
 
   return {
     el,

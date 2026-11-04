@@ -120,7 +120,7 @@ export const FONTS = [
 ];
 
 export const COLORS = [
-  { id: "white", text: "#ffffff", translation: "#ffd8b0" },
+  { id: "white", text: "#f2f2f2", translation: "#b8b8bc" },
   { id: "cream", text: "#f4ebe6", translation: "#ffb088" },
   { id: "gold", text: "#ffc861", translation: "#fff1d6" },
   { id: "ember", text: "#ff7a2f", translation: "#ffe2c8" },
