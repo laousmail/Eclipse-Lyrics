@@ -34,7 +34,7 @@ function drawThumb(canvas, thumb) {
   const w = canvas.width;
   const h = canvas.height;
   ctx.clearRect(0, 0, w, h);
-  ctx.fillStyle = "#0a0608";
+  ctx.fillStyle = "#111113";
   ctx.fillRect(0, 0, w, h);
   const data = Array.isArray(thumb) && thumb.length ? thumb : Array.from({ length: 32 }, () => 0.15);
   const mid = h / 2;

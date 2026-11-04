@@ -179,7 +179,7 @@ export function renderLookStep(c) {
   clash.className = "f-warn fl-clash";
   const colorRow = optionRow(c, {
     title: t("lookColor"),
-    current: COLORS.find((x) => x.text === v.textColor)?.id || "cream",
+    current: COLORS.find((x) => x.text === v.textColor)?.id || "white",
     className: "fl-colors",
     items: COLORS.map((col) => ({
       value: col.id,

@@ -7,9 +7,9 @@ import { STYLES } from "./styles/index.js";
 import { fontString, positionY } from "./layout.js";
 
 const DEFAULT_COLORS = {
-  text: "#f4ebe6",
-  translation: "#ffb088",
-  glow: "rgba(255,107,53,0.55)",
+  text: "#f2f2f2",
+  translation: "#b8b8bc",
+  glow: "rgba(255,255,255,0.35)",
 };
 
 /**
@@ -194,7 +194,7 @@ function drawBackground(ctx, width, height, settings, t, duration) {
   const reduced = Boolean(settings.reducedMotion);
   const zoom = !reduced && zoomOn ? 1 + 0.04 * Math.sin((t / Math.max(1, duration)) * Math.PI * 2) : 1;
 
-  ctx.fillStyle = settings.solidColor || "#0a0608";
+  ctx.fillStyle = settings.solidColor || "#0b0b0c";
   ctx.fillRect(0, 0, width, height);
 
   if (mode === "solid") {
@@ -213,15 +213,15 @@ function drawBackground(ctx, width, height, settings, t, duration) {
   }
 
   if (mode !== "solid") {
-    ctx.fillStyle = `rgba(10,6,8,${darken})`;
+    ctx.fillStyle = `rgba(8,8,9,${darken})`;
     ctx.fillRect(0, 0, width, height);
   }
 }
 
 function drawGradientBg(ctx, width, height, settings) {
   const g = ctx.createLinearGradient(0, 0, 0, height);
-  g.addColorStop(0, settings.gradientFrom || "#1a0a0c");
-  g.addColorStop(1, settings.gradientTo || "#0a0608");
+  g.addColorStop(0, settings.gradientFrom || "#1c1c1e");
+  g.addColorStop(1, settings.gradientTo || "#0b0b0c");
   ctx.fillStyle = g;
   ctx.fillRect(0, 0, width, height);
 }
@@ -272,24 +272,24 @@ function drawEclipseGlow(ctx, width, height, t, reduced, energy = 1, position = 
   const pulse = reduced ? 1 : (0.85 + 0.15 * Math.sin(t * 0.7)) * (0.7 + 0.3 * energy);
 
   const g1 = ctx.createRadialGradient(cx, cy, 0, cx, cy, s * 0.45 * pulse);
-  g1.addColorStop(0, `rgba(255,180,120,${0.35 * energy})`);
-  g1.addColorStop(0.35, `rgba(255,107,53,${0.28 * energy})`);
-  g1.addColorStop(0.65, `rgba(196,30,30,${0.18 * energy})`);
-  g1.addColorStop(1, "rgba(10,6,8,0)");
+  g1.addColorStop(0, `rgba(240,240,245,${0.3 * energy})`);
+  g1.addColorStop(0.35, `rgba(176,176,186,${0.2 * energy})`);
+  g1.addColorStop(0.65, `rgba(90,90,100,${0.12 * energy})`);
+  g1.addColorStop(1, "rgba(8,8,9,0)");
   ctx.fillStyle = g1;
   ctx.fillRect(0, 0, width, height);
 
   const r = s * 0.12 * (0.9 + 0.2 * energy);
   const disk = ctx.createRadialGradient(cx - r * 0.15, cy - r * 0.1, r * 0.2, cx, cy, r * 1.4);
-  disk.addColorStop(0, "#1a0a0c");
-  disk.addColorStop(0.7, "#0a0608");
-  disk.addColorStop(1, "rgba(10,6,8,0)");
+  disk.addColorStop(0, "#161618");
+  disk.addColorStop(0.7, "#0b0b0c");
+  disk.addColorStop(1, "rgba(8,8,9,0)");
   ctx.fillStyle = disk;
   ctx.beginPath();
   ctx.arc(cx, cy, r * 1.35, 0, Math.PI * 2);
   ctx.fill();
 
-  ctx.strokeStyle = `rgba(255,107,53,${0.45 * Math.min(1.2, energy)})`;
+  ctx.strokeStyle = `rgba(232,232,238,${0.45 * Math.min(1.2, energy)})`;
   ctx.lineWidth = Math.max(2, s * 0.003);
   ctx.beginPath();
   ctx.arc(cx, cy, r * 1.05, 0, Math.PI * 2);
@@ -342,7 +342,7 @@ function drawWatermark(ctx, width, height, settings) {
   if (!label) return;
   ctx.save();
   ctx.globalAlpha = 0.55;
-  ctx.fillStyle = settings.textColor || "#f4ebe6";
+  ctx.fillStyle = settings.textColor || DEFAULT_COLORS.text;
   ctx.font = fontString({
     font: settings.font || "Noto Sans",
     weight: 500,
@@ -360,14 +360,14 @@ function drawProgressBar(ctx, width, height, t, duration) {
   const y = height - h;
   ctx.fillStyle = "rgba(255,255,255,0.15)";
   ctx.fillRect(0, y, width, h);
-  ctx.fillStyle = "rgba(255,107,53,0.85)";
+  ctx.fillStyle = "rgba(255,255,255,0.85)";
   ctx.fillRect(0, y, width * p, h);
 }
 
 function drawCredit(ctx, width, height) {
   ctx.save();
   ctx.globalAlpha = 0.4;
-  ctx.fillStyle = "#f4ebe6";
+  ctx.fillStyle = DEFAULT_COLORS.text;
   ctx.font = fontString({
     font: "Noto Sans",
     weight: 400,

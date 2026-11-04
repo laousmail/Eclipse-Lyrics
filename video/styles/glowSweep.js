@@ -65,9 +65,9 @@ export function glowSweep(ctx, opts) {
 
     if (!reducedMotion && rowProgress > 0 && rowProgress < 1) {
       const grad = ctx.createLinearGradient(sweepX - 40, 0, sweepX + 40, 0);
-      grad.addColorStop(0, "rgba(255,107,53,0)");
-      grad.addColorStop(0.5, "rgba(255,107,53,0.55)");
-      grad.addColorStop(1, "rgba(255,107,53,0)");
+      grad.addColorStop(0, "rgba(255,255,255,0)");
+      grad.addColorStop(0.5, "rgba(255,255,255,0.5)");
+      grad.addColorStop(1, "rgba(255,255,255,0)");
       ctx.fillStyle = grad;
       ctx.fillRect(sweepX - 40, y - sizePx * 1.1, 80, sizePx * 2.2);
     }
